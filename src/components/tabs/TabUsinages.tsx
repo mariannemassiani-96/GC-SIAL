@@ -4,15 +4,14 @@ import { SchemaLisse } from '../SchemaLisse';
 
 interface TabUsinagesProps {
   resultat: ResultatAffaire;
-  angle: number;
 }
 
-export function TabUsinages({ resultat, angle }: TabUsinagesProps) {
-  const usinageAngle = USINAGE_ANGLE[angle] ?? USINAGE_ANGLE[0];
-
+export function TabUsinages({ resultat }: TabUsinagesProps) {
   return (
     <div className="space-y-8">
       {resultat.travees.map((rt) => {
+        const angle = rt.travee.angle;
+        const usinageAngle = USINAGE_ANGLE[angle] ?? USINAGE_ANGLE[0];
         const lisseLabels = ['INF', 'SUP', 'MED'];
         const raidSet = new Set(rt.posRaidisseurs.map((p) => Math.round(p * 10) / 10));
         const goupilleG = 68.3;

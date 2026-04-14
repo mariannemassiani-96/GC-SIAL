@@ -1,4 +1,4 @@
-import type { Affaire, Travee, NomenclatureItem } from '../types';
+import type { Travee, NomenclatureItem } from '../types';
 import { PROFILS, ACCESSOIRES } from '../constants/profils';
 import { TYPES_GC, TYPES_MC, POSE_DATA } from '../constants/typesGC';
 
@@ -15,21 +15,18 @@ interface CalcResult {
 
 export function calcNomenclature(
   travee: Travee,
-  affaire: Affaire,
   calc: CalcResult
 ): NomenclatureItem[] {
   const items: NomenclatureItem[] = [];
-  const gc = TYPES_GC[affaire.typeGC];
-  const mc = TYPES_MC[affaire.mc];
-  const pose = POSE_DATA[affaire.pose];
+  const gc = TYPES_GC[travee.typeGC];
+  const mc = TYPES_MC[travee.mc];
+  const pose = POSE_DATA[travee.pose];
 
   // --- Angles de coupe ---
-  // Coupe 45° (coupeG/coupeD) = angle en plan (GC en L ou U) → profils HORIZONTAUX
-  // Rampant (affaire.angle) = pente (escalier) → éléments VERTICAUX
-  const hCoupeG = travee.coupeG; // pour profils horizontaux
+  const hCoupeG = travee.coupeG;
   const hCoupeD = travee.coupeD;
-  const vCoupe = affaire.rampant && affaire.angle > 0
-    ? String(90 - affaire.angle)  // ex: pente 10° → coupe à 80°
+  const vCoupe = travee.rampant && travee.angle > 0
+    ? String(90 - travee.angle)
     : '90';
 
   function addProfil(ref: string, longueur: number, qte: number, coupeG: string, coupeD: string) {
@@ -76,7 +73,7 @@ export function calcNomenclature(
   }
   if (gc.hasRemplissage) {
     addProfil('180040', calc.debLisse, 2, hCoupeG, hCoupeD);
-    addProfil('126129', calc.debLisse, 2, '—', '—'); // joint, pas de coupe
+    addProfil('126129', calc.debLisse, 2, '—', '—');
   }
   if (gc.nbTubesRonds > 0) {
     addProfil('140545', calc.debMC, gc.nbTubesRonds, hCoupeG, hCoupeD);
@@ -91,20 +88,20 @@ export function calcNomenclature(
   if (gc.hasRemplissage) addAccess('6003997', calc.nbRaid * 2);
 
   // Fixations latérales
-  if (affaire.fixG === 'libre') {
+  if (travee.fixG === 'libre') {
     addAccess(mc.bouchon, 1);
     addAccess('127144', 1);
   }
-  if (affaire.fixD === 'libre') {
+  if (travee.fixD === 'libre') {
     addAccess(mc.bouchon, 1);
     addAccess('127144', 1);
   }
-  if (affaire.fixG === 'mur_d') addAccess('127149', 1);
-  if (affaire.fixG === 'mur_g') addAccess('127150', 1);
-  if (affaire.fixD === 'mur_d') addAccess('127149', 1);
-  if (affaire.fixD === 'mur_g') addAccess('127150', 1);
-  if (affaire.fixG === 'raccord90' || affaire.fixD === 'raccord90') addAccess('110962', 1);
-  if (affaire.fixG === 'raccord_droit' || affaire.fixD === 'raccord_droit') addAccess('110966', 1);
+  if (travee.fixG === 'mur_d') addAccess('127149', 1);
+  if (travee.fixG === 'mur_g') addAccess('127150', 1);
+  if (travee.fixD === 'mur_d') addAccess('127149', 1);
+  if (travee.fixD === 'mur_g') addAccess('127150', 1);
+  if (travee.fixG === 'raccord90' || travee.fixD === 'raccord90') addAccess('110962', 1);
+  if (travee.fixG === 'raccord_droit' || travee.fixD === 'raccord_droit') addAccess('110966', 1);
 
   return items;
 }

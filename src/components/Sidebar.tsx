@@ -1,5 +1,5 @@
 import { FileDown, FileText, Wrench } from 'lucide-react';
-import type { Affaire } from '../types';
+import type { Affaire, TraveeConfig } from '../types';
 import { TYPES_GC, TYPES_MC, POSE_DATA } from '../constants/typesGC';
 import { FIXATIONS } from '../constants/fixations';
 import { Button } from './ui/Button';
@@ -58,38 +58,44 @@ function InputField({ label, value, onChange, type = 'text', suffix }: {
 }
 
 export function Sidebar({ affaire, onChange, onExportXML, onExportPDF, onExportBC }: SidebarProps) {
+  const d = affaire.defaults;
+  const updateDefaults = (updates: Partial<TraveeConfig>) => {
+    onChange({ defaults: { ...d, ...updates } });
+  };
+
   return (
     <aside className="w-[280px] shrink-0 bg-[#14161d] border-r border-[#252830] overflow-y-auto flex flex-col">
       <div className="p-4 space-y-3 flex-1">
         <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
-          <Wrench size={14} /> Configuration
+          <Wrench size={14} /> Défauts nouvelles travées
         </h3>
+        <p className="text-[10px] text-gray-600 -mt-1">Pré-remplit les travées ajoutées</p>
 
         <SelectField
           label="Type de garde-corps"
-          value={affaire.typeGC}
-          onChange={(v) => onChange({ typeGC: v as Affaire['typeGC'] })}
+          value={d.typeGC}
+          onChange={(v) => updateDefaults({ typeGC: v as TraveeConfig['typeGC'] })}
           options={Object.entries(TYPES_GC).map(([id, def]) => ({ value: id, label: def.label }))}
         />
 
         <SelectField
           label="Type de pose"
-          value={affaire.pose}
-          onChange={(v) => onChange({ pose: v as Affaire['pose'] })}
+          value={d.pose}
+          onChange={(v) => updateDefaults({ pose: v as TraveeConfig['pose'] })}
           options={Object.entries(POSE_DATA).map(([id, def]) => ({ value: id, label: def.label }))}
         />
 
         <SelectField
           label="Main courante"
-          value={affaire.mc}
-          onChange={(v) => onChange({ mc: v as Affaire['mc'] })}
+          value={d.mc}
+          onChange={(v) => updateDefaults({ mc: v as TraveeConfig['mc'] })}
           options={Object.entries(TYPES_MC).map(([id, def]) => ({ value: id, label: def.label }))}
         />
 
         <SelectField
           label="Lieu"
-          value={affaire.lieu}
-          onChange={(v) => onChange({ lieu: v as Affaire['lieu'] })}
+          value={d.lieu}
+          onChange={(v) => updateDefaults({ lieu: v as TraveeConfig['lieu'] })}
           options={[
             { value: 'prive', label: 'Privé' },
             { value: 'public', label: 'Public' },
@@ -98,8 +104,8 @@ export function Sidebar({ affaire, onChange, onExportXML, onExportPDF, onExportB
 
         <InputField
           label="Hauteur (mm)"
-          value={affaire.hauteur}
-          onChange={(v) => onChange({ hauteur: parseInt(v) || 0 })}
+          value={d.hauteur}
+          onChange={(v) => updateDefaults({ hauteur: parseInt(v) || 0 })}
           type="number"
           suffix="mm"
         />
@@ -108,17 +114,17 @@ export function Sidebar({ affaire, onChange, onExportXML, onExportPDF, onExportB
           <label className="block text-xs text-gray-500">Rampant</label>
           <input
             type="checkbox"
-            checked={affaire.rampant}
-            onChange={(e) => onChange({ rampant: e.target.checked })}
+            checked={d.rampant}
+            onChange={(e) => updateDefaults({ rampant: e.target.checked })}
             className="accent-blue-500"
           />
         </div>
 
-        {affaire.rampant && (
+        {d.rampant && (
           <SelectField
             label="Angle rampant"
-            value={String(affaire.angle)}
-            onChange={(v) => onChange({ angle: parseInt(v) as Affaire['angle'] })}
+            value={String(d.angle)}
+            onChange={(v) => updateDefaults({ angle: parseInt(v) as TraveeConfig['angle'] })}
             options={[
               { value: '0', label: '0°' },
               { value: '10', label: '10°' },
@@ -130,15 +136,15 @@ export function Sidebar({ affaire, onChange, onExportXML, onExportPDF, onExportB
 
         <SelectField
           label="Fixation gauche"
-          value={affaire.fixG}
-          onChange={(v) => onChange({ fixG: v as Affaire['fixG'] })}
+          value={d.fixG}
+          onChange={(v) => updateDefaults({ fixG: v as TraveeConfig['fixG'] })}
           options={Object.entries(FIXATIONS).map(([id, def]) => ({ value: id, label: def.label }))}
         />
 
         <SelectField
           label="Fixation droite"
-          value={affaire.fixD}
-          onChange={(v) => onChange({ fixD: v as Affaire['fixD'] })}
+          value={d.fixD}
+          onChange={(v) => updateDefaults({ fixD: v as TraveeConfig['fixD'] })}
           options={Object.entries(FIXATIONS).map(([id, def]) => ({ value: id, label: def.label }))}
         />
 

@@ -60,22 +60,21 @@ function hasMachinings(posType: CutInfo['posType']): boolean {
 
 function collectCuts(affaire: Affaire, resultat: ResultatAffaire): CutInfo[] {
   const cuts: CutInfo[] = [];
-  const gc = TYPES_GC[affaire.typeGC];
-  const mc = TYPES_MC[affaire.mc];
   const affaireCode = getAffaireCode(affaire.chantier);
 
   for (let ti = 0; ti < resultat.travees.length; ti++) {
     const rt = resultat.travees[ti];
     const t = rt.travee;
+    // Config is on the travee
+    const gc = TYPES_GC[t.typeGC];
+    const mc = TYPES_MC[t.mc];
 
     for (let q = 0; q < t.qte; q++) {
       // --- Angles de coupe ---
-      // coupeG/coupeD (45°) = angle en plan (GC en L/U) → profils HORIZONTAUX
-      // rampant + angle = pente (escalier) → éléments VERTICAUX
-      const hCoupeG = t.coupeG; // horizontal profiles
+      const hCoupeG = t.coupeG;
       const hCoupeD = t.coupeD;
-      const vCoupe = affaire.rampant && affaire.angle > 0
-        ? String(90 - affaire.angle)
+      const vCoupe = t.rampant && t.angle > 0
+        ? String(90 - t.angle)
         : '90';
 
       // Raidisseurs — vertical → angle rampant
@@ -89,7 +88,7 @@ function collectCuts(affaire: Affaire, resultat: ResultatAffaire): CutInfo[] {
           coupeD: vCoupe,
           position: buildCID(affaireCode, 'raidisseur'),
           posType: 'raidisseur',
-          hauteur: affaire.hauteur,
+          hauteur: t.hauteur,
           affaireCode,
         });
       }
@@ -104,7 +103,7 @@ function collectCuts(affaire: Affaire, resultat: ResultatAffaire): CutInfo[] {
         coupeD: hCoupeD,
         position: buildCID(affaireCode, 'mc'),
         posType: 'mc',
-        hauteur: affaire.hauteur,
+        hauteur: t.hauteur,
         affaireCode,
       });
 
@@ -118,7 +117,7 @@ function collectCuts(affaire: Affaire, resultat: ResultatAffaire): CutInfo[] {
         coupeD: hCoupeD,
         position: buildCID(affaireCode, 'closoir'),
         posType: 'closoir',
-        hauteur: affaire.hauteur,
+        hauteur: t.hauteur,
         affaireCode,
       });
 
@@ -149,7 +148,7 @@ function collectCuts(affaire: Affaire, resultat: ResultatAffaire): CutInfo[] {
             position: buildCID(affaireCode, posType),
             posType,
             usinages,
-            hauteur: affaire.hauteur,
+            hauteur: t.hauteur,
             affaireCode,
           });
         }
@@ -167,7 +166,7 @@ function collectCuts(affaire: Affaire, resultat: ResultatAffaire): CutInfo[] {
             coupeD: vCoupe,
             position: buildCID(affaireCode, 'barreau'),
             posType: 'barreau',
-            hauteur: affaire.hauteur,
+            hauteur: t.hauteur,
             affaireCode,
           });
         }
@@ -185,7 +184,7 @@ function collectCuts(affaire: Affaire, resultat: ResultatAffaire): CutInfo[] {
             coupeD: hCoupeD,
             position: buildCID(affaireCode, 'u_remplissage'),
             posType: 'u_remplissage',
-            hauteur: affaire.hauteur,
+            hauteur: t.hauteur,
             affaireCode,
           });
         }
@@ -203,7 +202,7 @@ function collectCuts(affaire: Affaire, resultat: ResultatAffaire): CutInfo[] {
             coupeD: hCoupeD,
             position: buildCID(affaireCode, 'tube'),
             posType: 'tube',
-            hauteur: affaire.hauteur,
+            hauteur: t.hauteur,
             affaireCode,
           });
         }

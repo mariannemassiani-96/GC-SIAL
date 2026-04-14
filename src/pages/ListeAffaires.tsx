@@ -65,7 +65,7 @@ export function ListeAffaires({ affaires, onSelect, onNew, onDuplicate, onDelete
                         <span>•</span>
                         <span>{a.chantier || '—'}</span>
                         <span>•</span>
-                        <span>{TYPES_GC[a.typeGC]?.label ?? a.typeGC}</span>
+                        <span>{TYPES_GC[a.defaults.typeGC]?.label ?? a.defaults.typeGC}</span>
                         <span>•</span>
                         <span>{a.travees.length} travée(s)</span>
                       </div>

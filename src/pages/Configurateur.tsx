@@ -127,7 +127,7 @@ export function Configurateur({ affaire, onUpdate, onBack }: ConfigurateurProps)
               </div>
               <div className="p-4">
                 {activeTab === 'debits' && <TabDebits resultat={resultat} />}
-                {activeTab === 'usinages' && <TabUsinages resultat={resultat} angle={affaire.angle} />}
+                {activeTab === 'usinages' && <TabUsinages resultat={resultat} />}
                 {activeTab === 'bc' && <TabBonCommande resultat={resultat} />}
               </div>
             </div>

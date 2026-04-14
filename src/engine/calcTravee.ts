@@ -63,19 +63,20 @@ export function calcPositionsUsinages(
   };
 }
 
-export function calcTravee(travee: Travee, affaire: Affaire): ResultatTravee {
-  const gc = TYPES_GC[affaire.typeGC];
-  const mc = TYPES_MC[affaire.mc];
-  const pose = POSE_DATA[affaire.pose];
+export function calcTravee(travee: Travee, _affaire: Affaire): ResultatTravee {
+  // Config is now on the travee itself
+  const gc = TYPES_GC[travee.typeGC];
+  const mc = TYPES_MC[travee.mc];
+  const pose = POSE_DATA[travee.pose];
   const alertes: Alerte[] = [];
 
   // 1. Nombre de raidisseurs
-  const entraxeMax = ENTRAXE[affaire.lieu][affaire.angle];
+  const entraxeMax = ENTRAXE[travee.lieu][travee.angle];
   const nbRaid = Math.ceil(travee.largeur / entraxeMax) + 1;
   const entraxeEff = travee.largeur / (nbRaid - 1);
 
   // 2. Débit raidisseur
-  const debRaid = affaire.hauteur + pose.offsets[mc.raidKey];
+  const debRaid = travee.hauteur + pose.offsets[mc.raidKey];
 
   // 3. h1 et débit barreau
   const h1 = debRaid - 20 - mc.hauteur;
@@ -88,8 +89,8 @@ export function calcTravee(travee: Travee, affaire: Affaire): ResultatTravee {
   }
 
   // 5. Débits profilés filants
-  const dedG = affaire.fixG === 'libre' ? 5 : 0;
-  const dedD = affaire.fixD === 'libre' ? 5 : 0;
+  const dedG = travee.fixG === 'libre' ? 5 : 0;
+  const dedD = travee.fixD === 'libre' ? 5 : 0;
   const debMC = travee.largeur - dedG - dedD;
   const debLisse = travee.largeur;
   const debClosoir = travee.largeur;
@@ -102,7 +103,7 @@ export function calcTravee(travee: Travee, affaire: Affaire): ResultatTravee {
     const deltaH = mc.raidKey === 'std' ? -112 : -80;
     const X = 20;
     const Y = 20;
-    hautVitre = Math.max(0, affaire.hauteur + deltaH - X - Y);
+    hautVitre = Math.max(0, travee.hauteur + deltaH - X - Y);
     largVitre = Math.max(0, entraxeEff - 10);
   }
 
@@ -168,20 +169,20 @@ export function calcTravee(travee: Travee, affaire: Affaire): ResultatTravee {
   }
 
   // 10. Alertes
-  if (affaire.hauteur < 1000) {
-    alertes.push({ niveau: 'bloquant', message: `Hauteur ${affaire.hauteur}mm < 1000mm minimum` });
+  if (travee.hauteur < 1000) {
+    alertes.push({ niveau: 'bloquant', message: `Hauteur ${travee.hauteur}mm < 1000mm minimum` });
   }
-  if (gc.hMax && affaire.hauteur > gc.hMax) {
+  if (gc.hMax && travee.hauteur > gc.hMax) {
     alertes.push({
       niveau: 'bloquant',
-      message: `Hauteur ${affaire.hauteur}mm > ${gc.hMax}mm max pour ${gc.label}`,
+      message: `Hauteur ${travee.hauteur}mm > ${gc.hMax}mm max pour ${gc.label}`,
     });
   }
-  if (affaire.rampant) {
+  if (travee.rampant) {
     alertes.push({ niveau: 'info', message: 'GC rampant — vérifier l\'angle de coupe' });
   }
 
-  // 10. Nomenclature
+  // 11. Nomenclature
   const calcResult = {
     nbRaid,
     entraxeEff,
@@ -196,7 +197,7 @@ export function calcTravee(travee: Travee, affaire: Affaire): ResultatTravee {
     hautVitre,
     largVitre,
   };
-  const nomenclature = calcNomenclature(travee, affaire, calcResult);
+  const nomenclature = calcNomenclature(travee, calcResult);
 
   return {
     travee,

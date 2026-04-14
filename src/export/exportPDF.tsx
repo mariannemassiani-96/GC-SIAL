@@ -95,10 +95,11 @@ function SchemaLissePDF({ rt, lisseLabel }: { rt: ResultatTravee; lisseLabel: st
 }
 
 function FicheFabricationPage({ affaire, rt }: { affaire: Affaire; rt: ResultatTravee }) {
-  const gc = TYPES_GC[affaire.typeGC];
-  const mc = TYPES_MC[affaire.mc];
-  const pose = POSE_DATA[affaire.pose];
-  const usinageAngle = USINAGE_ANGLE[affaire.angle] ?? USINAGE_ANGLE[0];
+  const t = rt.travee;
+  const gc = TYPES_GC[t.typeGC];
+  const mc = TYPES_MC[t.mc];
+  const pose = POSE_DATA[t.pose];
+  const usinageAngle = USINAGE_ANGLE[t.angle] ?? USINAGE_ANGLE[0];
   const lisseLabels = ['INF', 'SUP', 'MED'];
 
   const raidSet = new Set(rt.posRaidisseurs.map((p) => Math.round(p * 10) / 10));
@@ -134,7 +135,7 @@ function FicheFabricationPage({ affaire, rt }: { affaire: Affaire; rt: ResultatT
       {/* Travee info */}
       <View style={s.section}>
         <Text style={s.sectionTitle}>
-          Travée {rt.travee.repere} — {rt.travee.etage} — L={rt.travee.largeur}mm — H={affaire.hauteur}mm — Qté={rt.travee.qte}
+          Travée {rt.travee.repere} — {rt.travee.etage} — L={rt.travee.largeur}mm — H={t.hauteur}mm — Qté={rt.travee.qte}
         </Text>
       </View>
 
@@ -218,7 +219,7 @@ function FicheFabricationPage({ affaire, rt }: { affaire: Affaire; rt: ResultatT
       {/* Raidisseur usinages */}
       <View style={s.usinageInfo}>
         <Text style={{ fontSize: 8, fontWeight: 'bold', marginBottom: 2 }}>
-          Usinages Raidisseur (180000) — Angle {affaire.angle}°
+          Usinages Raidisseur (180000) — Angle {t.angle}°
         </Text>
         <Text style={{ fontSize: 7 }}>
           Goupille lisse basse : X=15mm, Y={usinageAngle.goupilleRaidY}mm, Ø{usinageAngle.goupilleDiametre}mm

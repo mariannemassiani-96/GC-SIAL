@@ -13,24 +13,8 @@ export type LieuId = 'prive' | 'public';
 export type FixationId = 'libre' | 'mur_d' | 'mur_g' | 'raccord90' | 'raccord_droit';
 export type StatutAffaire = 'brouillon' | 'a_valider' | 'validee';
 
-export interface Travee {
-  id: string;
-  etage: string;
-  repere: string;
-  largeur: number;
-  hauteur: number;
-  qte: number;
-  coupeG: '90' | '45';
-  coupeD: '90' | '45';
-}
-
-export interface Affaire {
-  id: string;
-  ref: string;
-  client: string;
-  chantier: string;
-  date: string;
-  coloris: string;
+/** Configuration technique — portée par chaque travée */
+export interface TraveeConfig {
   typeGC: TypeGCId;
   pose: PoseId;
   mc: MCId;
@@ -40,6 +24,28 @@ export interface Affaire {
   fixG: FixationId;
   fixD: FixationId;
   hauteur: number;
+}
+
+export interface Travee extends TraveeConfig {
+  id: string;
+  etage: string;
+  repere: string;
+  largeur: number;
+  qte: number;
+  coupeG: '90' | '45';
+  coupeD: '90' | '45';
+}
+
+/** Affaire = enveloppe projet + valeurs par défaut pour nouvelles travées */
+export interface Affaire {
+  id: string;
+  ref: string;
+  client: string;
+  chantier: string;
+  date: string;
+  coloris: string;
+  /** Valeurs par défaut — pré-remplissent les nouvelles travées */
+  defaults: TraveeConfig;
   travees: Travee[];
   statut: StatutAffaire;
 }
@@ -50,8 +56,8 @@ export interface NomenclatureItem {
   longueur: number;
   qte: number;
   type: 'profil' | 'accessoire';
-  coupeG: string;  // angle coupe gauche (ex: "90", "45")
-  coupeD: string;  // angle coupe droite
+  coupeG: string;
+  coupeD: string;
 }
 
 export interface UsinageLisse {
