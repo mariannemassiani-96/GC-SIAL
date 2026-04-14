@@ -3,6 +3,27 @@ import { ENTRAXE, ESPACEMENT_BARREAU, DEPASSEMENT_LISSE } from '../constants/par
 import { TYPES_GC, TYPES_MC, POSE_DATA } from '../constants/typesGC';
 import { calcNomenclature } from './calcNomenclature';
 
+/**
+ * Répartit les barreaux symétriquement dans un intervalle [start, end].
+ * Les barreaux sont centrés dans l'intervalle avec un espacement ≤ ESPACEMENT_BARREAU.
+ * Aucun barreau n'est placé sur start ou end (ce sont les raidisseurs).
+ */
+function barreauxDansIntervalle(start: number, end: number): number[] {
+  const largeur = end - start;
+  if (largeur < ESPACEMENT_BARREAU * 1.5) return []; // pas de place pour un barreau
+
+  const nbBar = Math.floor(largeur / ESPACEMENT_BARREAU) - 1;
+  if (nbBar <= 0) return [];
+
+  // Espacement réel = largeur / (nbBar + 1) → répartition symétrique
+  const esp = largeur / (nbBar + 1);
+  const positions: number[] = [];
+  for (let i = 1; i <= nbBar; i++) {
+    positions.push(Math.round((start + i * esp) * 10) / 10);
+  }
+  return positions;
+}
+
 export function calcPositionsUsinages(
   longueurLisse: number,
   nbRaid: number,
@@ -10,20 +31,19 @@ export function calcPositionsUsinages(
 ): UsinageLisse {
   const depassement = DEPASSEMENT_LISSE;
 
+  // Positions des raidisseurs
   const posRaidisseurs: number[] = [];
   for (let i = 0; i < nbRaid; i++) {
     posRaidisseurs.push(Math.round((depassement + i * entraxeEff) * 10) / 10);
   }
 
+  // Barreaux répartis symétriquement dans chaque intervalle entre raidisseurs
   const posBarreaux: number[] = [];
-  for (
-    let x = ESPACEMENT_BARREAU;
-    x <= longueurLisse - ESPACEMENT_BARREAU + 0.1;
-    x += ESPACEMENT_BARREAU
-  ) {
-    posBarreaux.push(Math.round(x * 10) / 10);
+  for (let i = 0; i < nbRaid - 1; i++) {
+    posBarreaux.push(...barreauxDansIntervalle(posRaidisseurs[i], posRaidisseurs[i + 1]));
   }
 
+  // Goupilles d'extrémité
   const posGoupilleG = 68.3;
   const posGoupilleD = Math.round((longueurLisse - 68.3) * 10) / 10;
 
