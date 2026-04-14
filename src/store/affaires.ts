@@ -58,6 +58,7 @@ function migrateAffaire(a: any): Affaire {
     fixG: t.fixG ?? defaults.fixG,
     fixD: t.fixD ?? defaults.fixD,
     hauteur: t.hauteur ?? defaults.hauteur,
+    largeur2: t.largeur2 ?? 0,
   }));
 
   return {
@@ -102,6 +103,7 @@ export function createEmptyTravee(index: number, config: TraveeConfig): Travee {
     etage: 'RDC',
     repere: `T${String(index).padStart(2, '0')}`,
     largeur: 2000,
+    largeur2: 0,
     qte: 1,
     coupeG: '90',
     coupeD: '90',

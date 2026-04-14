@@ -1,4 +1,4 @@
-import type { Affaire, ResultatAffaire, Alerte, NomenclatureItem } from '../types';
+import type { Affaire, Travee, ResultatAffaire, Alerte, NomenclatureItem } from '../types';
 import { calcTravee } from './calcTravee';
 import { optimiserBarres } from './optimiserBarres';
 
@@ -8,7 +8,27 @@ export { optimiserBarres } from './optimiserBarres';
 export { calcPositionsUsinages } from './calcTravee';
 
 export function calculerAffaire(affaire: Affaire): ResultatAffaire {
-  const travees = affaire.travees.map((t) => calcTravee(t, affaire));
+  // Pour les travées en angle (largeur2 > 0), on calcule les deux branches
+  const travees = affaire.travees.flatMap((t) => {
+    const results = [calcTravee(t, affaire)];
+    if (t.largeur2 > 0 && (t.coupeG === '45' || t.coupeD === '45')) {
+      // Branche 2 : inverser les fixations et coupes, utiliser largeur2
+      const t2: Travee = {
+        ...t,
+        id: t.id + '_b2',
+        repere: t.repere + 'b',
+        largeur: t.largeur2,
+        largeur2: 0,
+        // Inverser G/D pour la branche 2 (elle part de l'angle)
+        fixG: t.coupeD === '45' ? 'raccord90' : t.fixG,
+        fixD: t.coupeD === '45' ? t.fixD : 'raccord90',
+        coupeG: t.coupeD === '45' ? '45' : '90',
+        coupeD: t.coupeD === '45' ? '90' : '45',
+      };
+      results.push(calcTravee(t2, affaire));
+    }
+    return results;
+  });
 
   // Nomenclature globale — regrouper par ref et additionner
   const nomenclatureMap = new Map<string, NomenclatureItem>();

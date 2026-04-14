@@ -43,6 +43,11 @@ function getSchemaId(t: Travee): string {
   return '?';
 }
 
+/** Schéma avec angle = a une coupe 45° sur un côté */
+function schemaHasAngle(t: Travee): boolean {
+  return t.coupeG === '45' || t.coupeD === '45';
+}
+
 /** Petit SVG schématique du schéma de pose (vue intérieure) */
 function SchemaPoseMini({ schema }: { schema: SchemaPose }) {
   const w = 80, h = 28, pad = 6;
@@ -126,12 +131,16 @@ export function SectionTravees({ affaire, onChange, alertesByTravee }: SectionTr
     onChange({ travees: [...affaire.travees, dup] });
   };
 
-  const applySchema = (id: string, schema: typeof SCHEMAS_POSE[0]) => {
+  const applySchema = (id: string, schema: SchemaPose) => {
+    const hasAngle = schema.coupeG === '45' || schema.coupeD === '45';
+    const travee = affaire.travees.find((t) => t.id === id);
     updateTravee(id, {
       fixG: schema.fixG,
       fixD: schema.fixD,
       coupeG: schema.coupeG,
       coupeD: schema.coupeD,
+      // Pré-remplir largeur2 si angle et pas encore définie
+      largeur2: hasAngle ? (travee?.largeur2 || travee?.largeur || 2000) : 0,
     });
   };
 
@@ -165,7 +174,9 @@ export function SectionTravees({ affaire, onChange, alertesByTravee }: SectionTr
 
                   <span className="text-xs font-mono font-semibold text-blue-400 w-10">{t.repere}</span>
                   <span className="text-xs text-gray-500 w-10">{t.etage}</span>
-                  <span className="text-xs font-mono text-gray-200 w-14 text-right">{t.largeur}</span>
+                  <span className="text-xs font-mono text-gray-200 text-right">
+                    {t.largeur}{schemaHasAngle(t) && t.largeur2 > 0 ? <span className="text-amber-400"> + {t.largeur2}</span> : ''}
+                  </span>
                   <span className="text-[10px] text-gray-600">×</span>
                   <span className="text-xs font-mono text-gray-200 w-12 text-right">{t.hauteur}</span>
                   <span className="text-[10px] text-gray-600">mm</span>
@@ -198,7 +209,7 @@ export function SectionTravees({ affaire, onChange, alertesByTravee }: SectionTr
                 {isExpanded && (
                   <div className="px-4 pb-4 pt-2 border-t border-[#252830] space-y-3" onClick={(e) => e.stopPropagation()}>
                     {/* Row 1: basic fields */}
-                    <div className="grid grid-cols-6 gap-2">
+                    <div className={`grid gap-2 ${schemaHasAngle(t) ? 'grid-cols-7' : 'grid-cols-6'}`}>
                       <div>
                         <label className="block text-[10px] text-gray-500 mb-0.5">Repère</label>
                         <input value={t.repere} onChange={(e) => updateTravee(t.id, { repere: e.target.value })}
@@ -210,10 +221,19 @@ export function SectionTravees({ affaire, onChange, alertesByTravee }: SectionTr
                           className="w-full bg-[#1e2028] border border-[#353840] rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:border-blue-500" />
                       </div>
                       <div>
-                        <label className="block text-[10px] text-gray-500 mb-0.5">Largeur (mm)</label>
+                        <label className="block text-[10px] text-gray-500 mb-0.5">
+                          {schemaHasAngle(t) ? 'Côté 1 (mm)' : 'Largeur (mm)'}
+                        </label>
                         <input type="number" value={t.largeur} onChange={(e) => updateTravee(t.id, { largeur: parseInt(e.target.value) || 0 })}
                           className="w-full bg-[#1e2028] border border-[#353840] rounded px-2 py-1 text-xs text-gray-200 font-mono focus:outline-none focus:border-blue-500" />
                       </div>
+                      {schemaHasAngle(t) && (
+                        <div>
+                          <label className="block text-[10px] text-amber-400 mb-0.5">Côté 2 (mm)</label>
+                          <input type="number" value={t.largeur2} onChange={(e) => updateTravee(t.id, { largeur2: parseInt(e.target.value) || 0 })}
+                            className="w-full bg-[#1e2028] border border-amber-500/30 rounded px-2 py-1 text-xs text-amber-300 font-mono focus:outline-none focus:border-amber-500" />
+                        </div>
+                      )}
                       <div>
                         <label className="block text-[10px] text-gray-500 mb-0.5">Hauteur (mm)</label>
                         <input type="number" value={t.hauteur} onChange={(e) => updateTravee(t.id, { hauteur: parseInt(e.target.value) || 0 })}
