@@ -27,8 +27,10 @@ export function calcPositionsUsinages(
   const posGoupilleG = 68.3;
   const posGoupilleD = Math.round((longueurLisse - 68.3) * 10) / 10;
 
-  const allPercage = [...posBarreaux, posGoupilleG, posGoupilleD];
-  const uniquePercage = [...new Set(allPercage)].sort((a, b) => a - b);
+  // percageLisse = barreaux + goupilles extrémité + positions raidisseurs
+  // (les raidisseurs ont un "Perçage Lisse" goupille 110306 EN PLUS du "Perçage Lisse_Raidisseur")
+  const allPercage = [...posBarreaux, posGoupilleG, posGoupilleD, ...posRaidisseurs];
+  const uniquePercage = [...new Set(allPercage.map(v => Math.round(v * 10) / 10))].sort((a, b) => a - b);
 
   return {
     percageLisse: uniquePercage,
