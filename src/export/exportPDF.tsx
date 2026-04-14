@@ -1,4 +1,4 @@
-import { Document, Page, Text, View, StyleSheet, pdf } from '@react-pdf/renderer';
+import { Document, Page, Text, View, StyleSheet, pdf, Svg, Rect, Line } from '@react-pdf/renderer';
 import type { Affaire, ResultatAffaire, ResultatTravee } from '../types';
 import { ACCESSOIRES } from '../constants/profils';
 import { TYPES_GC, TYPES_MC, POSE_DATA } from '../constants/typesGC';
@@ -19,7 +19,6 @@ const s = StyleSheet.create({
   tableRow: { flexDirection: 'row', borderBottom: '0.5 solid #ccc', paddingVertical: 2 },
   cellSm: { width: '8%', paddingHorizontal: 2, textAlign: 'right' },
   cellMd: { width: '12%', paddingHorizontal: 2 },
-  cellLg: { width: '25%', paddingHorizontal: 2 },
   cellXl: { width: '35%', paddingHorizontal: 2 },
   bold: { fontWeight: 'bold' },
   controlBox: { marginTop: 16, borderTop: '1 solid #333', paddingTop: 8 },
@@ -28,12 +27,83 @@ const s = StyleSheet.create({
   usinageInfo: { marginTop: 6, padding: 6, backgroundColor: '#f5f5f5', borderRadius: 2 },
 });
 
+/**
+ * Schéma de la lisse en SVG react-pdf (lignes + rectangles uniquement, pas de SVG Text).
+ * Labels affichés en dessous avec des Text PDF normaux.
+ */
+function SchemaLissePDF({ rt, lisseLabel }: { rt: ResultatTravee; lisseLabel: string }) {
+  const u = rt.usinages[0];
+  if (!u) return null;
+
+  const L = rt.longueurLisse;
+  const svgW = 530;
+  const svgH = 36;
+  const pad = 8;
+  const barY = 10;
+  const barH = 16;
+  const scale = (svgW - 2 * pad) / L;
+  const toX = (mm: number) => pad + mm * scale;
+
+  const raidSet = new Set(rt.posRaidisseurs.map((p) => Math.round(p * 10) / 10));
+  const goupilleG = 68.3;
+  const goupilleD = Math.round((L - 68.3) * 10) / 10;
+
+  const barreaux = u.percageLisse.filter(
+    (p) =>
+      !raidSet.has(Math.round(p * 10) / 10) &&
+      Math.abs(p - goupilleG) > 0.05 &&
+      Math.abs(p - goupilleD) > 0.05
+  );
+
+  return (
+    <View style={{ marginTop: 2, marginBottom: 2 }}>
+      <Text style={{ fontSize: 7, fontWeight: 'bold', marginBottom: 2 }}>
+        {`Lisse ${lisseLabel} — L = ${L.toFixed(1)} mm — entraxe = ${rt.entraxeEff.toFixed(1)} mm`}
+      </Text>
+      <Svg viewBox={`0 0 ${svgW} ${svgH}`} style={{ width: svgW, height: svgH }}>
+        {/* Lisse bar */}
+        <Rect x={toX(0)} y={barY} width={toX(L) - toX(0)} height={barH} fill="#e8e8e8" stroke="#999" strokeWidth={0.5} />
+
+        {/* Goupilles (green dashed) */}
+        {[goupilleG, goupilleD].map((pos, i) => (
+          <Line key={`g${i}`} x1={toX(pos)} y1={barY - 2} x2={toX(pos)} y2={barY + barH + 2} stroke="#16a34a" strokeWidth={0.7} strokeDasharray="2,1" />
+        ))}
+
+        {/* Barreaux (blue) */}
+        {barreaux.map((pos, i) => (
+          <Line key={`b${i}`} x1={toX(pos)} y1={barY + 1} x2={toX(pos)} y2={barY + barH - 1} stroke="#2563eb" strokeWidth={0.4} />
+        ))}
+
+        {/* Raidisseurs (red) */}
+        {rt.posRaidisseurs.map((pos, i) => (
+          <Line key={`r${i}`} x1={toX(pos)} y1={barY - 6} x2={toX(pos)} y2={barY + barH + 6} stroke="#dc2626" strokeWidth={1.2} />
+        ))}
+      </Svg>
+      {/* Raidisseur position labels below */}
+      <Text style={{ fontSize: 5.5, color: '#dc2626', marginTop: 0 }}>
+        Raidisseurs : {rt.posRaidisseurs.map((p) => p.toFixed(1)).join(' | ')} mm
+      </Text>
+      <View style={{ flexDirection: 'row', gap: 12, marginTop: 1 }}>
+        <Text style={{ fontSize: 5, color: '#666' }}>
+          <Text style={{ color: '#dc2626' }}>|</Text> Raid.{'  '}
+          <Text style={{ color: '#2563eb' }}>|</Text> Barr.{'  '}
+          <Text style={{ color: '#16a34a' }}>:</Text> Goup.
+        </Text>
+      </View>
+    </View>
+  );
+}
+
 function FicheFabricationPage({ affaire, rt }: { affaire: Affaire; rt: ResultatTravee }) {
   const gc = TYPES_GC[affaire.typeGC];
   const mc = TYPES_MC[affaire.mc];
   const pose = POSE_DATA[affaire.pose];
   const usinageAngle = USINAGE_ANGLE[affaire.angle] ?? USINAGE_ANGLE[0];
   const lisseLabels = ['INF', 'SUP', 'MED'];
+
+  const raidSet = new Set(rt.posRaidisseurs.map((p) => Math.round(p * 10) / 10));
+  const goupilleG = 68.3;
+  const goupilleD = Math.round((rt.longueurLisse - 68.3) * 10) / 10;
 
   return (
     <Page size="A4" style={s.page}>
@@ -89,23 +159,59 @@ function FicheFabricationPage({ affaire, rt }: { affaire: Affaire; rt: ResultatT
         </View>
       </View>
 
-      {/* Usinages */}
+      {/* Schema + Usinages per lisse */}
       {rt.usinages.length > 0 && (
         <View style={s.section}>
           <Text style={{ fontSize: 9, fontWeight: 'bold', marginBottom: 3 }}>Usinages Lisses</Text>
-          {rt.usinages.map((u, li) => (
-            <View key={li} style={{ marginBottom: 4 }}>
-              <Text style={{ fontSize: 8, fontWeight: 'bold', color: '#333' }}>
-                Lisse {lisseLabels[li]} — L = {rt.longueurLisse.toFixed(1)}mm
-              </Text>
-              <Text style={{ fontSize: 7, color: '#444', marginTop: 1 }}>
-                Perçage Lisse : {u.percageLisse.map((p) => p.toFixed(1)).join(' | ')} mm
-              </Text>
-              <Text style={{ fontSize: 7, color: '#444', marginTop: 1 }}>
-                Perçage Raidisseur : {u.percageLisseRaidisseur.map((p) => p.toFixed(1)).join(' | ')} mm
-              </Text>
-            </View>
-          ))}
+
+          {/* Schema (one for all lisses since identical) */}
+          <SchemaLissePDF rt={rt} lisseLabel={lisseLabels[0]} />
+
+          {/* Positions table */}
+          {rt.usinages.map((u, li) => {
+            const posBarreaux = u.percageLisse.filter(
+              (p) =>
+                !raidSet.has(Math.round(p * 10) / 10) &&
+                Math.abs(p - goupilleG) > 0.05 &&
+                Math.abs(p - goupilleD) > 0.05
+            );
+            const posRaid = u.percageLisse.filter((p) => raidSet.has(Math.round(p * 10) / 10));
+
+            return (
+              <View key={li} style={{ marginTop: 3 }}>
+                <Text style={{ fontSize: 7, fontWeight: 'bold', marginBottom: 1 }}>
+                  Lisse {lisseLabels[li]} — Positions de perçage
+                </Text>
+                <View style={s.table}>
+                  <View style={{ ...s.tableHeader, backgroundColor: '#eee' }}>
+                    <Text style={{ width: '28%', paddingHorizontal: 2, fontSize: 6 }}>Opération</Text>
+                    <Text style={{ width: '7%', paddingHorizontal: 2, fontSize: 6, textAlign: 'right' }}>Nb</Text>
+                    <Text style={{ width: '65%', paddingHorizontal: 2, fontSize: 6 }}>Positions X (mm)</Text>
+                  </View>
+                  <View style={s.tableRow}>
+                    <Text style={{ width: '28%', paddingHorizontal: 2, fontSize: 6 }}>Goupilles extrémité</Text>
+                    <Text style={{ width: '7%', paddingHorizontal: 2, fontSize: 6, textAlign: 'right' }}>2</Text>
+                    <Text style={{ width: '65%', paddingHorizontal: 2, fontSize: 6 }}>{goupilleG.toFixed(1)} ; {goupilleD.toFixed(1)}</Text>
+                  </View>
+                  <View style={s.tableRow}>
+                    <Text style={{ width: '28%', paddingHorizontal: 2, fontSize: 6 }}>Perçage barreaux</Text>
+                    <Text style={{ width: '7%', paddingHorizontal: 2, fontSize: 6, textAlign: 'right' }}>{posBarreaux.length}</Text>
+                    <Text style={{ width: '65%', paddingHorizontal: 2, fontSize: 5.5 }}>{posBarreaux.map((p) => p.toFixed(1)).join(' ; ')}</Text>
+                  </View>
+                  <View style={s.tableRow}>
+                    <Text style={{ width: '28%', paddingHorizontal: 2, fontSize: 6 }}>Perçage raidisseurs</Text>
+                    <Text style={{ width: '7%', paddingHorizontal: 2, fontSize: 6, textAlign: 'right' }}>{posRaid.length}</Text>
+                    <Text style={{ width: '65%', paddingHorizontal: 2, fontSize: 6 }}>{posRaid.map((p) => p.toFixed(1)).join(' ; ')}</Text>
+                  </View>
+                  <View style={{ ...s.tableRow, backgroundColor: '#f0f0f0' }}>
+                    <Text style={{ width: '28%', paddingHorizontal: 2, fontSize: 6, fontWeight: 'bold' }}>Fraisage raidisseur</Text>
+                    <Text style={{ width: '7%', paddingHorizontal: 2, fontSize: 6, textAlign: 'right' }}>{u.percageLisseRaidisseur.length}</Text>
+                    <Text style={{ width: '65%', paddingHorizontal: 2, fontSize: 6, fontWeight: 'bold' }}>{u.percageLisseRaidisseur.map((p) => p.toFixed(1)).join(' ; ')}</Text>
+                  </View>
+                </View>
+              </View>
+            );
+          })}
         </View>
       )}
 

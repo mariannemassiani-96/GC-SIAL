@@ -4,19 +4,21 @@ import { TYPES_GC, TYPES_MC, POSE_DATA } from '../constants/typesGC';
 import { calcNomenclature } from './calcNomenclature';
 
 /**
- * Répartit les barreaux symétriquement dans un intervalle [start, end].
- * Garantit que chaque espacement ≤ ESPACEMENT_BARREAU (130mm) pour conformité NF P01-012.
- * Aucun barreau n'est placé sur start ou end (ce sont les raidisseurs).
+ * Calcule le nombre de barreaux par intervalle pour un entraxe donné.
+ * ceil garantit espacement ≤ 130mm (NF P01-012).
  */
-function barreauxDansIntervalle(start: number, end: number): number[] {
-  const largeur = end - start;
-  if (largeur <= ESPACEMENT_BARREAU) return []; // gap ≤ 130mm → conforme, pas besoin de barreau
+function calcBarParIntervalle(entraxeEff: number): number {
+  if (entraxeEff <= ESPACEMENT_BARREAU) return 0;
+  return Math.ceil(entraxeEff / ESPACEMENT_BARREAU) - 1;
+}
 
-  // ceil garantit que l'espacement réel ≤ 130mm
-  const nbBar = Math.ceil(largeur / ESPACEMENT_BARREAU) - 1;
+/**
+ * Répartit nbBar barreaux symétriquement dans un intervalle [start, end].
+ * L'espacement barreau-barreau = espacement barreau-raidisseur = largeur/(nbBar+1).
+ */
+function barreauxDansIntervalle(start: number, end: number, nbBar: number): number[] {
   if (nbBar <= 0) return [];
-
-  // Espacement réel = largeur / (nbBar + 1) → répartition symétrique, toujours ≤ 130mm
+  const largeur = end - start;
   const esp = largeur / (nbBar + 1);
   const positions: number[] = [];
   for (let i = 1; i <= nbBar; i++) {
@@ -38,10 +40,12 @@ export function calcPositionsUsinages(
     posRaidisseurs.push(Math.round((depassement + i * entraxeEff) * 10) / 10);
   }
 
-  // Barreaux répartis symétriquement dans chaque intervalle entre raidisseurs
+  // Barreaux : même nombre dans chaque intervalle, répartis symétriquement
+  // Le nombre est calculé une seule fois sur l'entraxe pour garantir l'uniformité
+  const barParInterval = calcBarParIntervalle(entraxeEff);
   const posBarreaux: number[] = [];
   for (let i = 0; i < nbRaid - 1; i++) {
-    posBarreaux.push(...barreauxDansIntervalle(posRaidisseurs[i], posRaidisseurs[i + 1]));
+    posBarreaux.push(...barreauxDansIntervalle(posRaidisseurs[i], posRaidisseurs[i + 1], barParInterval));
   }
 
   // Goupilles d'extrémité
@@ -77,13 +81,10 @@ export function calcTravee(travee: Travee, affaire: Affaire): ResultatTravee {
   const h1 = debRaid - 20 - mc.hauteur;
   const debBarreau = gc.hasBarreaux ? Math.max(0, h1 + mc.barreauDelta) : 0;
 
-  // 4. Nombre de barreaux (ceil pour garantir espacement ≤ 130mm NF P01-012)
+  // 4. Nombre de barreaux (même nombre par intervalle, espacement ≤ 130mm NF P01-012)
   let nbBarreaux = 0;
   if (gc.hasBarreaux) {
-    const barParInterval = entraxeEff <= ESPACEMENT_BARREAU
-      ? 0
-      : Math.ceil(entraxeEff / ESPACEMENT_BARREAU) - 1;
-    nbBarreaux = Math.max(0, barParInterval) * (nbRaid - 1);
+    nbBarreaux = calcBarParIntervalle(entraxeEff) * (nbRaid - 1);
   }
 
   // 5. Débits profilés filants
