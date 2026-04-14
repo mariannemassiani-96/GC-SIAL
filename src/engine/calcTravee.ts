@@ -5,17 +5,18 @@ import { calcNomenclature } from './calcNomenclature';
 
 /**
  * Répartit les barreaux symétriquement dans un intervalle [start, end].
- * Les barreaux sont centrés dans l'intervalle avec un espacement ≤ ESPACEMENT_BARREAU.
+ * Garantit que chaque espacement ≤ ESPACEMENT_BARREAU (130mm) pour conformité NF P01-012.
  * Aucun barreau n'est placé sur start ou end (ce sont les raidisseurs).
  */
 function barreauxDansIntervalle(start: number, end: number): number[] {
   const largeur = end - start;
-  if (largeur < ESPACEMENT_BARREAU * 1.5) return []; // pas de place pour un barreau
+  if (largeur <= ESPACEMENT_BARREAU) return []; // gap ≤ 130mm → conforme, pas besoin de barreau
 
-  const nbBar = Math.floor(largeur / ESPACEMENT_BARREAU) - 1;
+  // ceil garantit que l'espacement réel ≤ 130mm
+  const nbBar = Math.ceil(largeur / ESPACEMENT_BARREAU) - 1;
   if (nbBar <= 0) return [];
 
-  // Espacement réel = largeur / (nbBar + 1) → répartition symétrique
+  // Espacement réel = largeur / (nbBar + 1) → répartition symétrique, toujours ≤ 130mm
   const esp = largeur / (nbBar + 1);
   const positions: number[] = [];
   for (let i = 1; i <= nbBar; i++) {
@@ -76,10 +77,12 @@ export function calcTravee(travee: Travee, affaire: Affaire): ResultatTravee {
   const h1 = debRaid - 20 - mc.hauteur;
   const debBarreau = gc.hasBarreaux ? Math.max(0, h1 + mc.barreauDelta) : 0;
 
-  // 4. Nombre de barreaux
+  // 4. Nombre de barreaux (ceil pour garantir espacement ≤ 130mm NF P01-012)
   let nbBarreaux = 0;
   if (gc.hasBarreaux) {
-    const barParInterval = Math.floor(entraxeEff / ESPACEMENT_BARREAU) - 1;
+    const barParInterval = entraxeEff <= ESPACEMENT_BARREAU
+      ? 0
+      : Math.ceil(entraxeEff / ESPACEMENT_BARREAU) - 1;
     nbBarreaux = Math.max(0, barParInterval) * (nbRaid - 1);
   }
 
@@ -124,7 +127,46 @@ export function calcTravee(travee: Travee, affaire: Affaire): ResultatTravee {
     usinages.push(calcPositionsUsinages(longueurLisse, nbRaid, entraxeEff));
   }
 
-  // 9. Alertes
+  // 9. Contrôle NF P01-012 : vérifier que tous les espacements ≤ 130mm
+  if (gc.hasBarreaux && usinages.length > 0) {
+    // Prendre toutes les positions d'éléments verticaux (raidisseurs + barreaux)
+    // = percageLisse SANS les goupilles d'extrémité (qui ne sont pas des éléments verticaux)
+    const posGoupG = 68.3;
+    const posGoupD = Math.round((longueurLisse - 68.3) * 10) / 10;
+    const posVerticaux = usinages[0].percageLisse.filter(
+      (p) => Math.abs(p - posGoupG) > 0.05 && Math.abs(p - posGoupD) > 0.05
+    );
+
+    // Vérifier bord gauche → premier élément
+    if (posVerticaux.length > 0 && posVerticaux[0] > ESPACEMENT_BARREAU + 0.5) {
+      alertes.push({
+        niveau: 'attention',
+        message: `Espace bord gauche → 1er élément = ${posVerticaux[0].toFixed(1)}mm > ${ESPACEMENT_BARREAU}mm`,
+      });
+    }
+    // Vérifier dernier élément → bord droit
+    if (posVerticaux.length > 0) {
+      const gapDroit = longueurLisse - posVerticaux[posVerticaux.length - 1];
+      if (gapDroit > ESPACEMENT_BARREAU + 0.5) {
+        alertes.push({
+          niveau: 'attention',
+          message: `Espace dernier élément → bord droit = ${gapDroit.toFixed(1)}mm > ${ESPACEMENT_BARREAU}mm`,
+        });
+      }
+    }
+    // Vérifier entre chaque paire d'éléments consécutifs
+    for (let i = 1; i < posVerticaux.length; i++) {
+      const gap = posVerticaux[i] - posVerticaux[i - 1];
+      if (gap > ESPACEMENT_BARREAU + 0.5) {
+        alertes.push({
+          niveau: 'bloquant',
+          message: `Espacement ${posVerticaux[i - 1].toFixed(1)}→${posVerticaux[i].toFixed(1)}mm = ${gap.toFixed(1)}mm > ${ESPACEMENT_BARREAU}mm (NF P01-012)`,
+        });
+      }
+    }
+  }
+
+  // 10. Alertes
   if (affaire.hauteur < 1000) {
     alertes.push({ niveau: 'bloquant', message: `Hauteur ${affaire.hauteur}mm < 1000mm minimum` });
   }
