@@ -14,7 +14,7 @@ interface CalcResult {
 }
 
 export function calcNomenclature(
-  _travee: Travee,
+  travee: Travee,
   affaire: Affaire,
   calc: CalcResult
 ): NomenclatureItem[] {
@@ -23,7 +23,16 @@ export function calcNomenclature(
   const mc = TYPES_MC[affaire.mc];
   const pose = POSE_DATA[affaire.pose];
 
-  function addProfil(ref: string, longueur: number, qte: number) {
+  // --- Angles de coupe ---
+  // Coupe 45° (coupeG/coupeD) = angle en plan (GC en L ou U) → profils HORIZONTAUX
+  // Rampant (affaire.angle) = pente (escalier) → éléments VERTICAUX
+  const hCoupeG = travee.coupeG; // pour profils horizontaux
+  const hCoupeD = travee.coupeD;
+  const vCoupe = affaire.rampant && affaire.angle > 0
+    ? String(90 - affaire.angle)  // ex: pente 10° → coupe à 80°
+    : '90';
+
+  function addProfil(ref: string, longueur: number, qte: number, coupeG: string, coupeD: string) {
     if (qte > 0 && longueur > 0) {
       items.push({
         ref,
@@ -31,6 +40,8 @@ export function calcNomenclature(
         longueur: Math.round(longueur * 10) / 10,
         qte,
         type: 'profil',
+        coupeG,
+        coupeD,
       });
     }
   }
@@ -43,28 +54,32 @@ export function calcNomenclature(
         longueur: 0,
         qte,
         type: 'accessoire',
+        coupeG: '—',
+        coupeD: '—',
       });
     }
   }
 
-  // Profilés
-  addProfil('180000', calc.debRaid, calc.nbRaid);
-  addProfil(mc.ref, calc.debMC, 1);
-  addProfil('180020', calc.debClosoir, 1);
+  // Profilés verticaux → angle rampant
+  addProfil('180000', calc.debRaid, calc.nbRaid, vCoupe, vCoupe);
+  if (gc.hasBarreaux && calc.nbBarreaux > 0) {
+    addProfil('180005', calc.debBarreau, calc.nbBarreaux, vCoupe, vCoupe);
+  }
+
+  // Profilés horizontaux → angle en plan (45° pour L/U)
+  addProfil(mc.ref, calc.debMC, 1, hCoupeG, hCoupeD);
+  addProfil('180020', calc.debClosoir, 1, hCoupeG, hCoupeD);
 
   if (gc.hasBarreaux || gc.hasRemplissage) {
     const nbLisses = gc.hasLisseInter ? 3 : gc.hasBarreaux ? 2 : 1;
-    addProfil('180010', calc.longueurLisse, nbLisses);
-  }
-  if (gc.hasBarreaux && calc.nbBarreaux > 0) {
-    addProfil('180005', calc.debBarreau, calc.nbBarreaux);
+    addProfil('180010', calc.longueurLisse, nbLisses, hCoupeG, hCoupeD);
   }
   if (gc.hasRemplissage) {
-    addProfil('180040', calc.debLisse, 2);
-    addProfil('126129', calc.debLisse, 2);
+    addProfil('180040', calc.debLisse, 2, hCoupeG, hCoupeD);
+    addProfil('126129', calc.debLisse, 2, '—', '—'); // joint, pas de coupe
   }
   if (gc.nbTubesRonds > 0) {
-    addProfil('140545', calc.debMC, gc.nbTubesRonds);
+    addProfil('140545', calc.debMC, gc.nbTubesRonds, hCoupeG, hCoupeD);
   }
 
   // Accessoires

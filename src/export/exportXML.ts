@@ -69,15 +69,24 @@ function collectCuts(affaire: Affaire, resultat: ResultatAffaire): CutInfo[] {
     const t = rt.travee;
 
     for (let q = 0; q < t.qte; q++) {
-      // Raidisseurs
+      // --- Angles de coupe ---
+      // coupeG/coupeD (45°) = angle en plan (GC en L/U) → profils HORIZONTAUX
+      // rampant + angle = pente (escalier) → éléments VERTICAUX
+      const hCoupeG = t.coupeG; // horizontal profiles
+      const hCoupeD = t.coupeD;
+      const vCoupe = affaire.rampant && affaire.angle > 0
+        ? String(90 - affaire.angle)
+        : '90';
+
+      // Raidisseurs — vertical → angle rampant
       for (let r = 0; r < rt.nbRaid; r++) {
         cuts.push({
           ref: '180000',
           longueur: rt.debRaid,
           traveeIdx: ti,
           traveeRepere: t.repere,
-          coupeG: t.coupeG,
-          coupeD: t.coupeD,
+          coupeG: vCoupe,
+          coupeD: vCoupe,
           position: buildCID(affaireCode, 'raidisseur'),
           posType: 'raidisseur',
           hauteur: affaire.hauteur,
@@ -85,28 +94,28 @@ function collectCuts(affaire: Affaire, resultat: ResultatAffaire): CutInfo[] {
         });
       }
 
-      // Main courante
+      // Main courante — horizontal → angle en plan
       cuts.push({
         ref: mc.ref,
         longueur: rt.debMC,
         traveeIdx: ti,
         traveeRepere: t.repere,
-        coupeG: t.coupeG,
-        coupeD: t.coupeD,
+        coupeG: hCoupeG,
+        coupeD: hCoupeD,
         position: buildCID(affaireCode, 'mc'),
         posType: 'mc',
         hauteur: affaire.hauteur,
         affaireCode,
       });
 
-      // Closoir
+      // Closoir — horizontal → angle en plan
       cuts.push({
         ref: '180020',
         longueur: rt.debClosoir,
         traveeIdx: ti,
         traveeRepere: t.repere,
-        coupeG: t.coupeG,
-        coupeD: t.coupeD,
+        coupeG: hCoupeG,
+        coupeD: hCoupeD,
         position: buildCID(affaireCode, 'closoir'),
         posType: 'closoir',
         hauteur: affaire.hauteur,
@@ -135,8 +144,8 @@ function collectCuts(affaire: Affaire, resultat: ResultatAffaire): CutInfo[] {
             longueur: rt.longueurLisse,
             traveeIdx: ti,
             traveeRepere: t.repere,
-            coupeG: t.coupeG,
-            coupeD: t.coupeD,
+            coupeG: hCoupeG,
+            coupeD: hCoupeD,
             position: buildCID(affaireCode, posType),
             posType,
             usinages,
@@ -146,7 +155,7 @@ function collectCuts(affaire: Affaire, resultat: ResultatAffaire): CutInfo[] {
         }
       }
 
-      // Barreaux
+      // Barreaux — vertical → angle rampant
       if (gc.hasBarreaux && rt.nbBarreaux > 0) {
         for (let b = 0; b < rt.nbBarreaux; b++) {
           cuts.push({
@@ -154,8 +163,8 @@ function collectCuts(affaire: Affaire, resultat: ResultatAffaire): CutInfo[] {
             longueur: rt.debBarreau,
             traveeIdx: ti,
             traveeRepere: t.repere,
-            coupeG: '90',
-            coupeD: '90',
+            coupeG: vCoupe,
+            coupeD: vCoupe,
             position: buildCID(affaireCode, 'barreau'),
             posType: 'barreau',
             hauteur: affaire.hauteur,
@@ -164,7 +173,7 @@ function collectCuts(affaire: Affaire, resultat: ResultatAffaire): CutInfo[] {
         }
       }
 
-      // U remplissage
+      // U remplissage — horizontal → angle en plan
       if (gc.hasRemplissage) {
         for (let u = 0; u < 2; u++) {
           cuts.push({
@@ -172,8 +181,8 @@ function collectCuts(affaire: Affaire, resultat: ResultatAffaire): CutInfo[] {
             longueur: rt.debLisse,
             traveeIdx: ti,
             traveeRepere: t.repere,
-            coupeG: t.coupeG,
-            coupeD: t.coupeD,
+            coupeG: hCoupeG,
+            coupeD: hCoupeD,
             position: buildCID(affaireCode, 'u_remplissage'),
             posType: 'u_remplissage',
             hauteur: affaire.hauteur,
@@ -182,7 +191,7 @@ function collectCuts(affaire: Affaire, resultat: ResultatAffaire): CutInfo[] {
         }
       }
 
-      // Tubes ronds
+      // Tubes ronds — horizontal → angle en plan
       if (gc.nbTubesRonds > 0) {
         for (let tr = 0; tr < gc.nbTubesRonds; tr++) {
           cuts.push({
@@ -190,8 +199,8 @@ function collectCuts(affaire: Affaire, resultat: ResultatAffaire): CutInfo[] {
             longueur: rt.debMC,
             traveeIdx: ti,
             traveeRepere: t.repere,
-            coupeG: t.coupeG,
-            coupeD: t.coupeD,
+            coupeG: hCoupeG,
+            coupeD: hCoupeD,
             position: buildCID(affaireCode, 'tube'),
             posType: 'tube',
             hauteur: affaire.hauteur,

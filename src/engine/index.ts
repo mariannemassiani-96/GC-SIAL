@@ -1,4 +1,4 @@
-import type { Affaire, ResultatAffaire, Alerte } from '../types';
+import type { Affaire, ResultatAffaire, Alerte, NomenclatureItem } from '../types';
 import { calcTravee } from './calcTravee';
 import { optimiserBarres } from './optimiserBarres';
 
@@ -11,11 +11,11 @@ export function calculerAffaire(affaire: Affaire): ResultatAffaire {
   const travees = affaire.travees.map((t) => calcTravee(t, affaire));
 
   // Nomenclature globale — regrouper par ref et additionner
-  const nomenclatureMap = new Map<string, { ref: string; label: string; longueur: number; qte: number; type: 'profil' | 'accessoire' }>();
+  const nomenclatureMap = new Map<string, NomenclatureItem>();
 
   for (const rt of travees) {
     for (const item of rt.nomenclature) {
-      const key = `${item.ref}_${item.longueur}`;
+      const key = `${item.ref}_${item.longueur}_${item.coupeG}_${item.coupeD}`;
       const existing = nomenclatureMap.get(key);
       if (existing) {
         existing.qte += item.qte * rt.travee.qte;

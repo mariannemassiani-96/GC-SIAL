@@ -56,8 +56,8 @@ export function TabDebits({ resultat }: TabDebitsProps) {
                       <td className="py-1 px-2 text-blue-400">{n.ref}</td>
                       <td className="py-1 px-2 text-gray-300">{n.label}</td>
                       <td className="py-1 px-2 text-right text-gray-200">{n.longueur.toFixed(1)}</td>
-                      <td className="py-1 px-2 text-center text-gray-400">{rt.travee.coupeG}°</td>
-                      <td className="py-1 px-2 text-center text-gray-400">{rt.travee.coupeD}°</td>
+                      <td className="py-1 px-2 text-center text-gray-400">{n.coupeG}°</td>
+                      <td className="py-1 px-2 text-center text-gray-400">{n.coupeD}°</td>
                       <td className="py-1 px-2 text-right text-gray-200">{n.qte}</td>
                       <td className="py-1 px-2 text-right text-gray-200">{(n.longueur * n.qte / 1000).toFixed(2)}</td>
                     </tr>

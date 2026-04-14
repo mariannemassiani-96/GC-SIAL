@@ -50,6 +50,8 @@ export interface NomenclatureItem {
   longueur: number;
   qte: number;
   type: 'profil' | 'accessoire';
+  coupeG: string;  // angle coupe gauche (ex: "90", "45")
+  coupeD: string;  // angle coupe droite
 }
 
 export interface UsinageLisse {
