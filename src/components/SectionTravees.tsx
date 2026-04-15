@@ -22,37 +22,84 @@ interface SchemaPose {
   fixD: FixationId;
   coupeG: '90' | '45';
   coupeD: '90' | '45';
+  forme: 'droit' | 'L' | 'U';
   desc: string;
 }
 
 const SCHEMAS_POSE: SchemaPose[] = [
-  { id: 'A', fixG: 'libre',         fixD: 'mur_d',        coupeG: '90', coupeD: '90', desc: 'Côté libre à gauche, patte murale droite' },
-  { id: 'B', fixG: 'mur_g',         fixD: 'mur_d',        coupeG: '90', coupeD: '90', desc: 'Patte murale des deux côtés' },
-  { id: 'C', fixG: 'libre',         fixD: 'raccord90',    coupeG: '90', coupeD: '45', desc: 'Libre à gauche, angle 90° à droite' },
-  { id: 'D', fixG: 'mur_g',         fixD: 'raccord90',    coupeG: '90', coupeD: '45', desc: 'Mur à gauche, angle 90° à droite' },
-  { id: 'E', fixG: 'libre',         fixD: 'libre',        coupeG: '90', coupeD: '90', desc: 'Bouchons des deux côtés' },
-  { id: 'F', fixG: 'mur_g',         fixD: 'libre',        coupeG: '90', coupeD: '90', desc: 'Patte murale gauche, libre à droite' },
-  { id: 'G', fixG: 'raccord90',     fixD: 'libre',        coupeG: '45', coupeD: '90', desc: 'Angle 90° à gauche, libre à droite' },
-  { id: 'H', fixG: 'raccord_droit', fixD: 'raccord_droit', coupeG: '90', coupeD: '90', desc: 'Éclisse droite des deux côtés' },
+  // Droits (A-B, E-F, H)
+  { id: 'A', fixG: 'libre',         fixD: 'mur_d',         coupeG: '90', coupeD: '90', forme: 'droit', desc: 'Libre / Mur' },
+  { id: 'B', fixG: 'mur_g',         fixD: 'mur_d',         coupeG: '90', coupeD: '90', forme: 'droit', desc: 'Mur / Mur' },
+  { id: 'E', fixG: 'libre',         fixD: 'libre',         coupeG: '90', coupeD: '90', forme: 'droit', desc: 'Libre / Libre' },
+  { id: 'F', fixG: 'mur_g',         fixD: 'libre',         coupeG: '90', coupeD: '90', forme: 'droit', desc: 'Mur / Libre' },
+  { id: 'H', fixG: 'raccord_droit', fixD: 'raccord_droit',  coupeG: '90', coupeD: '90', forme: 'droit', desc: 'Éclisse / Éclisse' },
+  // L (C-D, G)
+  { id: 'C', fixG: 'libre',         fixD: 'raccord90',     coupeG: '90', coupeD: '45', forme: 'L', desc: 'L — Libre / Angle 90°' },
+  { id: 'D', fixG: 'mur_g',         fixD: 'raccord90',     coupeG: '90', coupeD: '45', forme: 'L', desc: 'L — Mur / Angle 90°' },
+  { id: 'G', fixG: 'raccord90',     fixD: 'libre',         coupeG: '45', coupeD: '90', forme: 'L', desc: 'L — Angle 90° / Libre' },
+  // U (I-L)
+  { id: 'I', fixG: 'raccord90',     fixD: 'raccord90',     coupeG: '45', coupeD: '45', forme: 'U', desc: 'U — Libre / Libre' },
+  { id: 'J', fixG: 'raccord90',     fixD: 'raccord90',     coupeG: '45', coupeD: '45', forme: 'U', desc: 'U — Mur / Mur' },
+  { id: 'K', fixG: 'raccord90',     fixD: 'raccord90',     coupeG: '45', coupeD: '45', forme: 'U', desc: 'U — Libre / Mur' },
+  { id: 'L', fixG: 'raccord90',     fixD: 'raccord90',     coupeG: '45', coupeD: '45', forme: 'U', desc: 'U — Mur / Libre' },
 ];
 
+/** Pour les U, on stocke la fixation extérieure des branches dans un champ séparé
+ *  car fixG/fixD sont toujours raccord90 (les angles internes).
+ *  On encode ça : I=libre/libre, J=mur/mur, K=libre/mur, L=mur/libre
+ */
+const U_FIX_EXT: Record<string, { fixExtG: FixationId; fixExtD: FixationId }> = {
+  'I': { fixExtG: 'libre', fixExtD: 'libre' },
+  'J': { fixExtG: 'mur_g', fixExtD: 'mur_d' },
+  'K': { fixExtG: 'libre', fixExtD: 'mur_d' },
+  'L': { fixExtG: 'mur_g', fixExtD: 'libre' },
+};
+
 function getSchemaId(t: Travee): string {
+  // U-shape: both coupes at 45° AND largeur3 > 0
+  if (t.coupeG === '45' && t.coupeD === '45' && t.largeur3 > 0) {
+    // Determine which U variant based on the actual U ext fixations
+    // For now, default to 'I' — we'd need extra fields to distinguish J/K/L
+    return 'I';
+  }
   for (const s of SCHEMAS_POSE) {
-    if (s.fixG === t.fixG && s.fixD === t.fixD && s.coupeG === t.coupeG && s.coupeD === t.coupeD) return s.id;
+    if (s.forme !== 'U' && s.fixG === t.fixG && s.fixD === t.fixD && s.coupeG === t.coupeG && s.coupeD === t.coupeD) return s.id;
   }
   return '?';
 }
 
-/** Schéma avec angle = a une coupe 45° sur un côté */
-function schemaHasAngle(t: Travee): boolean {
-  return t.coupeG === '45' || t.coupeD === '45';
+/** Nombre de branches : 1=droit, 2=L, 3=U */
+function nbBranches(t: Travee): number {
+  if (t.coupeG === '45' && t.coupeD === '45' && t.largeur3 > 0) return 3;
+  if (t.coupeG === '45' || t.coupeD === '45') return 2;
+  return 1;
 }
 
 /** Petit SVG schématique du schéma de pose (vue intérieure) */
 function SchemaPoseMini({ schema }: { schema: SchemaPose }) {
-  const w = 80, h = 28, pad = 6;
-  const barY = h / 2;
+  const w = 80, h = 36, pad = 6;
 
+  if (schema.forme === 'U') {
+    // U-shape: 3 branches
+    const uFix = U_FIX_EXT[schema.id];
+    const leftWall = uFix?.fixExtG === 'mur_g';
+    const rightWall = uFix?.fixExtD === 'mur_d';
+    return (
+      <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-full">
+        <text x={w / 2} y={7} textAnchor="middle" fill="#6b7280" fontSize={5} fontFamily="sans-serif">INT.</text>
+        {/* U shape path */}
+        <polyline points={`${pad},${10} ${pad},${h - 8} ${w - pad},${h - 8} ${w - pad},${10}`} fill="none" stroke="#60a5fa" strokeWidth={2} strokeLinejoin="round" />
+        {/* Left outer end */}
+        {leftWall && <rect x={1} y={4} width={3} height={12} fill="#9ca3af" rx={0.5} />}
+        {!leftWall && <circle cx={pad} cy={10} r={2} fill="#ef4444" />}
+        {/* Right outer end */}
+        {rightWall && <rect x={w - 4} y={4} width={3} height={12} fill="#9ca3af" rx={0.5} />}
+        {!rightWall && <circle cx={w - pad} cy={10} r={2} fill="#ef4444" />}
+      </svg>
+    );
+  }
+
+  const barY = h / 2;
   const fG: FixationId = schema.fixG;
   const fD: FixationId = schema.fixD;
   const leftWall = fG === 'mur_g' || fG === 'mur_d';
@@ -62,6 +109,7 @@ function SchemaPoseMini({ schema }: { schema: SchemaPose }) {
 
   return (
     <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-full">
+      <text x={w / 2} y={8} textAnchor="middle" fill="#6b7280" fontSize={5} fontFamily="sans-serif">INT.</text>
       {/* Main bar */}
       <line x1={pad} y1={barY} x2={w - pad} y2={barY} stroke="#60a5fa" strokeWidth={2} />
       {/* Left end */}
@@ -69,19 +117,17 @@ function SchemaPoseMini({ schema }: { schema: SchemaPose }) {
         <rect x={1} y={barY - 8} width={3} height={16} fill="#9ca3af" rx={0.5} />
         <line x1={pad} y1={barY} x2={4} y2={barY} stroke="#f59e0b" strokeWidth={1.5} />
       </>)}
-      {leftAngle && (<line x1={pad} y1={barY} x2={pad} y2={barY + 10} stroke="#60a5fa" strokeWidth={2} />)}
-      {schema.fixG === 'libre' && (<circle cx={pad} cy={barY} r={2} fill="#ef4444" />)}
-      {schema.fixG === 'raccord_droit' && (<line x1={pad - 3} y1={barY} x2={pad} y2={barY} stroke="#60a5fa" strokeWidth={2} strokeDasharray="2,1" />)}
+      {leftAngle && <line x1={pad} y1={barY} x2={pad} y2={barY + 10} stroke="#60a5fa" strokeWidth={2} />}
+      {schema.fixG === 'libre' && <circle cx={pad} cy={barY} r={2} fill="#ef4444" />}
+      {schema.fixG === 'raccord_droit' && <line x1={pad - 3} y1={barY} x2={pad} y2={barY} stroke="#60a5fa" strokeWidth={2} strokeDasharray="2,1" />}
       {/* Right end */}
       {rightWall && (<>
         <rect x={w - 4} y={barY - 8} width={3} height={16} fill="#9ca3af" rx={0.5} />
         <line x1={w - pad} y1={barY} x2={w - 4} y2={barY} stroke="#f59e0b" strokeWidth={1.5} />
       </>)}
-      {rightAngle && (<line x1={w - pad} y1={barY} x2={w - pad} y2={barY + 10} stroke="#60a5fa" strokeWidth={2} />)}
-      {schema.fixD === 'libre' && (<circle cx={w - pad} cy={barY} r={2} fill="#ef4444" />)}
-      {schema.fixD === 'raccord_droit' && (<line x1={w - pad} y1={barY} x2={w - pad + 3} y2={barY} stroke="#60a5fa" strokeWidth={2} strokeDasharray="2,1" />)}
-      {/* Interior label */}
-      <text x={w / 2} y={8} textAnchor="middle" fill="#6b7280" fontSize={5} fontFamily="sans-serif">INT.</text>
+      {rightAngle && <line x1={w - pad} y1={barY} x2={w - pad} y2={barY + 10} stroke="#60a5fa" strokeWidth={2} />}
+      {schema.fixD === 'libre' && <circle cx={w - pad} cy={barY} r={2} fill="#ef4444" />}
+      {schema.fixD === 'raccord_droit' && <line x1={w - pad} y1={barY} x2={w - pad + 3} y2={barY} stroke="#60a5fa" strokeWidth={2} strokeDasharray="2,1" />}
     </svg>
   );
 }
@@ -131,16 +177,19 @@ export function SectionTravees({ affaire, onChange, alertesByTravee }: SectionTr
     onChange({ travees: [...affaire.travees, dup] });
   };
 
-  const applySchema = (id: string, schema: SchemaPose) => {
-    const hasAngle = schema.coupeG === '45' || schema.coupeD === '45';
-    const travee = affaire.travees.find((t) => t.id === id);
-    updateTravee(id, {
+  const applySchema = (traveeId: string, schema: SchemaPose) => {
+    const travee = affaire.travees.find((t) => t.id === traveeId);
+    const defLarg = travee?.largeur || 2000;
+    const isU = schema.forme === 'U';
+    const isL = schema.forme === 'L';
+
+    updateTravee(traveeId, {
       fixG: schema.fixG,
       fixD: schema.fixD,
       coupeG: schema.coupeG,
       coupeD: schema.coupeD,
-      // Pré-remplir largeur2 si angle et pas encore définie
-      largeur2: hasAngle ? (travee?.largeur2 || travee?.largeur || 2000) : 0,
+      largeur2: (isL || isU) ? (travee?.largeur2 || defLarg) : 0,
+      largeur3: isU ? (travee?.largeur3 || defLarg) : 0,
     });
   };
 
@@ -175,7 +224,9 @@ export function SectionTravees({ affaire, onChange, alertesByTravee }: SectionTr
                   <span className="text-xs font-mono font-semibold text-blue-400 w-10">{t.repere}</span>
                   <span className="text-xs text-gray-500 w-10">{t.etage}</span>
                   <span className="text-xs font-mono text-gray-200 text-right">
-                    {t.largeur}{schemaHasAngle(t) && t.largeur2 > 0 ? <span className="text-amber-400"> + {t.largeur2}</span> : ''}
+                    {t.largeur}
+                    {nbBranches(t) >= 2 && t.largeur2 > 0 && <span className="text-amber-400"> + {t.largeur2}</span>}
+                    {nbBranches(t) >= 3 && t.largeur3 > 0 && <span className="text-purple-400"> + {t.largeur3}</span>}
                   </span>
                   <span className="text-[10px] text-gray-600">×</span>
                   <span className="text-xs font-mono text-gray-200 w-12 text-right">{t.hauteur}</span>
@@ -209,7 +260,7 @@ export function SectionTravees({ affaire, onChange, alertesByTravee }: SectionTr
                 {isExpanded && (
                   <div className="px-4 pb-4 pt-2 border-t border-[#252830] space-y-3" onClick={(e) => e.stopPropagation()}>
                     {/* Row 1: basic fields */}
-                    <div className={`grid gap-2 ${schemaHasAngle(t) ? 'grid-cols-7' : 'grid-cols-6'}`}>
+                    <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${6 + (nbBranches(t) >= 2 ? 1 : 0) + (nbBranches(t) >= 3 ? 1 : 0)}, minmax(0, 1fr))` }}>
                       <div>
                         <label className="block text-[10px] text-gray-500 mb-0.5">Repère</label>
                         <input value={t.repere} onChange={(e) => updateTravee(t.id, { repere: e.target.value })}
@@ -222,16 +273,25 @@ export function SectionTravees({ affaire, onChange, alertesByTravee }: SectionTr
                       </div>
                       <div>
                         <label className="block text-[10px] text-gray-500 mb-0.5">
-                          {schemaHasAngle(t) ? 'Côté 1 (mm)' : 'Largeur (mm)'}
+                          {nbBranches(t) >= 2 ? 'Côté 1 (mm)' : 'Largeur (mm)'}
                         </label>
                         <input type="number" value={t.largeur} onChange={(e) => updateTravee(t.id, { largeur: parseInt(e.target.value) || 0 })}
                           className="w-full bg-[#1e2028] border border-[#353840] rounded px-2 py-1 text-xs text-gray-200 font-mono focus:outline-none focus:border-blue-500" />
                       </div>
-                      {schemaHasAngle(t) && (
+                      {nbBranches(t) >= 2 && (
                         <div>
-                          <label className="block text-[10px] text-amber-400 mb-0.5">Côté 2 (mm)</label>
+                          <label className="block text-[10px] text-amber-400 mb-0.5">
+                            {nbBranches(t) >= 3 ? 'Fond U (mm)' : 'Côté 2 (mm)'}
+                          </label>
                           <input type="number" value={t.largeur2} onChange={(e) => updateTravee(t.id, { largeur2: parseInt(e.target.value) || 0 })}
                             className="w-full bg-[#1e2028] border border-amber-500/30 rounded px-2 py-1 text-xs text-amber-300 font-mono focus:outline-none focus:border-amber-500" />
+                        </div>
+                      )}
+                      {nbBranches(t) >= 3 && (
+                        <div>
+                          <label className="block text-[10px] text-purple-400 mb-0.5">Côté 3 (mm)</label>
+                          <input type="number" value={t.largeur3} onChange={(e) => updateTravee(t.id, { largeur3: parseInt(e.target.value) || 0 })}
+                            className="w-full bg-[#1e2028] border border-purple-500/30 rounded px-2 py-1 text-xs text-purple-300 font-mono focus:outline-none focus:border-purple-500" />
                         </div>
                       )}
                       <div>
