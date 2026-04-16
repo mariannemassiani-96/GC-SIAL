@@ -3,14 +3,20 @@ import { useAffaires, createEmptyAffaire } from './store/affaires';
 import { ListeAffaires } from './pages/ListeAffaires';
 import { Configurateur } from './pages/Configurateur';
 import { ConfigurateurAper } from './menuiseries/pages/ConfigurateurAper';
+import { SmartAssembly } from './atelier/components/SmartAssembly';
+import { PickToLight } from './atelier/components/PickToLight';
+import { BridgeAtelier } from './atelier/components/BridgeAtelier';
 import type { Affaire } from './types';
 
 type AppMode =
   | 'home'
-  | 'fabrication'        // Hub fabrication (GC + apps atelier)
-  | 'commercial'         // Hub commercial (APER menuiseries)
-  | 'gc'                 // Configurateur garde-corps
-  | 'aper';              // Configurateur menuiseries
+  | 'fabrication'
+  | 'commercial'
+  | 'gc'
+  | 'aper'
+  | 'smart_assembly'
+  | 'bridge'
+  | 'picktolight';
 
 // ── Page d'accueil — choix du portail ────────────────────────────────
 
@@ -113,12 +119,11 @@ function HubFabrication({ onSelect, onBack }: { onSelect: (mode: AppMode) => voi
       ),
       color: 'amber',
       ready: true,
-      externalUrl: '/atelier/sial_smart_assembly.html',
     },
     {
       id: 'bridge' as AppMode,
-      label: 'Bridge Atelier — Serveur PDF',
-      description: 'API REST — surveille les PDF PRO F2, parse les fiches atelier, alimente la tablette et les LEDs pick-to-light.',
+      label: 'Bridge Atelier — Base de données',
+      description: 'Gestion des fiches PRO F2 en mémoire. Import JSON, recherche, détail pièces Ferco par fiche.',
       icon: (
         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-cyan-400">
           <rect x="2" y="3" width="20" height="14" rx="2" />
@@ -127,13 +132,12 @@ function HubFabrication({ onSelect, onBack }: { onSelect: (mode: AppMode) => voi
         </svg>
       ),
       color: 'cyan',
-      ready: false,
-      note: 'Application serveur Python — lancer sur PC atelier',
+      ready: true,
     },
     {
       id: 'picktolight' as AppMode,
-      label: 'Pick-to-Light — Raspberry Pi',
-      description: 'Contrôle des LEDs WS2812B par casier. API REST sur Raspberry Pi 4 — 14 casiers Ferco mappés.',
+      label: 'Pick-to-Light — Simulation LED',
+      description: 'Dashboard des 14 casiers Ferco avec simulation LED. Test séquentiel, contrôle luminosité.',
       icon: (
         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-rose-400">
           <circle cx="12" cy="12" r="3" />
@@ -141,8 +145,7 @@ function HubFabrication({ onSelect, onBack }: { onSelect: (mode: AppMode) => voi
         </svg>
       ),
       color: 'rose',
-      ready: false,
-      note: 'Application Python sur Raspberry Pi — GPIO 18 + LEDs WS2812B',
+      ready: true,
     },
   ];
 
@@ -165,44 +168,26 @@ function HubFabrication({ onSelect, onBack }: { onSelect: (mode: AppMode) => voi
         <p className="text-sm text-gray-500 mb-8">Configurateurs techniques et outils atelier</p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          {apps.map((app) => {
-            const handleClick = () => {
-              if (!app.ready) return;
-              if ('externalUrl' in app && app.externalUrl) {
-                window.open(app.externalUrl, '_blank');
-              } else {
-                onSelect(app.id);
-              }
-            };
-            const isServerApp = 'note' in app;
-            return (
-              <button
-                key={app.label}
-                onClick={handleClick}
-                disabled={!app.ready && !isServerApp}
-                className={`group text-left p-6 rounded-xl border-2 transition-all
-                  ${app.ready
-                    ? 'border-[#2a2d35] bg-[#181a20] hover:border-green-500/50 hover:bg-green-600/5 cursor-pointer'
-                    : isServerApp
-                      ? 'border-[#2a2d35] bg-[#181a20] opacity-70'
-                      : 'border-[#1e2028] bg-[#14161c] opacity-50 cursor-not-allowed'
-                  }`}
-              >
-                <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-4 ${app.ready ? 'bg-green-600/10 border border-green-500/20' : 'bg-[#1c1e24] border border-[#2a2d35]'}`}>
-                  {app.icon}
-                </div>
-                <h3 className={`font-semibold text-base mb-1 ${app.ready ? 'text-white group-hover:text-green-400' : 'text-gray-400'} transition-colors`}>
-                  {app.label}
-                </h3>
-                <p className="text-xs text-gray-500 leading-relaxed">{app.description}</p>
-                {isServerApp && 'note' in app && (
-                  <span className="inline-block mt-3 text-[10px] px-2 py-0.5 rounded bg-[#252830] text-gray-500 border border-[#353840]">
-                    {(app as { note: string }).note}
-                  </span>
-                )}
-              </button>
-            );
-          })}
+          {apps.map((app) => (
+            <button
+              key={app.label}
+              onClick={() => app.ready && onSelect(app.id)}
+              disabled={!app.ready}
+              className={`group text-left p-6 rounded-xl border-2 transition-all
+                ${app.ready
+                  ? 'border-[#2a2d35] bg-[#181a20] hover:border-green-500/50 hover:bg-green-600/5 cursor-pointer'
+                  : 'border-[#1e2028] bg-[#14161c] opacity-50 cursor-not-allowed'
+                }`}
+            >
+              <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-4 ${app.ready ? 'bg-green-600/10 border border-green-500/20' : 'bg-[#1c1e24] border border-[#2a2d35]'}`}>
+                {app.icon}
+              </div>
+              <h3 className={`font-semibold text-base mb-1 ${app.ready ? 'text-white group-hover:text-green-400' : 'text-gray-600'} transition-colors`}>
+                {app.label}
+              </h3>
+              <p className="text-xs text-gray-500 leading-relaxed">{app.description}</p>
+            </button>
+          ))}
         </div>
       </main>
     </div>
@@ -251,6 +236,17 @@ export default function App() {
   // ── Hub Commercial → APER directement ──────────────
   if (mode === 'commercial' || mode === 'aper') {
     return <ConfigurateurAper onSwitchToGC={goHome} />;
+  }
+
+  // ── Apps atelier ───────────────────────────────────
+  if (mode === 'smart_assembly') {
+    return <SmartAssembly onBack={() => setMode('fabrication')} />;
+  }
+  if (mode === 'bridge') {
+    return <BridgeAtelier onBack={() => setMode('fabrication')} />;
+  }
+  if (mode === 'picktolight') {
+    return <PickToLight onBack={() => setMode('fabrication')} />;
   }
 
   // ── Garde-corps ────────────────────────────────────
