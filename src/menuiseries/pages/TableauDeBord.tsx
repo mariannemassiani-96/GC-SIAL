@@ -52,7 +52,7 @@ export function TableauDeBord({ affaires, onNew, onSelect, onDuplicate, onDelete
                 onClick={onSwitchToGC}
                 className="px-4 py-2 text-sm text-gray-400 hover:text-white border border-[#353840] hover:border-[#404550] rounded-lg transition-colors"
               >
-                Garde-corps GC
+                Accueil
               </button>
               <button
                 onClick={onNew}
