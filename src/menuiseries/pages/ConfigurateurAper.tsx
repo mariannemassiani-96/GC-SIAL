@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { useAffairesAper, useWizard, createEmptyMenuiserie } from '../store/menuiserieStore';
+import { useAffairesAper, createEmptyMenuiserie } from '../store/menuiserieStore';
 import type { AffaireAper } from '../store/menuiserieStore';
 import type { ConfigMenuiserie } from '../types';
 import { TableauDeBord } from './TableauDeBord';
@@ -7,7 +7,7 @@ import { CreationAffaire } from './CreationAffaire';
 import { ListeMenuiseries } from './ListeMenuiseries';
 import { EcranVariantes } from './EcranVariantes';
 import { AnalyseInterne } from './AnalyseInterne';
-import { WizardLayout } from '../components/WizardLayout';
+import { FlowConfigurator } from '../components/flow/FlowConfigurator';
 import { genererDevisPDF } from '../export/exportDevisPDF';
 import { exportCSV } from '../export/exportTechnique';
 import { v4 as uuid } from 'uuid';
@@ -26,9 +26,7 @@ export function ConfigurateurAper({ onSwitchToGC }: ConfigurateurAperProps) {
 
   const selectedAffaire = store.affaires.find((a) => a.id === selectedAffaireId) ?? null;
 
-  // ── Wizard state ───────────────────────────────────
-  const [wizardConfig] = useState<Partial<ConfigMenuiserie>>({});
-  const wizard = useWizard(wizardConfig);
+  const [editingConfig, setEditingConfig] = useState<Partial<ConfigMenuiserie> | null>(null);
 
   // ── Navigation ─────────────────────────────────────
 
@@ -56,31 +54,26 @@ export function ConfigurateurAper({ onSwitchToGC }: ConfigurateurAperProps) {
     setScreen('menuiseries');
   }, []);
 
-  // ── Wizard menuiserie ─────────────────────────────
+  // ── Flow configurateur ──────────────────────────────
 
-  const startWizard = useCallback((menuiserieId?: string) => {
+  const startFlow = useCallback((menuiserieId?: string) => {
     if (menuiserieId && selectedAffaire) {
       const menu = selectedAffaire.menuiseries.find((m) => m.id === menuiserieId);
       if (menu) {
         setEditingMenuiserieId(menuiserieId);
-        wizard.setConfig({ ...menu });
+        setEditingConfig({ ...menu });
         setScreen('wizard');
         return;
       }
     }
-    // Nouvelle menuiserie
     setEditingMenuiserieId(null);
-    const defaults = selectedAffaire?.parametresCommuns;
-    const newConfig = createEmptyMenuiserie(defaults);
-    wizard.setConfig({ ...newConfig });
+    setEditingConfig({ ...createEmptyMenuiserie(selectedAffaire?.parametresCommuns) });
     setScreen('wizard');
-  }, [selectedAffaire, wizard]);
+  }, [selectedAffaire]);
 
-  const handleAddToCart = useCallback(() => {
+  const handleAddToCart = useCallback((config: ConfigMenuiserie) => {
     if (!selectedAffaireId) return;
-    const config = wizard.config as ConfigMenuiserie;
     if (!config.id) config.id = uuid();
-
     if (editingMenuiserieId) {
       store.updateMenuiserie(selectedAffaireId, editingMenuiserieId, config);
     } else {
@@ -94,7 +87,7 @@ export function ConfigurateurAper({ onSwitchToGC }: ConfigurateurAperProps) {
     }
     setScreen('menuiseries');
     window.location.reload();
-  }, [selectedAffaireId, editingMenuiserieId, wizard.config, store]);
+  }, [selectedAffaireId, editingMenuiserieId, store]);
 
   // ── Exports ────────────────────────────────────────
 
@@ -139,8 +132,8 @@ export function ConfigurateurAper({ onSwitchToGC }: ConfigurateurAperProps) {
           affaire={selectedAffaire}
           onBack={() => setScreen('dashboard')}
           onEditAffaire={() => setScreen('creation')}
-          onAddMenuiserie={() => startWizard()}
-          onEditMenuiserie={(id) => startWizard(id)}
+          onAddMenuiserie={() => startFlow()}
+          onEditMenuiserie={(id) => startFlow(id)}
           onDuplicateMenuiserie={(id) => {
             store.duplicateMenuiserie(selectedAffaireId!, id);
           }}
@@ -175,15 +168,8 @@ export function ConfigurateurAper({ onSwitchToGC }: ConfigurateurAperProps) {
 
     case 'wizard':
       return (
-        <WizardLayout
-          step={wizard.step}
-          maxStep={wizard.maxStep}
-          config={wizard.config}
-          prix={wizard.prix}
-          onGoTo={wizard.goTo}
-          onNext={wizard.next}
-          onPrev={wizard.prev}
-          onUpdateConfig={wizard.updateConfig}
+        <FlowConfigurator
+          initialConfig={editingConfig ?? undefined}
           onBack={() => setScreen('menuiseries')}
           onAddToCart={handleAddToCart}
         />
