@@ -39,7 +39,7 @@ export function Step5Vitrage({ config, onUpdate, onNext, onPrev }: Step5Props) {
     // Triple vitrage recommandé pour les grandes surfaces
     const surface = ((config.largeur ?? 1000) / 1000) * ((config.hauteur ?? 1200) / 1000);
     if (vitrageId === 'triple_standard' && surface > 3) return 'recommande';
-    if (vitrageId === 'double_securite' && config.typeProduit === 'porte_entree') return 'obligatoire';
+    if (vitrageId === 'double_securite_a3' && config.typeProduit === 'porte_entree') return 'obligatoire';
     return null;
   };
 

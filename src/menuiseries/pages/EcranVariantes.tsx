@@ -61,7 +61,7 @@ export function EcranVariantes({ affaire, onUpdate, onBack }: VariantesProps) {
           copy.vitrage = newVitrage;
           break;
         case 'ajouter_volet':
-          copy.voletRoulant = { type: 'electrique', pose: 'neuf_coffre_tunnel', couleur: copy.couleurExterieure };
+          copy.voletRoulant = { type: 'electrique_somfy_ilmo', pose: 'neuf_coffre_tunnel', couleur: copy.couleurExterieure };
           break;
         case 'retirer_volet':
           copy.voletRoulant = undefined;

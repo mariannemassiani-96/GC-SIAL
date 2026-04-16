@@ -5,12 +5,12 @@
 export type TypeProduit =
   | 'fenetre'
   | 'porte_fenetre'
-  | 'baie_vitree'
+  | 'baie_coulissante'
+  | 'baie_oscillo_coulissante'
   | 'porte_entree'
+  | 'porte_service'
   | 'volet_roulant'
-  | 'store'
-  | 'pergola'
-  | 'portail';
+  | 'pergola';
 
 export interface TypeProduitDef {
   id: TypeProduit;
@@ -26,7 +26,7 @@ export interface TypeProduitDef {
 
 // ── Matériaux ─────────────────────────────────────────────────────────
 
-export type MateriauId = 'pvc' | 'bois' | 'aluminium' | 'bois_alu' | 'pvc_alu';
+export type MateriauId = 'pvc' | 'bois' | 'aluminium' | 'bois_alu' | 'pvc_alu' | 'acier';
 
 export interface MateriauDef {
   id: MateriauId;
@@ -97,12 +97,19 @@ export interface TypeOuvertureDef {
 
 export type TypeVitrageId =
   | 'double_standard'
-  | 'double_phonique'
-  | 'double_securite'
+  | 'double_phonique_cl2'
+  | 'double_phonique_cl3_36'
+  | 'double_phonique_cl3_38'
+  | 'double_phonique_cl4'
+  | 'double_phonique_cl5'
+  | 'double_securite_a1'
+  | 'double_securite_a3'
   | 'double_solaire'
+  | 'double_structure'
   | 'triple_standard'
   | 'triple_phonique'
-  | 'triple_securite';
+  | 'triple_securite'
+  | 'triple_solaire';
 
 export interface VitrageDef {
   id: TypeVitrageId;
@@ -138,7 +145,7 @@ export interface PoigneeDef {
 
 // ── Volets roulants ───────────────────────────────────────────────────
 
-export type TypeVoletId = 'manuel_sangle' | 'manuel_manivelle' | 'electrique' | 'solaire';
+export type TypeVoletId = 'manuel_sangle' | 'manuel_manivelle' | 'electrique_inel' | 'electrique_somfy_ilmo' | 'electrique_somfy_oximo' | 'solaire';
 
 export interface VoletRoulantDef {
   id: TypeVoletId;
@@ -147,7 +154,7 @@ export interface VoletRoulantDef {
   coefPrix: number;
 }
 
-export type PoseVoletId = 'neuf_coffre_tunnel' | 'neuf_coffre_exterieur' | 'renovation';
+export type PoseVoletId = 'neuf_coffre_tunnel' | 'neuf_coffre_exterieur' | 'ext_coffre_arrondi' | 'ext_coffre_rectangulaire' | 'renovation';
 
 export interface PoseVoletDef {
   id: PoseVoletId;
