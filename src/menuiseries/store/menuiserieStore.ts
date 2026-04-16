@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { v4 as uuid } from 'uuid';
 import type { ConfigMenuiserie, Panier, PanierItem, ClientInfo, WizardStep, VarianteId, Variante } from '../types';
+import { BRANDING } from '../config/branding';
 import { calculerPrix } from '../engine/calcPrix';
 
 const STORAGE_KEY = 'sial-aper-affaires';
@@ -55,7 +56,7 @@ function createEmptyAffaireAper(): AffaireAper {
   const refNum = Date.now().toString(36).toUpperCase().slice(-5);
   return {
     id: uuid(),
-    ref: `APER-${now.replace(/-/g, '').slice(2)}-${refNum}`,
+    ref: `${BRANDING.devisPrefix}-${now.replace(/-/g, '').slice(2)}-${refNum}`,
     nom: '',
     client: '',
     adresse: '',
@@ -161,7 +162,7 @@ export function useAffairesAper() {
     const dup: AffaireAper = {
       ...structuredClone(source),
       id: uuid(),
-      ref: `APER-${new Date().toISOString().slice(2, 10).replace(/-/g, '')}-${Date.now().toString(36).toUpperCase().slice(-5)}`,
+      ref: `${BRANDING.devisPrefix}-${new Date().toISOString().slice(2, 10).replace(/-/g, '')}-${Date.now().toString(36).toUpperCase().slice(-5)}`,
       nom: `${source.nom} (copie)`,
       dateCreation: new Date().toISOString().slice(0, 10),
       dateModification: new Date().toISOString().slice(0, 10),

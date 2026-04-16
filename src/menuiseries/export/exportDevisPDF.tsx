@@ -6,6 +6,7 @@ import { MATERIAUX } from '../constants/materiaux';
 import { VITRAGES } from '../constants/vitrages';
 import { COULEURS } from '../constants/couleurs';
 import { TYPES_OUVERTURES, POIGNEES, NIVEAUX_SECURITE } from '../constants/ouvertures';
+import { BRANDING } from '../config/branding';
 
 const s = StyleSheet.create({
   page: { padding: 30, fontSize: 8, fontFamily: 'Helvetica', color: '#333' },
@@ -75,7 +76,7 @@ function DevisPDF({ affaire }: { affaire: AffaireAper }) {
         {/* Header */}
         <View style={s.header}>
           <View style={s.headerLeft}>
-            <Text style={s.logo}>APER</Text>
+            <Text style={s.logo}>{BRANDING.logoText}</Text>
             <Text style={s.subtitle}>Configurateur Menuiseries Pro</Text>
           </View>
           <View style={s.headerRight}>
@@ -154,7 +155,7 @@ function DevisPDF({ affaire }: { affaire: AffaireAper }) {
 
         {/* Footer */}
         <View style={s.footer}>
-          <Text style={s.footerText}>APER Configurateur Menuiseries — {affaire.ref}</Text>
+          <Text style={s.footerText}>{BRANDING.logoText} Configurateur Menuiseries — {affaire.ref}</Text>
           <Text style={s.footerText}>Devis généré le {new Date().toLocaleDateString('fr-FR')}</Text>
         </View>
       </Page>
@@ -255,7 +256,7 @@ function DevisPDF({ affaire }: { affaire: AffaireAper }) {
             )}
 
             <View style={s.footer}>
-              <Text style={s.footerText}>APER — {affaire.ref} — Menuiserie #{i + 1}</Text>
+              <Text style={s.footerText}>{BRANDING.logoText} — {affaire.ref} — Menuiserie #{i + 1}</Text>
               <Text style={s.footerText}>Page {i + 2}</Text>
             </View>
           </Page>
