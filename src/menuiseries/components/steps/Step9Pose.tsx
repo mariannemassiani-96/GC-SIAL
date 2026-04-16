@@ -10,6 +10,7 @@ interface Step9Props {
   onPoseChange?: (pose: TypePose) => void;
   onNext: () => void;
   onPrev: () => void;
+  hideNav?: boolean;
 }
 
 interface PoseOption {
@@ -52,7 +53,7 @@ const POSES: PoseOption[] = [
   },
 ];
 
-export function Step9Pose({ config: _config, typePose, onPoseChange, onNext, onPrev }: Step9Props) {
+export function Step9Pose({ config: _config, typePose, onPoseChange, onNext, onPrev, hideNav }: Step9Props) {
   const [selectedPose, setSelectedPose] = useState<TypePose>(typePose ?? 'neuf_applique');
 
   // Options de pose
@@ -156,17 +157,19 @@ export function Step9Pose({ config: _config, typePose, onPoseChange, onNext, onP
       )}
 
       {/* Navigation */}
-      <div className="flex justify-between pt-4">
-        <button onClick={onPrev} className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors px-4 py-2">
-          <ArrowLeft size={18} /> Retour
-        </button>
-        <button
-          onClick={onNext}
-          className="flex items-center gap-2 bg-green-600 hover:bg-green-500 text-white font-semibold px-6 py-3 rounded-lg transition-colors"
-        >
-          Voir le récapitulatif <ArrowRight size={18} />
-        </button>
-      </div>
+      {!hideNav && (
+        <div className="flex justify-between pt-4">
+          <button onClick={onPrev} className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors px-4 py-2">
+            <ArrowLeft size={18} /> Retour
+          </button>
+          <button
+            onClick={onNext}
+            className="flex items-center gap-2 bg-green-600 hover:bg-green-500 text-white font-semibold px-6 py-3 rounded-lg transition-colors"
+          >
+            Voir le récapitulatif <ArrowRight size={18} />
+          </button>
+        </div>
+      )}
     </div>
   );
 }

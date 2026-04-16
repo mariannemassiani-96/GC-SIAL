@@ -9,9 +9,10 @@ interface Step8Props {
   onUpdate: (updates: Partial<ConfigMenuiserie>) => void;
   onNext: () => void;
   onPrev: () => void;
+  hideNav?: boolean;
 }
 
-export function Step8Accessoires({ config, onUpdate, onNext, onPrev }: Step8Props) {
+export function Step8Accessoires({ config, onUpdate, onNext, onPrev, hideNav }: Step8Props) {
   const typeProduit = getTypeProduit(config.typeProduit ?? '');
   const hasVoletIntegre = typeProduit?.hasVoletIntegre ?? false;
 
@@ -19,7 +20,7 @@ export function Step8Accessoires({ config, onUpdate, onNext, onPrev }: Step8Prop
   const [moustiquaireActif, setMoustiquaireActif] = useState(false);
   const [bsoActif, setBsoActif] = useState(false);
 
-  const voletConfig = config.voletRoulant ?? { type: 'electrique' as TypeVoletId, pose: 'neuf_coffre_tunnel' as PoseVoletId, couleur: config.couleurExterieure ?? 'blanc_9016' };
+  const voletConfig = config.voletRoulant ?? { type: 'electrique_somfy_ilmo' as TypeVoletId, pose: 'neuf_coffre_tunnel' as PoseVoletId, couleur: config.couleurExterieure ?? 'blanc_9016' };
 
   const handleVoletToggle = (actif: boolean) => {
     setVoletActif(actif);
@@ -231,17 +232,19 @@ export function Step8Accessoires({ config, onUpdate, onNext, onPrev }: Step8Prop
       )}
 
       {/* Navigation */}
-      <div className="flex justify-between pt-4">
-        <button onClick={onPrev} className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors px-4 py-2">
-          <ArrowLeft size={18} /> Retour
-        </button>
-        <button
-          onClick={onNext}
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold px-6 py-3 rounded-lg transition-colors"
-        >
-          Continuer <ArrowRight size={18} />
-        </button>
-      </div>
+      {!hideNav && (
+        <div className="flex justify-between pt-4">
+          <button onClick={onPrev} className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors px-4 py-2">
+            <ArrowLeft size={18} /> Retour
+          </button>
+          <button
+            onClick={onNext}
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold px-6 py-3 rounded-lg transition-colors"
+          >
+            Continuer <ArrowRight size={18} />
+          </button>
+        </div>
+      )}
     </div>
   );
 }

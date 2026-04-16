@@ -8,11 +8,12 @@ interface Step7Props {
   onUpdate: (updates: Partial<ConfigMenuiserie>) => void;
   onNext: () => void;
   onPrev: () => void;
+  hideNav?: boolean;
 }
 
 type NiveauQuincaillerie = 'standard' | 'confort' | 'securite';
 
-export function Step7Quincaillerie({ config, onUpdate, onNext, onPrev }: Step7Props) {
+export function Step7Quincaillerie({ config, onUpdate, onNext, onPrev, hideNav }: Step7Props) {
   const [niveau, setNiveau] = useState<NiveauQuincaillerie>('standard');
 
   const poignees = getPoigneesForMateriau(config.materiau ?? 'pvc');
@@ -156,17 +157,19 @@ export function Step7Quincaillerie({ config, onUpdate, onNext, onPrev }: Step7Pr
       </div>
 
       {/* Navigation */}
-      <div className="flex justify-between pt-4">
-        <button onClick={onPrev} className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors px-4 py-2">
-          <ArrowLeft size={18} /> Retour
-        </button>
-        <button
-          onClick={onNext}
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold px-6 py-3 rounded-lg transition-colors"
-        >
-          Continuer <ArrowRight size={18} />
-        </button>
-      </div>
+      {!hideNav && (
+        <div className="flex justify-between pt-4">
+          <button onClick={onPrev} className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors px-4 py-2">
+            <ArrowLeft size={18} /> Retour
+          </button>
+          <button
+            onClick={onNext}
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold px-6 py-3 rounded-lg transition-colors"
+          >
+            Continuer <ArrowRight size={18} />
+          </button>
+        </div>
+      )}
     </div>
   );
 }

@@ -13,7 +13,7 @@ import { Step8Accessoires } from './steps/Step8Accessoires';
 import { Step9Pose } from './steps/Step9Pose';
 import { StepRecap } from './steps/StepRecap';
 import { TYPES_PRODUITS } from '../constants/produits';
-import { ArrowLeft, AlertTriangle, Lightbulb, XCircle } from 'lucide-react';
+import { ArrowLeft, ArrowRight, AlertTriangle, Lightbulb, XCircle } from 'lucide-react';
 
 interface WizardLayoutProps {
   step: WizardStep;
@@ -78,12 +78,24 @@ export function WizardLayout({
       case 6: return <Step6Couleurs config={config} onUpdate={onUpdateConfig} onNext={onNext} onPrev={onPrev} />;
       case 7: return (
         <div className="space-y-8">
-          <Step7Quincaillerie config={config} onUpdate={onUpdateConfig} onNext={() => {}} onPrev={onPrev} />
+          <Step7Quincaillerie config={config} onUpdate={onUpdateConfig} onNext={() => {}} onPrev={onPrev} hideNav />
           <div className="border-t border-[#2a2d35] pt-6">
-            <Step8Accessoires config={config} onUpdate={onUpdateConfig} onNext={() => {}} onPrev={() => {}} />
+            <Step8Accessoires config={config} onUpdate={onUpdateConfig} onNext={() => {}} onPrev={() => {}} hideNav />
           </div>
           <div className="border-t border-[#2a2d35] pt-6">
-            <Step9Pose config={config} onUpdate={onUpdateConfig} onNext={onNext} onPrev={() => {}} />
+            <Step9Pose config={config} onUpdate={onUpdateConfig} onNext={() => {}} onPrev={() => {}} hideNav />
+          </div>
+          {/* Bouton principal Continuer — toujours visible en bas */}
+          <div className="flex justify-between pt-6 border-t border-[#2a2d35]">
+            <button onClick={onPrev} className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors px-4 py-2">
+              <ArrowLeft size={18} /> Retour
+            </button>
+            <button
+              onClick={onNext}
+              className="flex items-center gap-2 bg-green-600 hover:bg-green-500 text-white font-semibold px-8 py-3 rounded-lg transition-colors shadow-lg shadow-green-600/20"
+            >
+              Voir le récapitulatif <ArrowRight size={18} />
+            </button>
           </div>
         </div>
       );
