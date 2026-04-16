@@ -101,48 +101,48 @@ function HubFabrication({ onSelect, onBack }: { onSelect: (mode: AppMode) => voi
       color: 'green',
       ready: true,
     },
-    // ── Placeholder pour les 3 apps atelier à venir ──
     {
-      id: 'app_atelier_1' as AppMode,
-      label: 'Application Atelier 1',
-      description: 'En attente d\'intégration — envoyez le code pour activer.',
+      id: 'smart_assembly' as AppMode,
+      label: 'Smart Assembly — Tablette opérateur',
+      description: 'Guidage pas-à-pas pour le poste de montage frappe. Scan code-barres PRO F2, pick-to-light LED par casier.',
       icon: (
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-gray-500">
-          <rect x="3" y="3" width="18" height="18" rx="2" />
-          <line x1="12" y1="8" x2="12" y2="16" />
-          <line x1="8" y1="12" x2="16" y2="12" />
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-amber-400">
+          <rect x="5" y="2" width="14" height="20" rx="2" />
+          <line x1="12" y1="18" x2="12" y2="18.01" strokeWidth="2" strokeLinecap="round" />
         </svg>
       ),
-      color: 'gray',
-      ready: false,
+      color: 'amber',
+      ready: true,
+      externalUrl: '/atelier/sial_smart_assembly.html',
     },
     {
-      id: 'app_atelier_2' as AppMode,
-      label: 'Application Atelier 2',
-      description: 'En attente d\'intégration — envoyez le code pour activer.',
+      id: 'bridge' as AppMode,
+      label: 'Bridge Atelier — Serveur PDF',
+      description: 'API REST — surveille les PDF PRO F2, parse les fiches atelier, alimente la tablette et les LEDs pick-to-light.',
       icon: (
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-gray-500">
-          <rect x="3" y="3" width="18" height="18" rx="2" />
-          <line x1="12" y1="8" x2="12" y2="16" />
-          <line x1="8" y1="12" x2="16" y2="12" />
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-cyan-400">
+          <rect x="2" y="3" width="20" height="14" rx="2" />
+          <line x1="8" y1="21" x2="16" y2="21" />
+          <line x1="12" y1="17" x2="12" y2="21" />
         </svg>
       ),
-      color: 'gray',
+      color: 'cyan',
       ready: false,
+      note: 'Application serveur Python — lancer sur PC atelier',
     },
     {
-      id: 'app_atelier_3' as AppMode,
-      label: 'Application Atelier 3',
-      description: 'En attente d\'intégration — envoyez le code pour activer.',
+      id: 'picktolight' as AppMode,
+      label: 'Pick-to-Light — Raspberry Pi',
+      description: 'Contrôle des LEDs WS2812B par casier. API REST sur Raspberry Pi 4 — 14 casiers Ferco mappés.',
       icon: (
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-gray-500">
-          <rect x="3" y="3" width="18" height="18" rx="2" />
-          <line x1="12" y1="8" x2="12" y2="16" />
-          <line x1="8" y1="12" x2="16" y2="12" />
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-rose-400">
+          <circle cx="12" cy="12" r="3" />
+          <path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83" />
         </svg>
       ),
-      color: 'gray',
+      color: 'rose',
       ready: false,
+      note: 'Application Python sur Raspberry Pi — GPIO 18 + LEDs WS2812B',
     },
   ];
 
@@ -165,31 +165,44 @@ function HubFabrication({ onSelect, onBack }: { onSelect: (mode: AppMode) => voi
         <p className="text-sm text-gray-500 mb-8">Configurateurs techniques et outils atelier</p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          {apps.map((app) => (
-            <button
-              key={app.label}
-              onClick={() => app.ready && onSelect(app.id)}
-              disabled={!app.ready}
-              className={`group text-left p-6 rounded-xl border-2 transition-all
-                ${app.ready
-                  ? 'border-[#2a2d35] bg-[#181a20] hover:border-green-500/50 hover:bg-green-600/5 cursor-pointer'
-                  : 'border-[#1e2028] bg-[#14161c] opacity-50 cursor-not-allowed'
-                }`}
-            >
-              <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-4 ${app.ready ? 'bg-green-600/10 border border-green-500/20' : 'bg-[#1c1e24] border border-[#2a2d35]'}`}>
-                {app.icon}
-              </div>
-              <h3 className={`font-semibold text-base mb-1 ${app.ready ? 'text-white group-hover:text-green-400' : 'text-gray-600'} transition-colors`}>
-                {app.label}
-              </h3>
-              <p className="text-xs text-gray-500 leading-relaxed">{app.description}</p>
-              {!app.ready && (
-                <span className="inline-block mt-3 text-[10px] px-2 py-0.5 rounded bg-[#252830] text-gray-600 border border-[#353840]">
-                  Bientôt disponible
-                </span>
-              )}
-            </button>
-          ))}
+          {apps.map((app) => {
+            const handleClick = () => {
+              if (!app.ready) return;
+              if ('externalUrl' in app && app.externalUrl) {
+                window.open(app.externalUrl, '_blank');
+              } else {
+                onSelect(app.id);
+              }
+            };
+            const isServerApp = 'note' in app;
+            return (
+              <button
+                key={app.label}
+                onClick={handleClick}
+                disabled={!app.ready && !isServerApp}
+                className={`group text-left p-6 rounded-xl border-2 transition-all
+                  ${app.ready
+                    ? 'border-[#2a2d35] bg-[#181a20] hover:border-green-500/50 hover:bg-green-600/5 cursor-pointer'
+                    : isServerApp
+                      ? 'border-[#2a2d35] bg-[#181a20] opacity-70'
+                      : 'border-[#1e2028] bg-[#14161c] opacity-50 cursor-not-allowed'
+                  }`}
+              >
+                <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-4 ${app.ready ? 'bg-green-600/10 border border-green-500/20' : 'bg-[#1c1e24] border border-[#2a2d35]'}`}>
+                  {app.icon}
+                </div>
+                <h3 className={`font-semibold text-base mb-1 ${app.ready ? 'text-white group-hover:text-green-400' : 'text-gray-400'} transition-colors`}>
+                  {app.label}
+                </h3>
+                <p className="text-xs text-gray-500 leading-relaxed">{app.description}</p>
+                {isServerApp && 'note' in app && (
+                  <span className="inline-block mt-3 text-[10px] px-2 py-0.5 rounded bg-[#252830] text-gray-500 border border-[#353840]">
+                    {(app as { note: string }).note}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
       </main>
     </div>
