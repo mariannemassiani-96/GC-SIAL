@@ -37,7 +37,7 @@ export const MATERIAUX: MateriauDef[] = [
       'Personnalisable (teinture, laque, RAL)',
       'Choix d\'essences nobles',
     ],
-    coefPrix: 1.35,
+    coefPrix: 3.25,   // Confirmé : PF bois 419€ / PF PVC 129€ = 3.25
     couleursDisponibles: [
       'bois_pin_naturel', 'bois_chene_naturel', 'bois_meranti', 'bois_meleze', 'bois_eucalyptus',
       'bois_laque_blanc', 'bois_laque_gris_7016', 'bois_laque_noir_9005',
@@ -56,7 +56,7 @@ export const MATERIAUX: MateriauDef[] = [
       'Toutes les couleurs RAL',
       'Idéal grandes dimensions',
     ],
-    coefPrix: 1.55,
+    coefPrix: 1.75,   // Confirmé : PF alu 226€ / PF PVC 129€ = 1.75
     couleursDisponibles: [
       'blanc_9016', 'creme_9001',
       'gris_anthracite_7016', 'gris_quartz_7039', 'gris_agate_7038',
@@ -78,7 +78,7 @@ export const MATERIAUX: MateriauDef[] = [
       'Aucun entretien côté extérieur',
       'Toutes les couleurs RAL extérieur',
     ],
-    coefPrix: 1.85,
+    coefPrix: 3.60,   // Bois-alu ≈ bois ×1.1 (protection alu extérieur)
     couleursDisponibles: [
       // Extérieur alu
       'blanc_9016', 'gris_anthracite_7016', 'gris_quartz_7039', 'noir_jet_9005',
@@ -99,7 +99,7 @@ export const MATERIAUX: MateriauDef[] = [
       'Bonne isolation',
       'Couleurs RAL extérieur',
     ],
-    coefPrix: 1.3,
+    coefPrix: 1.40,   // PF PVC-Alu 177€ / PF PVC 129€ = 1.37 → arrondi 1.40
     couleursDisponibles: [
       'blanc_9016', 'creme_9001',
       'gris_anthracite_7016', 'gris_quartz_7039', 'noir_jet_9005',
@@ -129,13 +129,19 @@ export const MATERIAUX: MateriauDef[] = [
 // ─── Profilés par matériau ────────────────────────────────────────────
 // Fenetre24 utilise Aluplast (IDEAL série) pour le PVC
 
+// Note: coefPrix ici est informatif pour l'UI.
+// Le moteur calcPrix.ts utilise COEF_PROFIL de prix.ts.
+// Les deux doivent rester synchronisés.
 export const PROFILS: ProfileDef[] = [
-  // ── PVC — Aluplast ──
+  // ── PVC — Aluplast (prix départ confirmés: 4000=39€, 5000=40€, 7000=42€, Energeto=50€, ED=57€) ──
   { id: 'aluplast_ideal_4000', label: 'Aluplast IDEAL 4000', materiau: 'pvc', epaisseur: 70, isolation: 'standard', uw: 1.3, coefPrix: 1.0 },
+  { id: 'aluplast_ideal_4000_reno', label: 'Aluplast IDEAL 4000 Rénovation', materiau: 'pvc', epaisseur: 70, isolation: 'standard', uw: 1.3, coefPrix: 0.95 },
   { id: 'aluplast_ideal_5000', label: 'Aluplast IDEAL 5000', materiau: 'pvc', epaisseur: 70, isolation: 'standard', uw: 1.2, coefPrix: 1.05 },
-  { id: 'aluplast_ideal_7000', label: 'Aluplast IDEAL 7000', materiau: 'pvc', epaisseur: 76, isolation: 'renforcee', uw: 1.1, coefPrix: 1.15 },
-  { id: 'aluplast_energeto_8000', label: 'Aluplast Energeto 8000', materiau: 'pvc', epaisseur: 82, isolation: 'premium', uw: 0.95, coefPrix: 1.3 },
-  { id: 'aluplast_energeto_view', label: 'Aluplast Energeto View', materiau: 'pvc', epaisseur: 82, isolation: 'premium', uw: 0.90, coefPrix: 1.4 },
+  { id: 'aluplast_ideal_7000', label: 'Aluplast IDEAL 7000', materiau: 'pvc', epaisseur: 76, isolation: 'renforcee', uw: 1.1, coefPrix: 1.20 },
+  { id: 'aluplast_energeto_neo', label: 'Aluplast Energeto neo', materiau: 'pvc', epaisseur: 76, isolation: 'renforcee', uw: 1.0, coefPrix: 1.45 },
+  { id: 'aluplast_energeto_8000', label: 'Aluplast Energeto 8000', materiau: 'pvc', epaisseur: 82, isolation: 'premium', uw: 0.95, coefPrix: 1.60 },
+  { id: 'aluplast_energeto_8000_ed', label: 'Aluplast Energeto 8000 ED (passif)', materiau: 'pvc', epaisseur: 82, isolation: 'premium', uw: 0.80, coefPrix: 1.85 },
+  { id: 'aluplast_energeto_view', label: 'Aluplast Energeto View', materiau: 'pvc', epaisseur: 82, isolation: 'premium', uw: 0.90, coefPrix: 2.05 },
 
   // ── Bois ──
   { id: 'bois_iv68', label: 'Bois IV 68', materiau: 'bois', epaisseur: 68, isolation: 'standard', uw: 1.4, coefPrix: 1.0 },

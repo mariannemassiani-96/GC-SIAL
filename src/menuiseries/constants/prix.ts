@@ -71,13 +71,23 @@ export const COEF_MATERIAU: Record<MateriauId, number> = {
 // ── Coefficients profilés ─────────────────────────────────────────────
 // Fenetre24 PVC simple = 129€, Energeto 8000 = 239€ → ratio 1.85
 
+// Prix de départ confirmés par meta-descriptions Google fenetre24 :
+// IDEAL 4000 = 39€, IDEAL 4000 Réno = 32€, IDEAL 5000 = 40€,
+// IDEAL 7000 = 42€, Energeto neo = 49€, Energeto 8000 = 50€,
+// Energeto 8000 ED = 57€
+// MAIS : ces "à partir de" sont pour fixe petite dim où les écarts sont faibles.
+// Pour OB standard, l'écart se creuse (forum: profil 80mm ≈ +18%).
+// Le ratio porte-fenêtre Energeto 8000 ED / simple = 239/129 = 1.85 reste la ref fiable.
 export const COEF_PROFIL: Record<string, number> = {
-  // PVC Aluplast
-  aluplast_ideal_4000: 1.0,
-  aluplast_ideal_5000: 1.08,
-  aluplast_ideal_7000: 1.30,
-  aluplast_energeto_8000: 1.85,      // Confirmé : 239/129 ≈ 1.85
-  aluplast_energeto_view: 2.05,
+  // PVC Aluplast — prix départ et ratio PF confirmés
+  aluplast_ideal_4000: 1.0,          // 39€ base — profil 70mm 5 chambres
+  aluplast_ideal_4000_reno: 0.95,    // 32€ — rénovation, cadre plus fin
+  aluplast_ideal_5000: 1.05,         // 40€ — profil 70mm amélioré
+  aluplast_ideal_7000: 1.20,         // 42€ base mais +18% en OB standard (forum)
+  aluplast_energeto_neo: 1.45,       // 49€ — profil 76mm 6 chambres
+  aluplast_energeto_8000: 1.60,      // 50€ — profil 82mm passif
+  aluplast_energeto_8000_ed: 1.85,   // 57€ + ratio PF 239/129 = 1.85 confirmé
+  aluplast_energeto_view: 2.05,      // Profilé fin esthétique, premium
   // Bois
   bois_iv68: 1.0,
   bois_iv78: 1.15,
@@ -101,21 +111,25 @@ export const COEF_PROFIL: Record<string, number> = {
 // Double vitrage standard INCLUS (coef 1.0)
 // Triple vitrage ≈ +35-45% selon les sources
 
+// Sources croisées : agents recherche (forums DE, fenetre24 meta, marché FR)
+// cl.2 quasi-inclus (+8%), cl.3 DE: +40-50€/m², cl.5 DE: 150-200€/m²
+// Sécurité A1/A3 : fenetre24 classes confirmées, marché FR
+// Triple : consensus +35-50%, fenetre24 "surcoût faible" = positionnement agressif
 export const COEF_VITRAGE: Record<string, number> = {
-  double_standard: 1.0,              // Inclus dans le prix de base
-  double_phonique_cl2: 1.08,
-  double_phonique_cl3_36: 1.15,
-  double_phonique_cl3_38: 1.20,
-  double_phonique_cl4: 1.30,
-  double_phonique_cl5: 1.45,
-  double_securite_a1: 1.18,
-  double_securite_a3: 1.35,
-  double_solaire: 1.22,
-  double_structure: 1.10,
-  triple_standard: 1.40,             // Triple standard ≈ +40%
-  triple_phonique: 1.60,
-  triple_securite: 1.75,
-  triple_solaire: 1.55,
+  double_standard: 1.0,              // Inclus dans le prix de base (Ug 1.1, 4/16/4 argon)
+  double_phonique_cl2: 1.08,         // 32 dB — quasi-inclus, verre légèrement plus épais
+  double_phonique_cl3_36: 1.18,      // 36 dB — 8/16/4 argon
+  double_phonique_cl3_38: 1.25,      // 38 dB — 10/16/4 argon, verre asymétrique
+  double_phonique_cl4: 1.35,         // 42 dB — sources DE: +40-50€/m²
+  double_phonique_cl5: 1.55,         // 45 dB — sources DE: 150-200€/m², classe max
+  double_securite_a1: 1.20,          // Feuilleté 33.1 anti-blessure
+  double_securite_a3: 1.40,          // Feuilleté 44.2 anti-effraction (chute 9m)
+  double_solaire: 1.22,              // Couche contrôle solaire
+  double_structure: 1.10,            // Dépoli / ornemental
+  triple_standard: 1.40,             // Consensus marché +35-45%, fenetre24 compétitif
+  triple_phonique: 1.65,             // Triple + acoustique renforcée
+  triple_securite: 1.80,             // Triple + feuilleté A3
+  triple_solaire: 1.55,              // Triple + couche solaire
 };
 
 // ── Coefficients ouverture ────────────────────────────────────────────
@@ -257,7 +271,7 @@ export const DIMENSIONS_LIMITES: Record<TypeProduit, { minL: number; maxL: numbe
 // ── Options sécurité porte d'entrée ───────────────────────────────────
 export const COEF_SERRURE: Record<string, number> = {
   serrure_3pts: 1.0,
-  serrure_5pts: 1.18,
+  serrure_5pts: 1.25,   // Confirmé : passage gamme Basic→Comfort (page sécurité porte fenetre24)
 };
 
 export const PRIX_ACCESSOIRES_PORTE: Record<string, number> = {
