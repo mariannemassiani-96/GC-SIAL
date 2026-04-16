@@ -3,7 +3,7 @@ import type { ConfigMenuiserie } from '../types';
 import { calculerPrix } from '../engine/calcPrix';
 import { TYPES_PRODUITS } from '../constants/produits';
 import { MATERIAUX } from '../constants/materiaux';
-import { Plus, ArrowLeft, Copy, Trash2, Edit3, FileText, Download, Settings, ChevronRight } from 'lucide-react';
+import { Plus, ArrowLeft, Copy, Trash2, Edit3, FileText, Download, Settings, ChevronRight, GitBranch, BarChart3, FileSpreadsheet } from 'lucide-react';
 
 interface ListeMenuiseriesProps {
   affaire: AffaireAper;
@@ -14,12 +14,15 @@ interface ListeMenuiseriesProps {
   onDuplicateMenuiserie: (menuiserieId: string) => void;
   onDeleteMenuiserie: (menuiserieId: string) => void;
   onExportDevis: () => void;
+  onExportCSV?: () => void;
+  onVariantes?: () => void;
+  onAnalyse?: () => void;
 }
 
 export function ListeMenuiseries({
   affaire, onBack, onEditAffaire,
   onAddMenuiserie, onEditMenuiserie, onDuplicateMenuiserie, onDeleteMenuiserie,
-  onExportDevis,
+  onExportDevis, onExportCSV, onVariantes, onAnalyse,
 }: ListeMenuiseriesProps) {
   const totalHT = affaire.menuiseries.reduce((acc, m) => acc + calculerPrix(m).totalHT, 0);
   const totalTTC = Math.round(totalHT * 1.2);
@@ -43,18 +46,33 @@ export function ListeMenuiseries({
                 </div>
               </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               <button onClick={onEditAffaire} className="flex items-center gap-1.5 px-3 py-2 text-sm text-gray-400 hover:text-white border border-[#353840] rounded-lg transition-colors">
                 <Settings size={14} /> Paramètres
               </button>
+              {onVariantes && (
+                <button onClick={onVariantes} className="flex items-center gap-1.5 px-3 py-2 text-sm text-gray-400 hover:text-white border border-[#353840] rounded-lg transition-colors">
+                  <GitBranch size={14} /> Variantes
+                </button>
+              )}
+              {onAnalyse && (
+                <button onClick={onAnalyse} className="flex items-center gap-1.5 px-3 py-2 text-sm text-gray-400 hover:text-white border border-[#353840] rounded-lg transition-colors">
+                  <BarChart3 size={14} /> Analyse
+                </button>
+              )}
               <button onClick={onExportDevis} className="flex items-center gap-1.5 px-3 py-2 text-sm text-gray-400 hover:text-white border border-[#353840] rounded-lg transition-colors">
-                <Download size={14} /> Export devis
+                <Download size={14} /> PDF
               </button>
+              {onExportCSV && (
+                <button onClick={onExportCSV} className="flex items-center gap-1.5 px-3 py-2 text-sm text-gray-400 hover:text-white border border-[#353840] rounded-lg transition-colors">
+                  <FileSpreadsheet size={14} /> CSV
+                </button>
+              )}
               <button
                 onClick={onAddMenuiserie}
                 className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold px-4 py-2 rounded-lg transition-colors"
               >
-                <Plus size={16} /> Ajouter une menuiserie
+                <Plus size={16} /> Ajouter
               </button>
             </div>
           </div>

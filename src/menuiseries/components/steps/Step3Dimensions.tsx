@@ -122,34 +122,69 @@ export function Step3Dimensions({ config, onUpdate, onNext, onPrev }: Step3Props
       {/* Dimensions */}
       <div>
         <h3 className="text-sm font-semibold text-gray-300 mb-3">Dimensions (mm)</h3>
-        <div className="grid grid-cols-2 gap-4 max-w-md">
+        <div className="grid grid-cols-2 gap-6 max-w-xl">
+          {/* Largeur */}
           <div>
             <label className="block text-xs text-gray-500 mb-1">
               Largeur totale ({limites.minL} – {limites.maxL} mm)
             </label>
-            <input
-              type="number"
-              value={largeur}
-              min={limites.minL}
-              max={limites.maxL}
-              step={10}
-              onChange={(e) => onUpdate({ largeur: Number(e.target.value) })}
-              className="w-full px-3 py-2.5 bg-[#252830] border border-[#353840] rounded-lg text-white text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
-            />
+            <div className="flex items-center gap-3">
+              <input
+                type="range"
+                min={limites.minL}
+                max={limites.maxL}
+                step={10}
+                value={largeur}
+                onChange={(e) => onUpdate({ largeur: Number(e.target.value) })}
+                className="flex-1 h-2 bg-[#353840] rounded-lg appearance-none cursor-pointer accent-blue-500"
+              />
+              <input
+                type="number"
+                value={largeur}
+                min={limites.minL}
+                max={limites.maxL}
+                step={10}
+                onChange={(e) => onUpdate({ largeur: Number(e.target.value) })}
+                className="w-24 px-3 py-2 bg-[#252830] border border-[#353840] rounded-lg text-white text-sm text-center focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+              />
+            </div>
+            {/* Indicateur visuel */}
+            <div className="flex justify-between text-[10px] text-gray-600 mt-1 px-0.5">
+              <span>{limites.minL}</span>
+              <span>{Math.round((limites.minL + limites.maxL) / 2)}</span>
+              <span>{limites.maxL}</span>
+            </div>
           </div>
+          {/* Hauteur */}
           <div>
             <label className="block text-xs text-gray-500 mb-1">
               Hauteur totale ({limites.minH} – {limites.maxH} mm)
             </label>
-            <input
-              type="number"
-              value={hauteur}
-              min={limites.minH}
-              max={limites.maxH}
-              step={10}
-              onChange={(e) => onUpdate({ hauteur: Number(e.target.value) })}
-              className="w-full px-3 py-2.5 bg-[#252830] border border-[#353840] rounded-lg text-white text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
-            />
+            <div className="flex items-center gap-3">
+              <input
+                type="range"
+                min={limites.minH}
+                max={limites.maxH}
+                step={10}
+                value={hauteur}
+                onChange={(e) => onUpdate({ hauteur: Number(e.target.value) })}
+                className="flex-1 h-2 bg-[#353840] rounded-lg appearance-none cursor-pointer accent-blue-500"
+              />
+              <input
+                type="number"
+                value={hauteur}
+                min={limites.minH}
+                max={limites.maxH}
+                step={10}
+                onChange={(e) => onUpdate({ hauteur: Number(e.target.value) })}
+                className="w-24 px-3 py-2 bg-[#252830] border border-[#353840] rounded-lg text-white text-sm text-center focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+              />
+            </div>
+            <div className="flex justify-between text-[10px] text-gray-600 mt-1 px-0.5">
+              <span>{limites.minH}</span>
+              <span>{Math.round((limites.minH + limites.maxH) / 2)}</span>
+              <span>{limites.maxH}</span>
+            </div>
           </div>
         </div>
 

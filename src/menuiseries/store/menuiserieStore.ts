@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { v4 as uuid } from 'uuid';
-import type { ConfigMenuiserie, Panier, PanierItem, ClientInfo, WizardStep } from '../types';
+import type { ConfigMenuiserie, Panier, PanierItem, ClientInfo, WizardStep, VarianteId, Variante } from '../types';
 import { calculerPrix } from '../engine/calcPrix';
 
 const STORAGE_KEY = 'sial-aper-affaires';
@@ -43,6 +43,8 @@ export interface AffaireAper {
   contexte: ContexteChantier;
   parametresCommuns: ParametresCommuns;
   menuiseries: ConfigMenuiserie[];
+  variantes: Variante[];
+  varianteActive: VarianteId;
   panier: Panier | null;
 }
 
@@ -77,6 +79,10 @@ function createEmptyAffaireAper(): AffaireAper {
       moustiquaire: false,
     },
     menuiseries: [],
+    variantes: [
+      { id: 'A', label: 'Variante A', menuiseries: [], totalHT: 0, totalTTC: 0 },
+    ],
+    varianteActive: 'A',
     panier: null,
   };
 }

@@ -317,6 +317,18 @@ export interface Panier {
   totalTTC: number;
 }
 
+// ── Variantes ────────────────────────────────────────────────────────
+
+export type VarianteId = 'A' | 'B' | 'C';
+
+export interface Variante {
+  id: VarianteId;
+  label: string;
+  menuiseries: ConfigMenuiserie[];
+  totalHT: number;
+  totalTTC: number;
+}
+
 // ── État du wizard ───────────────────────────────────────────────────
 
 export type WizardStep = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;

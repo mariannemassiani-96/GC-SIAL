@@ -5,10 +5,14 @@ import type { ConfigMenuiserie } from '../types';
 import { TableauDeBord } from './TableauDeBord';
 import { CreationAffaire } from './CreationAffaire';
 import { ListeMenuiseries } from './ListeMenuiseries';
+import { EcranVariantes } from './EcranVariantes';
+import { AnalyseInterne } from './AnalyseInterne';
 import { WizardLayout } from '../components/WizardLayout';
+import { genererDevisPDF } from '../export/exportDevisPDF';
+import { exportCSV } from '../export/exportTechnique';
 import { v4 as uuid } from 'uuid';
 
-type Screen = 'dashboard' | 'creation' | 'menuiseries' | 'wizard';
+type Screen = 'dashboard' | 'creation' | 'menuiseries' | 'wizard' | 'variantes' | 'analyse';
 
 interface ConfigurateurAperProps {
   onSwitchToGC: () => void;
@@ -78,10 +82,8 @@ export function ConfigurateurAper({ onSwitchToGC }: ConfigurateurAperProps) {
     if (!config.id) config.id = uuid();
 
     if (editingMenuiserieId) {
-      // Update existing
       store.updateMenuiserie(selectedAffaireId, editingMenuiserieId, config);
     } else {
-      // Add new — on met à jour directement via le store
       const allAffaires = JSON.parse(localStorage.getItem('sial-aper-affaires') ?? '[]');
       const affaire = allAffaires.find((a: AffaireAper) => a.id === selectedAffaireId);
       if (affaire) {
@@ -91,9 +93,18 @@ export function ConfigurateurAper({ onSwitchToGC }: ConfigurateurAperProps) {
       }
     }
     setScreen('menuiseries');
-    // Force refresh
     window.location.reload();
   }, [selectedAffaireId, editingMenuiserieId, wizard.config, store]);
+
+  // ── Exports ────────────────────────────────────────
+
+  const handleExportDevis = useCallback(() => {
+    if (selectedAffaire) genererDevisPDF(selectedAffaire);
+  }, [selectedAffaire]);
+
+  const handleExportCSV = useCallback(() => {
+    if (selectedAffaire) exportCSV(selectedAffaire);
+  }, [selectedAffaire]);
 
   // ── Render ─────────────────────────────────────────
 
@@ -136,10 +147,29 @@ export function ConfigurateurAper({ onSwitchToGC }: ConfigurateurAperProps) {
           onDeleteMenuiserie={(id) => {
             store.deleteMenuiserie(selectedAffaireId!, id);
           }}
-          onExportDevis={() => {
-            // TODO: Export PDF
-            alert('Export PDF — à venir');
-          }}
+          onExportDevis={handleExportDevis}
+          onExportCSV={handleExportCSV}
+          onVariantes={() => setScreen('variantes')}
+          onAnalyse={() => setScreen('analyse')}
+        />
+      );
+
+    case 'variantes':
+      if (!selectedAffaire) return null;
+      return (
+        <EcranVariantes
+          affaire={selectedAffaire}
+          onUpdate={handleUpdateAffaire}
+          onBack={() => setScreen('menuiseries')}
+        />
+      );
+
+    case 'analyse':
+      if (!selectedAffaire) return null;
+      return (
+        <AnalyseInterne
+          affaire={selectedAffaire}
+          onBack={() => setScreen('menuiseries')}
         />
       );
 
