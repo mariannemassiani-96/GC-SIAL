@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { categoriserArticle } from '../categorisation';
-import { ArrowLeft, FileText, ClipboardList, CheckSquare, BarChart3, TrendingUp, MessageCircle, Upload, Download, Plus, Search, Trash2, Sparkles, X, Send } from 'lucide-react';
+import { DEMO_VITRAGES, type VitrageFacture } from '../vitrageAnalyse';
+import { ArrowLeft, FileText, ClipboardList, CheckSquare, BarChart3, TrendingUp, Layers, MessageCircle, Upload, Download, Plus, Search, Trash2, Sparkles, X, Send } from 'lucide-react';
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -59,7 +60,7 @@ interface ArticleTerrain {
 
 interface Props { onBack: () => void; }
 
-type Tab = 'factures' | 'recensement' | 'decisions' | 'statistiques' | 'dashboard';
+type Tab = 'factures' | 'recensement' | 'decisions' | 'statistiques' | 'vitrage' | 'dashboard';
 
 const FAMILLES = ['VISSERIE', 'QUINCAILLERIE', 'JOINT', 'ACCESSOIRE', 'CONSOMMABLE', 'AUTRE'];
 const UNITES = ['piece', 'boite', 'kg', 'metre', 'rouleau'];
@@ -155,6 +156,7 @@ export function StageInventaire({ onBack }: Props) {
   const [tab, setTab] = useState<Tab>('factures');
   const [factures, setFactures] = useState<Facture[]>(() => loadData(STORAGE_FACTURES, DEMO_FACTURES));
   const [articles, setArticles] = useState<ArticleTerrain[]>(() => loadData(STORAGE_ARTICLES, DEMO_ARTICLES));
+  const [vitrages] = useState<VitrageFacture[]>(() => loadData('sial_vitrages', DEMO_VITRAGES));
   const [showChat, setShowChat] = useState(false);
   const [chatMessages, setChatMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
   const [chatInput, setChatInput] = useState('');
@@ -230,6 +232,7 @@ export function StageInventaire({ onBack }: Props) {
     { id: 'factures', label: 'Factures', icon: <FileText size={16} /> },
     { id: 'recensement', label: 'Recensement', icon: <ClipboardList size={16} /> },
     { id: 'decisions', label: 'Decisions', icon: <CheckSquare size={16} /> },
+    { id: 'vitrage', label: 'Vitrage', icon: <Layers size={16} /> },
     { id: 'statistiques', label: 'Statistiques', icon: <TrendingUp size={16} /> },
     { id: 'dashboard', label: 'Tableau de bord', icon: <BarChart3 size={16} /> },
   ];
@@ -247,7 +250,7 @@ export function StageInventaire({ onBack }: Props) {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-500">{articles.length} articles | {factures.length} factures</span>
+            <span className="text-xs text-gray-500">{articles.length} articles | {factures.length} factures | {vitrages.length} vitrages</span>
           </div>
         </div>
       </header>
@@ -270,6 +273,7 @@ export function StageInventaire({ onBack }: Props) {
         {tab === 'factures' && <TabFactures factures={factures} consolidated={consolidated} onUpdate={updateFactures} />}
         {tab === 'recensement' && <TabRecensement articles={filteredArticles} consolidated={consolidated} search={searchFilter} onSearch={setSearchFilter} onAdd={addArticle} onUpdate={updateArticle} onDelete={deleteArticle} />}
         {tab === 'decisions' && <TabDecisions articles={filteredArticles} search={searchFilter} onSearch={setSearchFilter} onUpdate={updateArticle} onExport={exportCSV} />}
+        {tab === 'vitrage' && <TabVitrage vitrages={vitrages} />}
         {tab === 'statistiques' && <TabStatistiques factures={factures} />}
         {tab === 'dashboard' && <TabDashboard articles={articles} consolidated={consolidated} factures={factures} />}
       </main>
@@ -913,6 +917,200 @@ function TabStatistiques({ factures }: { factures: Facture[] }) {
                 <td className="px-4 py-3 text-right text-white font-bold">100%</td>
                 <td className="px-4 py-3 text-center text-white font-bold">{nbLignes}</td>
                 <td className="px-4 py-3 text-center text-white font-bold">{nbRefs}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Tab Vitrage — Analyse production ─────────────────────────────────
+
+function TabVitrage({ vitrages }: { vitrages: VitrageFacture[] }) {
+  const [vue, setVue] = useState<'composition' | 'annee' | 'mois' | 'semaine' | 'dimensions'>('composition');
+  const [filtreAnnee, setFiltreAnnee] = useState<string>('tous');
+
+  const annees = [...new Set(vitrages.map(v => v.annee))].sort();
+  const filtres = vitrages.filter(v => filtreAnnee === 'tous' || v.annee === filtreAnnee);
+
+  // KPIs
+  const totalSurfaceM2 = filtres.reduce((s, v) => s + v.surfaceTotaleM2, 0);
+  const totalQte = filtres.reduce((s, v) => s + v.qte, 0);
+  const totalHT = filtres.reduce((s, v) => s + v.totalHT, 0);
+  const nbCompositions = new Set(filtres.map(v => v.composition.composition)).size;
+
+  // Nombre de mois et semaines dans la période
+  const moisUniques = new Set(filtres.map(v => v.mois)).size;
+  const semainesUniques = new Set(filtres.map(v => v.semaine)).size;
+  const moyenneMoisM2 = moisUniques > 0 ? totalSurfaceM2 / moisUniques : 0;
+  const moyenneSemaineM2 = semainesUniques > 0 ? totalSurfaceM2 / semainesUniques : 0;
+  const moyenneAnneeM2 = annees.length > 0 ? totalSurfaceM2 / annees.length : totalSurfaceM2;
+
+  type Agg = { label: string; surfaceM2: number; qte: number; totalHT: number; nbLignes: number; details?: string };
+
+  function agreger(keyFn: (v: VitrageFacture) => string, detailFn?: (v: VitrageFacture) => string): Agg[] {
+    const map = new Map<string, { surfaceM2: number; qte: number; totalHT: number; nbLignes: number; details: Set<string> }>();
+    for (const v of filtres) {
+      const key = keyFn(v);
+      const ex = map.get(key) ?? { surfaceM2: 0, qte: 0, totalHT: 0, nbLignes: 0, details: new Set<string>() };
+      ex.surfaceM2 += v.surfaceTotaleM2;
+      ex.qte += v.qte;
+      ex.totalHT += v.totalHT;
+      ex.nbLignes++;
+      if (detailFn) ex.details.add(detailFn(v));
+      map.set(key, ex);
+    }
+    return [...map.entries()].map(([label, v]) => ({
+      label, surfaceM2: v.surfaceM2, qte: v.qte, totalHT: v.totalHT, nbLignes: v.nbLignes,
+      details: v.details.size > 0 ? [...v.details].join(', ') : undefined,
+    })).sort((a, b) => b.surfaceM2 - a.surfaceM2);
+  }
+
+  let donnees: Agg[] = [];
+  switch (vue) {
+    case 'composition':
+      donnees = agreger(
+        v => v.composition.composition || 'Inconnue',
+        v => [v.composition.gaz, ...v.composition.caracteristiques].filter(Boolean).join(', ')
+      );
+      break;
+    case 'annee':
+      donnees = agreger(v => v.annee).sort((a, b) => a.label.localeCompare(b.label));
+      break;
+    case 'mois':
+      donnees = agreger(v => v.mois).sort((a, b) => a.label.localeCompare(b.label));
+      break;
+    case 'semaine':
+      donnees = agreger(v => v.semaine).sort((a, b) => a.label.localeCompare(b.label));
+      break;
+    case 'dimensions':
+      donnees = agreger(v => `${v.largeurMM}x${v.hauteurMM}`);
+      break;
+  }
+
+  const maxSurface = Math.max(...donnees.map(d => d.surfaceM2), 1);
+
+  const exportCSVVitrage = () => {
+    const h = ['Composition/Periode', 'Surface m2', 'Quantite', 'Total HT', 'Nb lignes', 'Details'];
+    const rows = donnees.map(d => [d.label, d.surfaceM2.toFixed(2), d.qte, d.totalHT.toFixed(2), d.nbLignes, d.details ?? '']);
+    const csv = '\uFEFF' + [h.join(';'), ...rows.map(r => r.map(c => `"${c}"`).join(';'))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `vitrage_${vue}_${new Date().toISOString().slice(0, 10)}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="max-w-7xl mx-auto px-4 py-6 space-y-5">
+      {/* KPIs production */}
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+        <KPI label="Surface totale" value={`${totalSurfaceM2.toFixed(1)} m\u00b2`} color="text-cyan-400" />
+        <KPI label="Nb vitrages" value={totalQte} color="text-white" />
+        <KPI label="Compositions" value={nbCompositions} color="text-amber-400" />
+        <KPI label="Total HT" value={`${Math.round(totalHT).toLocaleString('fr-FR')} EUR`} color="text-green-400" />
+        <KPI label="Moy/semaine" value={`${moyenneSemaineM2.toFixed(1)} m\u00b2`} color="text-blue-400" />
+        <KPI label="Moy/mois" value={`${moyenneMoisM2.toFixed(1)} m\u00b2`} color="text-blue-400" />
+        <KPI label="Moy/an" value={`${moyenneAnneeM2.toFixed(0)} m\u00b2`} color="text-blue-400" />
+      </div>
+
+      {/* Objectif production */}
+      <div className="bg-cyan-600/10 border border-cyan-500/30 rounded-xl p-4">
+        <h3 className="text-xs text-cyan-400 font-bold tracking-wider mb-2">OBJECTIF PRODUCTION INTERNE (95%)</h3>
+        <div className="grid grid-cols-3 gap-4 text-center">
+          <div>
+            <p className="text-2xl font-bold text-white">{(moyenneSemaineM2 * 0.95).toFixed(1)} m&sup2;</p>
+            <p className="text-[10px] text-gray-500">par SEMAINE</p>
+          </div>
+          <div>
+            <p className="text-2xl font-bold text-white">{(moyenneMoisM2 * 0.95).toFixed(0)} m&sup2;</p>
+            <p className="text-[10px] text-gray-500">par MOIS</p>
+          </div>
+          <div>
+            <p className="text-2xl font-bold text-white">{(moyenneAnneeM2 * 0.95).toFixed(0)} m&sup2;</p>
+            <p className="text-[10px] text-gray-500">par AN</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Filtres + sélecteur vue */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-500">Annee :</span>
+          <select value={filtreAnnee} onChange={e => setFiltreAnnee(e.target.value)}
+            className="px-3 py-1.5 bg-[#252830] border border-[#353840] rounded-lg text-xs text-white outline-none">
+            <option value="tous">Toutes</option>
+            {annees.map(a => <option key={a} value={a}>{a}</option>)}
+          </select>
+        </div>
+        <div className="flex-1" />
+        <button onClick={exportCSVVitrage} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-green-600/10 border border-green-500/30 text-green-400 rounded-lg">
+          <Download size={12} /> Export CSV
+        </button>
+      </div>
+
+      <div className="flex gap-1 bg-[#181a20] border border-[#2a2d35] rounded-xl p-1">
+        {([
+          { id: 'composition' as const, label: 'Par composition' },
+          { id: 'annee' as const, label: 'Par annee' },
+          { id: 'mois' as const, label: 'Par mois' },
+          { id: 'semaine' as const, label: 'Par semaine' },
+          { id: 'dimensions' as const, label: 'Par dimension' },
+        ]).map(v => (
+          <button key={v.id} onClick={() => setVue(v.id)}
+            className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all
+              ${vue === v.id ? 'bg-cyan-600/20 text-cyan-400 border border-cyan-500/40' : 'text-gray-500 hover:text-gray-300 border border-transparent'}`}>
+            {v.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Tableau */}
+      <div className="bg-[#181a20] border border-[#2a2d35] rounded-xl overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-[#2a2d35] text-gray-500">
+                <th className="text-left px-4 py-3">{vue === 'composition' ? 'Composition' : vue === 'dimensions' ? 'Dimensions (mm)' : 'Periode'}</th>
+                <th className="text-left px-4 py-3 w-[25%]">Repartition surface</th>
+                <th className="text-right px-4 py-3">Surface m&sup2;</th>
+                <th className="text-right px-4 py-3">% surface</th>
+                <th className="text-center px-4 py-3">Quantite</th>
+                <th className="text-right px-4 py-3">Total HT</th>
+                {vue === 'composition' && <th className="text-left px-4 py-3">Details</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {donnees.map((d, i) => {
+                const pct = totalSurfaceM2 > 0 ? (d.surfaceM2 / totalSurfaceM2) * 100 : 0;
+                return (
+                  <tr key={`${d.label}-${i}`} className="border-b border-[#2a2d35]/50 hover:bg-[#1c1e24]">
+                    <td className="px-4 py-2.5 text-white font-medium font-mono">{d.label}</td>
+                    <td className="px-4 py-2.5">
+                      <div className="h-4 bg-[#252830] rounded-full overflow-hidden">
+                        <div className="h-full bg-cyan-600/60 rounded-full" style={{ width: `${(d.surfaceM2 / maxSurface) * 100}%` }} />
+                      </div>
+                    </td>
+                    <td className="px-4 py-2.5 text-right text-cyan-400 font-bold">{d.surfaceM2.toFixed(2)}</td>
+                    <td className="px-4 py-2.5 text-right text-gray-400">{pct.toFixed(1)}%</td>
+                    <td className="px-4 py-2.5 text-center text-white">{d.qte}</td>
+                    <td className="px-4 py-2.5 text-right text-gray-300">{Math.round(d.totalHT).toLocaleString('fr-FR')} EUR</td>
+                    {vue === 'composition' && <td className="px-4 py-2.5 text-gray-500 text-[10px]">{d.details}</td>}
+                  </tr>
+                );
+              })}
+            </tbody>
+            <tfoot>
+              <tr className="border-t-2 border-[#353840] bg-[#1c1e24]">
+                <td className="px-4 py-3 text-white font-bold">TOTAL</td>
+                <td className="px-4 py-3" />
+                <td className="px-4 py-3 text-right text-cyan-400 font-bold text-sm">{totalSurfaceM2.toFixed(2)} m&sup2;</td>
+                <td className="px-4 py-3 text-right text-white font-bold">100%</td>
+                <td className="px-4 py-3 text-center text-white font-bold">{totalQte}</td>
+                <td className="px-4 py-3 text-right text-white font-bold">{Math.round(totalHT).toLocaleString('fr-FR')} EUR</td>
+                {vue === 'composition' && <td />}
               </tr>
             </tfoot>
           </table>
