@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
-import { categoriserArticle } from '../categorisation';
+import { categoriserArticle, CATEGORIES } from '../categorisation';
 import { DEMO_VITRAGES, type VitrageFacture } from '../vitrageAnalyse';
-import { ArrowLeft, FileText, ClipboardList, CheckSquare, BarChart3, TrendingUp, Layers, MessageCircle, Upload, Download, Plus, Search, Trash2, Sparkles, X, Send } from 'lucide-react';
+import { ArrowLeft, FileText, ClipboardList, CheckSquare, BarChart3, TrendingUp, Layers, AlertTriangle, MessageCircle, Upload, Download, Plus, Search, Trash2, Sparkles, X, Send } from 'lucide-react';
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -60,7 +60,7 @@ interface ArticleTerrain {
 
 interface Props { onBack: () => void; }
 
-type Tab = 'factures' | 'recensement' | 'decisions' | 'statistiques' | 'vitrage' | 'dashboard';
+type Tab = 'factures' | 'recensement' | 'decisions' | 'statistiques' | 'vitrage' | 'averifier' | 'dashboard';
 
 const FAMILLES = ['VISSERIE', 'QUINCAILLERIE', 'JOINT', 'ACCESSOIRE', 'CONSOMMABLE', 'AUTRE'];
 const UNITES = ['piece', 'boite', 'kg', 'metre', 'rouleau'];
@@ -157,6 +157,7 @@ export function StageInventaire({ onBack }: Props) {
   const [factures, setFactures] = useState<Facture[]>(() => loadData(STORAGE_FACTURES, DEMO_FACTURES));
   const [articles, setArticles] = useState<ArticleTerrain[]>(() => loadData(STORAGE_ARTICLES, DEMO_ARTICLES));
   const [vitrages] = useState<VitrageFacture[]>(() => loadData('sial_vitrages', DEMO_VITRAGES));
+  const [corrections, setCorrections] = useState<Record<string, string>>(() => loadData("sial_corrections", {}));
   const [showChat, setShowChat] = useState(false);
   const [chatMessages, setChatMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
   const [chatInput, setChatInput] = useState('');
@@ -174,6 +175,12 @@ export function StageInventaire({ onBack }: Props) {
     setFactures(next);
     saveData(STORAGE_FACTURES, next);
   }, []);
+
+  const learnCategorie = useCallback((ref: string, categorie: string) => {
+    const next = { ...corrections, [ref]: categorie };
+    setCorrections(next);
+    saveData('sial_corrections', next);
+  }, [corrections]);
 
   // ── Chat IA ──
   const sendChat = useCallback(async () => {
@@ -232,6 +239,7 @@ export function StageInventaire({ onBack }: Props) {
     { id: 'factures', label: 'Factures', icon: <FileText size={16} /> },
     { id: 'recensement', label: 'Recensement', icon: <ClipboardList size={16} /> },
     { id: 'decisions', label: 'Decisions', icon: <CheckSquare size={16} /> },
+    { id: 'averifier', label: 'A verifier', icon: <AlertTriangle size={16} /> },
     { id: 'vitrage', label: 'Vitrage', icon: <Layers size={16} /> },
     { id: 'statistiques', label: 'Statistiques', icon: <TrendingUp size={16} /> },
     { id: 'dashboard', label: 'Tableau de bord', icon: <BarChart3 size={16} /> },
@@ -273,6 +281,7 @@ export function StageInventaire({ onBack }: Props) {
         {tab === 'factures' && <TabFactures factures={factures} consolidated={consolidated} onUpdate={updateFactures} />}
         {tab === 'recensement' && <TabRecensement articles={filteredArticles} consolidated={consolidated} search={searchFilter} onSearch={setSearchFilter} onAdd={addArticle} onUpdate={updateArticle} onDelete={deleteArticle} />}
         {tab === 'decisions' && <TabDecisions articles={filteredArticles} search={searchFilter} onSearch={setSearchFilter} onUpdate={updateArticle} onExport={exportCSV} />}
+        {tab === 'averifier' && <TabAVerifier factures={factures} onLearn={learnCategorie} corrections={corrections} />}
         {tab === 'vitrage' && <TabVitrage vitrages={vitrages} />}
         {tab === 'statistiques' && <TabStatistiques factures={factures} />}
         {tab === 'dashboard' && <TabDashboard articles={articles} consolidated={consolidated} factures={factures} />}
@@ -1115,6 +1124,177 @@ function TabVitrage({ vitrages }: { vitrages: VitrageFacture[] }) {
             </tfoot>
           </table>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Tab A Vérifier — Lignes non identifiées ──────────────────────────
+
+function TabAVerifier({ factures, onLearn, corrections }: {
+  factures: Facture[];
+  onLearn: (ref: string, categorie: string) => void;
+  corrections: Record<string, string>;
+}) {
+  const [filtreStatut, setFiltreStatut] = useState<'tous' | 'a_verifier' | 'corrige'>('a_verifier');
+  const [searchAV, setSearchAV] = useState('');
+
+  // Flatten toutes les lignes avec catégorisation
+  const toutesLignes = factures.flatMap(f =>
+    f.lignes.map(l => {
+      const result = categoriserArticle(l.ref, l.designation, f.fournisseur);
+      const correctionManuelle = corrections[l.ref];
+      return {
+        ...l,
+        fournisseur: f.fournisseur,
+        dateFacture: f.dateFacture,
+        numFacture: f.numFacture,
+        categorieAuto: result.categorie,
+        confiance: result.confiance,
+        motif: result.motif,
+        categorieCorrigee: correctionManuelle ?? null,
+        estCorrige: !!correctionManuelle,
+      };
+    })
+  );
+
+  // Dédupliquer par ref (garder la première occurrence)
+  const refsVues = new Set<string>();
+  const lignesUniques = toutesLignes.filter(l => {
+    if (refsVues.has(l.ref)) return false;
+    refsVues.add(l.ref);
+    return true;
+  });
+
+  // Filtrer
+  const aVerifier = lignesUniques.filter(l => l.confiance === 'basse' || l.categorieAuto === 'DIVERS');
+  const corrigees = lignesUniques.filter(l => l.estCorrige);
+  const hauteConfiance = lignesUniques.filter(l => l.confiance === 'haute' && !l.estCorrige && l.categorieAuto !== 'DIVERS');
+
+  let affichees = lignesUniques;
+  if (filtreStatut === 'a_verifier') affichees = aVerifier.filter(l => !l.estCorrige);
+  else if (filtreStatut === 'corrige') affichees = corrigees;
+
+  if (searchAV) {
+    const q = searchAV.toLowerCase();
+    affichees = affichees.filter(l => l.ref.toLowerCase().includes(q) || l.designation.toLowerCase().includes(q) || l.fournisseur.toLowerCase().includes(q));
+  }
+
+  const nbAVerifier = aVerifier.filter(l => !l.estCorrige).length;
+  const nbCorrige = corrigees.length;
+  const nbAuto = hauteConfiance.length;
+  const totalRefs = lignesUniques.length;
+  const pctAuto = totalRefs > 0 ? Math.round(((nbAuto + nbCorrige) / totalRefs) * 100) : 0;
+
+  const allCats = CATEGORIES.map(c => c.id);
+
+  return (
+    <div className="max-w-7xl mx-auto px-4 py-6 space-y-5">
+      {/* KPIs */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <KPI label="References totales" value={totalRefs} color="text-white" />
+        <KPI label="Identifiees auto" value={nbAuto} color="text-green-400" />
+        <KPI label="Corrigees manuellement" value={nbCorrige} color="text-blue-400" />
+        <KPI label="A verifier" value={nbAVerifier} color={nbAVerifier > 0 ? 'text-amber-400' : 'text-gray-400'} />
+        <KPI label="Taux identification" value={`${pctAuto}%`} color={pctAuto >= 90 ? 'text-green-400' : pctAuto >= 70 ? 'text-amber-400' : 'text-red-400'} />
+      </div>
+
+      {/* Barre de progression */}
+      <div className="bg-[#181a20] border border-[#2a2d35] rounded-xl p-4">
+        <div className="flex items-center justify-between text-xs mb-2">
+          <span className="text-gray-500">Progression identification</span>
+          <span className="text-white font-bold">{nbAuto + nbCorrige} / {totalRefs} refs</span>
+        </div>
+        <div className="h-3 bg-[#252830] rounded-full overflow-hidden flex">
+          <div className="h-full bg-green-600" style={{ width: `${totalRefs > 0 ? (nbAuto / totalRefs) * 100 : 0}%` }} title="Auto" />
+          <div className="h-full bg-blue-600" style={{ width: `${totalRefs > 0 ? (nbCorrige / totalRefs) * 100 : 0}%` }} title="Corrige" />
+          <div className="h-full bg-amber-600/50" style={{ width: `${totalRefs > 0 ? (nbAVerifier / totalRefs) * 100 : 0}%` }} title="A verifier" />
+        </div>
+        <div className="flex gap-4 mt-2 text-[10px] text-gray-500">
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-green-600" /> Auto ({nbAuto})</span>
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-blue-600" /> Corrige ({nbCorrige})</span>
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-amber-600" /> A verifier ({nbAVerifier})</span>
+        </div>
+      </div>
+
+      {/* Filtres */}
+      <div className="flex items-center gap-3">
+        <div className="flex gap-1 bg-[#181a20] border border-[#2a2d35] rounded-lg p-1">
+          {[
+            { id: 'a_verifier' as const, label: `A verifier (${nbAVerifier})`, color: 'amber' },
+            { id: 'corrige' as const, label: `Corriges (${nbCorrige})`, color: 'blue' },
+            { id: 'tous' as const, label: `Tous (${totalRefs})`, color: 'gray' },
+          ].map(f => (
+            <button key={f.id} onClick={() => setFiltreStatut(f.id)}
+              className={`px-3 py-1.5 rounded text-xs font-medium transition-all
+                ${filtreStatut === f.id ? `bg-${f.color}-600/20 text-${f.color}-400 border border-${f.color}-500/40` : 'text-gray-500 border border-transparent'}`}>
+              {f.label}
+            </button>
+          ))}
+        </div>
+        <div className="relative flex-1 max-w-sm">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+          <input value={searchAV} onChange={e => setSearchAV(e.target.value)} placeholder="Chercher ref, designation..."
+            className="w-full pl-9 pr-3 py-2 bg-[#1c1e24] border border-[#2a2d35] rounded-lg text-xs text-white placeholder-gray-600 outline-none" />
+        </div>
+      </div>
+
+      {/* Tableau */}
+      <div className="bg-[#181a20] border border-[#2a2d35] rounded-xl overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-[#2a2d35] text-gray-500">
+                <th className="text-left px-3 py-2.5">Ref</th>
+                <th className="text-left px-3 py-2.5">Designation</th>
+                <th className="text-left px-3 py-2.5">Fournisseur</th>
+                <th className="text-left px-3 py-2.5">Categorie auto</th>
+                <th className="text-center px-3 py-2.5">Confiance</th>
+                <th className="text-left px-3 py-2.5">Correction</th>
+                <th className="text-left px-3 py-2.5">Motif</th>
+              </tr>
+            </thead>
+            <tbody>
+              {affichees.slice(0, 100).map((l, i) => (
+                <tr key={`${l.ref}-${i}`} className={`border-b border-[#2a2d35]/50 hover:bg-[#1c1e24]
+                  ${l.estCorrige ? 'bg-blue-600/5' : l.confiance === 'basse' ? 'bg-amber-600/5' : ''}`}>
+                  <td className="px-3 py-2 font-mono text-amber-400">{l.ref}</td>
+                  <td className="px-3 py-2 text-white max-w-[250px] truncate">{l.designation}</td>
+                  <td className="px-3 py-2 text-gray-400">{l.fournisseur}</td>
+                  <td className="px-3 py-2">
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded border
+                      ${l.categorieAuto === 'DIVERS' ? 'bg-gray-600/20 text-gray-400 border-gray-600/30' :
+                        'bg-[#252830] text-gray-300 border-[#353840]'}`}>
+                      {l.categorieAuto}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2 text-center">
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded
+                      ${l.confiance === 'haute' ? 'text-green-400' : l.confiance === 'moyenne' ? 'text-amber-400' : 'text-red-400'}`}>
+                      {l.confiance}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2">
+                    <select
+                      value={l.categorieCorrigee ?? ''}
+                      onChange={e => onLearn(l.ref, e.target.value)}
+                      className={`bg-[#252830] border rounded px-2 py-1 text-[10px] outline-none
+                        ${l.estCorrige ? 'border-blue-500/40 text-blue-400' : 'border-[#353840] text-gray-400'}`}>
+                      <option value="">— Selectionner —</option>
+                      {allCats.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </td>
+                  <td className="px-3 py-2 text-[10px] text-gray-600 max-w-[200px] truncate">{l.motif}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {affichees.length > 100 && (
+          <div className="px-4 py-2 text-xs text-gray-500 text-center border-t border-[#2a2d35]">
+            Affichage limite a 100 lignes — {affichees.length - 100} lignes supplementaires
+          </div>
+        )}
       </div>
     </div>
   );
