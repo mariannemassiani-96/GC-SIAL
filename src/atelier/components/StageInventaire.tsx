@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { categoriserArticle, CATEGORIES } from '../categorisation';
 import { DEMO_VITRAGES, type VitrageFacture } from '../vitrageAnalyse';
-import { ArrowLeft, FileText, ClipboardList, CheckSquare, BarChart3, TrendingUp, Layers, AlertTriangle, MessageCircle, Upload, Download, Plus, Search, Trash2, Sparkles, X, Send } from 'lucide-react';
+import { ArrowLeft, FileText, ClipboardList, CheckSquare, BarChart3, TrendingUp, Layers, AlertTriangle, ClipboardCheck, MessageCircle, Upload, Download, Plus, Search, Trash2, Sparkles, X, Send } from 'lucide-react';
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -60,7 +60,7 @@ interface ArticleTerrain {
 
 interface Props { onBack: () => void; }
 
-type Tab = 'factures' | 'recensement' | 'decisions' | 'statistiques' | 'vitrage' | 'averifier' | 'dashboard';
+type Tab = 'factures' | 'recensement' | 'decisions' | 'statistiques' | 'vitrage' | 'averifier' | 'inventaire' | 'dashboard';
 
 const FAMILLES = ['VISSERIE', 'QUINCAILLERIE', 'JOINT', 'ACCESSOIRE', 'CONSOMMABLE', 'AUTRE'];
 const UNITES = ['piece', 'boite', 'kg', 'metre', 'rouleau'];
@@ -242,6 +242,7 @@ export function StageInventaire({ onBack }: Props) {
     { id: 'averifier', label: 'A verifier', icon: <AlertTriangle size={16} /> },
     { id: 'vitrage', label: 'Vitrage', icon: <Layers size={16} /> },
     { id: 'statistiques', label: 'Statistiques', icon: <TrendingUp size={16} /> },
+    { id: 'inventaire', label: 'Inventaire 31/07', icon: <ClipboardCheck size={16} /> },
     { id: 'dashboard', label: 'Tableau de bord', icon: <BarChart3 size={16} /> },
   ];
 
@@ -284,6 +285,7 @@ export function StageInventaire({ onBack }: Props) {
         {tab === 'averifier' && <TabAVerifier factures={factures} onLearn={learnCategorie} corrections={corrections} />}
         {tab === 'vitrage' && <TabVitrage vitrages={vitrages} />}
         {tab === 'statistiques' && <TabStatistiques factures={factures} />}
+        {tab === 'inventaire' && <TabInventaire articles={articles} consolidated={consolidated} />}
         {tab === 'dashboard' && <TabDashboard articles={articles} consolidated={consolidated} factures={factures} />}
       </main>
 
@@ -1295,6 +1297,222 @@ function TabAVerifier({ factures, onLearn, corrections }: {
             Affichage limite a 100 lignes — {affichees.length - 100} lignes supplementaires
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ── Tab Inventaire obligatoire 31/07 ─────────────────────────────────
+
+function TabInventaire({ articles, consolidated }: {
+  articles: ArticleTerrain[];
+  consolidated: RefConsolidee[];
+}) {
+  const [filtreZone, setFiltreZone] = useState<string>('tous');
+  const [showNonValorise, setShowNonValorise] = useState(false);
+
+  // Enrichir chaque article avec le dernier prix connu
+  const articlesValorises = articles.map(a => {
+    const refInfo = consolidated.find(c => c.ref === a.ref);
+    const prixUnitaire = refInfo?.dernierPrixHT ?? 0;
+    const valeur = a.qte * prixUnitaire;
+    return { ...a, prixUnitaire, valeur, hasPrix: prixUnitaire > 0 };
+  });
+
+  const filtres = articlesValorises.filter(a => {
+    if (filtreZone !== 'tous' && a.zone5S !== filtreZone) return false;
+    if (showNonValorise && a.hasPrix) return false;
+    return true;
+  });
+
+  // KPIs inventaire
+  const totalArticles = filtres.length;
+  const totalValeur = filtres.reduce((s, a) => s + a.valeur, 0);
+  const nbValorises = filtres.filter(a => a.hasPrix).length;
+  const nbNonValorises = filtres.filter(a => !a.hasPrix).length;
+  const nbSansZone = filtres.filter(a => !a.zone5S).length;
+  const nbSansOdoo = filtres.filter(a => !a.emplacementOdoo).length;
+  const nbQteZero = filtres.filter(a => a.qte === 0).length;
+
+  // Readiness check pour le 31/07
+  const checks = [
+    { label: 'Articles recenses', ok: totalArticles > 0, value: `${totalArticles}`, detail: totalArticles === 0 ? 'Aucun article' : 'OK' },
+    { label: 'Tous valorises (prix connu)', ok: nbNonValorises === 0, value: `${nbValorises}/${totalArticles}`, detail: nbNonValorises > 0 ? `${nbNonValorises} sans prix` : 'OK' },
+    { label: 'Tous avec zone 5S', ok: nbSansZone === 0, value: `${totalArticles - nbSansZone}/${totalArticles}`, detail: nbSansZone > 0 ? `${nbSansZone} sans zone` : 'OK' },
+    { label: 'Tous avec emplacement Odoo', ok: nbSansOdoo === 0, value: `${totalArticles - nbSansOdoo}/${totalArticles}`, detail: nbSansOdoo > 0 ? `${nbSansOdoo} sans code` : 'OK' },
+    { label: 'Aucune quantite a zero', ok: nbQteZero === 0, value: `${nbQteZero} a verifier`, detail: nbQteZero > 0 ? 'Recompter' : 'OK' },
+  ];
+  const readiness = checks.filter(c => c.ok).length;
+  const readinessPct = Math.round((readiness / checks.length) * 100);
+
+  // Valorisation par zone
+  const parZone = ZONES_5S.map(z => {
+    const arts = articlesValorises.filter(a => a.zone5S === z);
+    return { zone: z, nb: arts.length, valeur: arts.reduce((s, a) => s + a.valeur, 0) };
+  }).filter(z => z.nb > 0);
+
+  // Valorisation par famille
+  const parFamille = FAMILLES.map(f => {
+    const arts = articlesValorises.filter(a => a.famille === f);
+    return { famille: f, nb: arts.length, valeur: arts.reduce((s, a) => s + a.valeur, 0) };
+  }).filter(f => f.nb > 0);
+
+  // Export inventaire comptable
+  const exportInventaire = () => {
+    const h = ['Ref', 'Designation', 'Famille', 'Zone_5S', 'Emplacement_Odoo', 'Fournisseur', 'Qte', 'Unite', 'PU_HT', 'Valeur_HT', 'Statut'];
+    const rows = articlesValorises.map(a => [a.ref, a.designation, a.famille, a.zone5S, a.emplacementOdoo, a.fournisseur, a.qte, a.unite, a.prixUnitaire.toFixed(2), a.valeur.toFixed(2), a.statut]);
+    const totalRow = ['', '', '', '', '', 'TOTAL', '', '', '', totalValeur.toFixed(2), ''];
+    const csv = '\uFEFF' + [h.join(';'), ...rows.map(r => r.map(c => `"${c}"`).join(';')), totalRow.map(c => `"${c}"`).join(';')].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `inventaire_31juillet_${new Date().toISOString().slice(0, 10)}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // Planning stage
+  const semaines = [
+    { sem: 'S18-19 (1-11 mai)', tache: 'Import factures + categorisation auto + correction manuelle', statut: 'A faire' },
+    { sem: 'S20-21 (12-25 mai)', tache: 'Recensement physique Zone A (Visserie) + Zone B (Quincaillerie)', statut: 'A faire' },
+    { sem: 'S22-23 (26 mai-8 juin)', tache: 'Recensement Zone C (Joints) + Zone D (Consommables) + Zone E (Accessoires)', statut: 'A faire' },
+    { sem: 'S24-25 (9-22 juin)', tache: 'Decisions stock + seuils + emplacements Odoo + import Odoo', statut: 'A faire' },
+    { sem: 'S26 (23-30 juin)', tache: 'Verification finale + corrections + export test', statut: 'A faire' },
+    { sem: 'S30 (21-25 juil)', tache: 'Recomptage physique final pour inventaire 31/07', statut: 'A faire' },
+    { sem: '31 juillet', tache: 'INVENTAIRE LEGAL — export comptable definitif', statut: 'A faire' },
+  ];
+
+  return (
+    <div className="max-w-7xl mx-auto px-4 py-6 space-y-5">
+      {/* Readiness check */}
+      <div className="bg-[#181a20] border border-[#2a2d35] rounded-xl p-5">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-bold text-white">Preparation inventaire 31 juillet</h3>
+          <div className={`text-lg font-bold ${readinessPct === 100 ? 'text-green-400' : readinessPct >= 60 ? 'text-amber-400' : 'text-red-400'}`}>
+            {readinessPct}% pret
+          </div>
+        </div>
+        <div className="space-y-2">
+          {checks.map((c, i) => (
+            <div key={i} className="flex items-center gap-3">
+              <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${c.ok ? 'bg-green-600 text-white' : 'bg-amber-600/20 text-amber-400 border border-amber-500/30'}`}>
+                {c.ok ? '✓' : '!'}
+              </span>
+              <span className="text-xs text-gray-300 flex-1">{c.label}</span>
+              <span className="text-xs text-gray-500">{c.value}</span>
+              <span className={`text-[10px] ${c.ok ? 'text-green-400' : 'text-amber-400'}`}>{c.detail}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* KPIs valorisation */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <KPI label="Valeur stock totale HT" value={`${Math.round(totalValeur).toLocaleString('fr-FR')} EUR`} color="text-green-400" />
+        <KPI label="Articles valorises" value={`${nbValorises}/${totalArticles}`} color={nbNonValorises === 0 ? 'text-green-400' : 'text-amber-400'} />
+        <KPI label="Sans prix connu" value={nbNonValorises} color={nbNonValorises > 0 ? 'text-red-400' : 'text-gray-400'} />
+        <KPI label="Quantite = 0" value={nbQteZero} color={nbQteZero > 0 ? 'text-amber-400' : 'text-gray-400'} />
+      </div>
+
+      {/* Valorisation par zone + famille */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="bg-[#181a20] border border-[#2a2d35] rounded-xl p-4">
+          <h3 className="text-xs text-gray-500 uppercase tracking-wider mb-3">Valorisation par zone 5S</h3>
+          {parZone.map(z => (
+            <div key={z.zone} className="flex items-center justify-between text-xs py-1.5 border-b border-[#2a2d35]/30">
+              <span className="text-gray-300">{z.zone}</span>
+              <div className="flex gap-4">
+                <span className="text-gray-500">{z.nb} art.</span>
+                <span className="text-white font-bold w-24 text-right">{Math.round(z.valeur).toLocaleString('fr-FR')} EUR</span>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="bg-[#181a20] border border-[#2a2d35] rounded-xl p-4">
+          <h3 className="text-xs text-gray-500 uppercase tracking-wider mb-3">Valorisation par famille</h3>
+          {parFamille.map(f => (
+            <div key={f.famille} className="flex items-center justify-between text-xs py-1.5 border-b border-[#2a2d35]/30">
+              <span className="text-gray-300">{f.famille}</span>
+              <div className="flex gap-4">
+                <span className="text-gray-500">{f.nb} art.</span>
+                <span className="text-white font-bold w-24 text-right">{Math.round(f.valeur).toLocaleString('fr-FR')} EUR</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Planning stage */}
+      <div className="bg-[#181a20] border border-[#2a2d35] rounded-xl p-4">
+        <h3 className="text-xs text-gray-500 uppercase tracking-wider mb-3">Planning stage → inventaire</h3>
+        <div className="space-y-2">
+          {semaines.map((s, i) => (
+            <div key={i} className={`flex items-center gap-3 p-2 rounded-lg ${i === semaines.length - 1 ? 'bg-red-600/10 border border-red-500/20' : 'border border-[#2a2d35]/30'}`}>
+              <span className="text-[10px] text-gray-500 w-36 shrink-0 font-mono">{s.sem}</span>
+              <span className={`text-xs flex-1 ${i === semaines.length - 1 ? 'text-red-400 font-bold' : 'text-gray-300'}`}>{s.tache}</span>
+              <span className="text-[10px] text-gray-600">{s.statut}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Filtres + export */}
+      <div className="flex items-center gap-3">
+        <select value={filtreZone} onChange={e => setFiltreZone(e.target.value)}
+          className="px-3 py-1.5 bg-[#252830] border border-[#353840] rounded-lg text-xs text-white outline-none">
+          <option value="tous">Toutes les zones</option>
+          {ZONES_5S.map(z => <option key={z} value={z}>{z}</option>)}
+        </select>
+        <label className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer">
+          <input type="checkbox" checked={showNonValorise} onChange={e => setShowNonValorise(e.target.checked)}
+            className="w-3.5 h-3.5 rounded border-[#353840] bg-[#252830] text-blue-600" />
+          Seulement non valorises
+        </label>
+        <div className="flex-1" />
+        <button onClick={exportInventaire} className="flex items-center gap-1.5 px-4 py-2 bg-green-600 hover:bg-green-500 text-white text-xs font-semibold rounded-lg">
+          <Download size={14} /> Export inventaire comptable
+        </button>
+      </div>
+
+      {/* Tableau inventaire */}
+      <div className="bg-[#181a20] border border-[#2a2d35] rounded-xl overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-[#2a2d35] text-gray-500">
+                <th className="text-left px-3 py-2.5">Ref</th>
+                <th className="text-left px-3 py-2.5">Designation</th>
+                <th className="text-left px-3 py-2.5">Famille</th>
+                <th className="text-left px-3 py-2.5">Zone 5S</th>
+                <th className="text-left px-3 py-2.5">Emplacement</th>
+                <th className="text-center px-3 py-2.5">Qte</th>
+                <th className="text-right px-3 py-2.5">PU HT</th>
+                <th className="text-right px-3 py-2.5">Valeur HT</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtres.map(a => (
+                <tr key={a.id} className={`border-b border-[#2a2d35]/50 hover:bg-[#1c1e24] ${!a.hasPrix ? 'bg-red-600/5' : ''}`}>
+                  <td className="px-3 py-2 font-mono text-amber-400">{a.ref}</td>
+                  <td className="px-3 py-2 text-white truncate max-w-[200px]">{a.designation}</td>
+                  <td className="px-3 py-2 text-gray-400">{a.famille}</td>
+                  <td className="px-3 py-2 text-gray-400 text-[10px]">{a.zone5S || '—'}</td>
+                  <td className="px-3 py-2 font-mono text-gray-400 text-[10px]">{a.emplacementOdoo || '—'}</td>
+                  <td className="px-3 py-2 text-center text-white font-bold">{a.qte}</td>
+                  <td className="px-3 py-2 text-right text-gray-300">{a.hasPrix ? `${a.prixUnitaire.toFixed(2)} EUR` : <span className="text-red-400">?</span>}</td>
+                  <td className="px-3 py-2 text-right font-bold text-white">{a.hasPrix ? `${a.valeur.toFixed(2)} EUR` : <span className="text-red-400">manquant</span>}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="border-t-2 border-[#353840] bg-[#1c1e24]">
+                <td colSpan={5} className="px-3 py-3 text-white font-bold">TOTAL INVENTAIRE</td>
+                <td className="px-3 py-3 text-center text-white font-bold">{filtres.reduce((s, a) => s + a.qte, 0)}</td>
+                <td className="px-3 py-3" />
+                <td className="px-3 py-3 text-right text-green-400 font-bold text-sm">{Math.round(totalValeur).toLocaleString('fr-FR')} EUR HT</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
       </div>
     </div>
   );
