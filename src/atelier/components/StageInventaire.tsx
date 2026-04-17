@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
-import { ArrowLeft, FileText, ClipboardList, CheckSquare, BarChart3, MessageCircle, Upload, Download, Plus, Search, Trash2, Sparkles, X, Send } from 'lucide-react';
+import { categoriserArticle } from '../categorisation';
+import { ArrowLeft, FileText, ClipboardList, CheckSquare, BarChart3, TrendingUp, MessageCircle, Upload, Download, Plus, Search, Trash2, Sparkles, X, Send } from 'lucide-react';
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -58,7 +59,7 @@ interface ArticleTerrain {
 
 interface Props { onBack: () => void; }
 
-type Tab = 'factures' | 'recensement' | 'decisions' | 'dashboard';
+type Tab = 'factures' | 'recensement' | 'decisions' | 'statistiques' | 'dashboard';
 
 const FAMILLES = ['VISSERIE', 'QUINCAILLERIE', 'JOINT', 'ACCESSOIRE', 'CONSOMMABLE', 'AUTRE'];
 const UNITES = ['piece', 'boite', 'kg', 'metre', 'rouleau'];
@@ -229,6 +230,7 @@ export function StageInventaire({ onBack }: Props) {
     { id: 'factures', label: 'Factures', icon: <FileText size={16} /> },
     { id: 'recensement', label: 'Recensement', icon: <ClipboardList size={16} /> },
     { id: 'decisions', label: 'Decisions', icon: <CheckSquare size={16} /> },
+    { id: 'statistiques', label: 'Statistiques', icon: <TrendingUp size={16} /> },
     { id: 'dashboard', label: 'Tableau de bord', icon: <BarChart3 size={16} /> },
   ];
 
@@ -268,6 +270,7 @@ export function StageInventaire({ onBack }: Props) {
         {tab === 'factures' && <TabFactures factures={factures} consolidated={consolidated} onUpdate={updateFactures} />}
         {tab === 'recensement' && <TabRecensement articles={filteredArticles} consolidated={consolidated} search={searchFilter} onSearch={setSearchFilter} onAdd={addArticle} onUpdate={updateArticle} onDelete={deleteArticle} />}
         {tab === 'decisions' && <TabDecisions articles={filteredArticles} search={searchFilter} onSearch={setSearchFilter} onUpdate={updateArticle} onExport={exportCSV} />}
+        {tab === 'statistiques' && <TabStatistiques factures={factures} />}
         {tab === 'dashboard' && <TabDashboard articles={articles} consolidated={consolidated} factures={factures} />}
       </main>
 
@@ -722,6 +725,199 @@ function Select({ label, value, options, onChange }: { label: string; value: str
         className="w-full px-2.5 py-1.5 bg-[#252830] border border-[#353840] rounded-lg text-xs text-white outline-none focus:border-blue-500">
         {options.map(o => <option key={o} value={o}>{o}</option>)}
       </select>
+    </div>
+  );
+}
+
+// ── Tab Statistiques ─────────────────────────────────────────────────
+
+function TabStatistiques({ factures }: { factures: Facture[] }) {
+  const [filtreAnnee, setFiltreAnnee] = useState<string>('tous');
+  const [filtreFournisseur, setFiltreFournisseur] = useState<string>('tous');
+  const [vueActive, setVueActive] = useState<'annee' | 'mois' | 'fournisseur' | 'produit' | 'categorie' | 'couleur'>('fournisseur');
+
+  // Flatten toutes les lignes avec métadonnées
+  const toutesLignes = factures.flatMap(f =>
+    f.lignes.map(l => ({
+      ...l,
+      fournisseur: f.fournisseur,
+      dateFacture: f.dateFacture,
+      annee: f.dateFacture.slice(0, 4),
+      mois: f.dateFacture.slice(0, 7),
+      categorie: categoriserArticle(l.ref, l.designation, f.fournisseur).categorie,
+    }))
+  );
+
+  // Années et fournisseurs uniques pour filtres
+  const annees = [...new Set(toutesLignes.map(l => l.annee))].sort();
+  const fournisseurs = [...new Set(toutesLignes.map(l => l.fournisseur))].sort();
+
+  // Appliquer filtres
+  const lignesFiltrees = toutesLignes.filter(l => {
+    if (filtreAnnee !== 'tous' && l.annee !== filtreAnnee) return false;
+    if (filtreFournisseur !== 'tous' && l.fournisseur !== filtreFournisseur) return false;
+    return true;
+  });
+
+  const totalHT = lignesFiltrees.reduce((s, l) => s + l.totalLigneHT, 0);
+  const nbLignes = lignesFiltrees.length;
+  const nbRefs = new Set(lignesFiltrees.map(l => l.ref)).size;
+
+  // Fonctions d'agrégation
+  type Agg = { label: string; totalHT: number; nbLignes: number; nbRefs: number };
+
+  function agreger(keyFn: (l: typeof toutesLignes[0]) => string): Agg[] {
+    const map = new Map<string, { totalHT: number; nbLignes: number; refs: Set<string> }>();
+    for (const l of lignesFiltrees) {
+      const key = keyFn(l);
+      const existing = map.get(key) ?? { totalHT: 0, nbLignes: 0, refs: new Set<string>() };
+      existing.totalHT += l.totalLigneHT;
+      existing.nbLignes++;
+      existing.refs.add(l.ref);
+      map.set(key, existing);
+    }
+    return [...map.entries()]
+      .map(([label, v]) => ({ label, totalHT: v.totalHT, nbLignes: v.nbLignes, nbRefs: v.refs.size }))
+      .sort((a, b) => b.totalHT - a.totalHT);
+  }
+
+  const vues: { id: typeof vueActive; label: string }[] = [
+    { id: 'fournisseur', label: 'Par fournisseur' },
+    { id: 'annee', label: 'Par annee' },
+    { id: 'mois', label: 'Par mois' },
+    { id: 'categorie', label: 'Par categorie' },
+    { id: 'produit', label: 'Par produit' },
+    { id: 'couleur', label: 'Par couleur' },
+  ];
+
+  let donnees: Agg[] = [];
+  switch (vueActive) {
+    case 'fournisseur': donnees = agreger(l => l.fournisseur); break;
+    case 'annee': donnees = agreger(l => l.annee).sort((a, b) => a.label.localeCompare(b.label)); break;
+    case 'mois': donnees = agreger(l => l.mois).sort((a, b) => a.label.localeCompare(b.label)); break;
+    case 'categorie': donnees = agreger(l => l.categorie); break;
+    case 'produit': donnees = agreger(l => `${l.ref} — ${l.designation}`); break;
+    case 'couleur': donnees = agreger(l => l.coloris || '(non specifie)'); break;
+  }
+
+  const maxHT = Math.max(...donnees.map(d => d.totalHT), 1);
+
+  // Export CSV stats
+  const exportStats = () => {
+    const headers = ['Label', 'Total HT', 'Nb lignes', 'Nb refs'];
+    const rows = donnees.map(d => [d.label, d.totalHT.toFixed(2), d.nbLignes, d.nbRefs]);
+    const csv = '\uFEFF' + [headers.join(';'), ...rows.map(r => r.map(c => `"${c}"`).join(';'))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `stats_${vueActive}_${filtreAnnee}_${new Date().toISOString().slice(0, 10)}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="max-w-7xl mx-auto px-4 py-6 space-y-5">
+      {/* KPIs filtrés */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="bg-[#181a20] border border-[#2a2d35] rounded-xl p-4">
+          <p className="text-[10px] text-gray-500 uppercase tracking-wider">Total HT</p>
+          <p className="text-xl font-bold text-white">{Math.round(totalHT).toLocaleString('fr-FR')} EUR</p>
+        </div>
+        <div className="bg-[#181a20] border border-[#2a2d35] rounded-xl p-4">
+          <p className="text-[10px] text-gray-500 uppercase tracking-wider">Lignes factures</p>
+          <p className="text-xl font-bold text-blue-400">{nbLignes}</p>
+        </div>
+        <div className="bg-[#181a20] border border-[#2a2d35] rounded-xl p-4">
+          <p className="text-[10px] text-gray-500 uppercase tracking-wider">References uniques</p>
+          <p className="text-xl font-bold text-amber-400">{nbRefs}</p>
+        </div>
+        <div className="bg-[#181a20] border border-[#2a2d35] rounded-xl p-4">
+          <p className="text-[10px] text-gray-500 uppercase tracking-wider">Prix moyen/ligne HT</p>
+          <p className="text-xl font-bold text-green-400">{nbLignes > 0 ? (totalHT / nbLignes).toFixed(2) : '0'} EUR</p>
+        </div>
+      </div>
+
+      {/* Filtres */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-500">Annee :</span>
+          <select value={filtreAnnee} onChange={e => setFiltreAnnee(e.target.value)}
+            className="px-3 py-1.5 bg-[#252830] border border-[#353840] rounded-lg text-xs text-white outline-none">
+            <option value="tous">Toutes</option>
+            {annees.map(a => <option key={a} value={a}>{a}</option>)}
+          </select>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-500">Fournisseur :</span>
+          <select value={filtreFournisseur} onChange={e => setFiltreFournisseur(e.target.value)}
+            className="px-3 py-1.5 bg-[#252830] border border-[#353840] rounded-lg text-xs text-white outline-none">
+            <option value="tous">Tous</option>
+            {fournisseurs.map(f => <option key={f} value={f}>{f}</option>)}
+          </select>
+        </div>
+        <div className="flex-1" />
+        <button onClick={exportStats} className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-green-600/10 border border-green-500/30 text-green-400 rounded-lg hover:bg-green-600/20">
+          <Download size={12} /> Exporter CSV
+        </button>
+      </div>
+
+      {/* Sélecteur de vue */}
+      <div className="flex gap-1 bg-[#181a20] border border-[#2a2d35] rounded-xl p-1">
+        {vues.map(v => (
+          <button key={v.id} onClick={() => setVueActive(v.id)}
+            className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all
+              ${vueActive === v.id ? 'bg-blue-600/20 text-blue-400 border border-blue-500/40' : 'text-gray-500 hover:text-gray-300 border border-transparent'}`}>
+            {v.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Tableau + barres */}
+      <div className="bg-[#181a20] border border-[#2a2d35] rounded-xl overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-[#2a2d35] text-gray-500">
+                <th className="text-left px-4 py-3 w-[35%]">{vueActive === 'produit' ? 'Ref — Designation' : vueActive.charAt(0).toUpperCase() + vueActive.slice(1)}</th>
+                <th className="text-left px-4 py-3 w-[30%]">Repartition</th>
+                <th className="text-right px-4 py-3">Total HT</th>
+                <th className="text-right px-4 py-3">% du total</th>
+                <th className="text-center px-4 py-3">Lignes</th>
+                <th className="text-center px-4 py-3">Refs</th>
+              </tr>
+            </thead>
+            <tbody>
+              {donnees.map((d, i) => {
+                const pct = totalHT > 0 ? (d.totalHT / totalHT) * 100 : 0;
+                return (
+                  <tr key={`${d.label}-${i}`} className="border-b border-[#2a2d35]/50 hover:bg-[#1c1e24]">
+                    <td className="px-4 py-2.5 text-white font-medium truncate max-w-[300px]">{d.label}</td>
+                    <td className="px-4 py-2.5">
+                      <div className="h-4 bg-[#252830] rounded-full overflow-hidden">
+                        <div className="h-full bg-blue-600/60 rounded-full transition-all"
+                          style={{ width: `${(d.totalHT / maxHT) * 100}%` }} />
+                      </div>
+                    </td>
+                    <td className="px-4 py-2.5 text-right text-white font-bold">{Math.round(d.totalHT).toLocaleString('fr-FR')} EUR</td>
+                    <td className="px-4 py-2.5 text-right text-gray-400">{pct.toFixed(1)}%</td>
+                    <td className="px-4 py-2.5 text-center text-gray-400">{d.nbLignes}</td>
+                    <td className="px-4 py-2.5 text-center text-gray-400">{d.nbRefs}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+            <tfoot>
+              <tr className="border-t-2 border-[#353840] bg-[#1c1e24]">
+                <td className="px-4 py-3 text-white font-bold">TOTAL</td>
+                <td className="px-4 py-3" />
+                <td className="px-4 py-3 text-right text-white font-bold text-sm">{Math.round(totalHT).toLocaleString('fr-FR')} EUR HT</td>
+                <td className="px-4 py-3 text-right text-white font-bold">100%</td>
+                <td className="px-4 py-3 text-center text-white font-bold">{nbLignes}</td>
+                <td className="px-4 py-3 text-center text-white font-bold">{nbRefs}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }
