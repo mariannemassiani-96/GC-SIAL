@@ -108,6 +108,7 @@ export const CATEGORIES: CategorieDefinition[] = [
 // Certains fournisseurs sont spécialisés — on peut booster la confiance
 
 const FOURNISSEUR_CATEGORIES: Record<string, CategorieProduit[]> = {
+  // ── Fournisseurs directs (fabricants) ──
   'kawneer': ['PROFILE', 'ACCESSOIRE', 'HABILLAGE'],
   'rehau': ['PROFILE', 'JOINT', 'ACCESSOIRE'],
   'ferco': ['QUINCAILLERIE'],
@@ -129,6 +130,31 @@ const FOURNISSEUR_CATEGORIES: Record<string, CategorieProduit[]> = {
   'sika': ['CONSOMMABLE'],
   'illbruck': ['JOINT', 'CONSOMMABLE'],
   'tramico': ['CONSOMMABLE', 'JOINT'],
+  // ── Distributeurs / Quincailliers (multi-marques) ──
+  'pro equipe': ['QUINCAILLERIE', 'ACCESSOIRE', 'VISSERIE'],
+  'pro équipe': ['QUINCAILLERIE', 'ACCESSOIRE', 'VISSERIE'],
+  'proequipe': ['QUINCAILLERIE', 'ACCESSOIRE', 'VISSERIE'],
+  'foussier': ['QUINCAILLERIE', 'VISSERIE', 'OUTILLAGE', 'CONSOMMABLE', 'EPI'],
+  'boschat': ['QUINCAILLERIE', 'VISSERIE', 'OUTILLAGE', 'CONSOMMABLE'],
+  'laveix': ['QUINCAILLERIE', 'VISSERIE', 'OUTILLAGE', 'CONSOMMABLE'],
+  'boschat laveix': ['QUINCAILLERIE', 'VISSERIE', 'OUTILLAGE', 'CONSOMMABLE'],
+  'rey': ['QUINCAILLERIE', 'ACCESSOIRE', 'VISSERIE'],
+  'nerfs': ['QUINCAILLERIE', 'ACCESSOIRE', 'VISSERIE'],
+};
+
+// ── Distributeurs connus (ref distributeur ≠ ref fabricant) ──────────
+// Ces fournisseurs ont leur propre codification sur la facture,
+// mais la désignation contient la ref fabricant (Ferco, Roto, etc.)
+export const DISTRIBUTEURS: Record<string, { label: string; marques: string[] }> = {
+  'pro equipe': { label: 'PRO Équipe', marques: ['Ferco', 'Winkhaus', 'Roto', 'Siegenia', 'Hoppe', 'GU'] },
+  'pro équipe': { label: 'PRO Équipe', marques: ['Ferco', 'Winkhaus', 'Roto', 'Siegenia', 'Hoppe', 'GU'] },
+  'proequipe': { label: 'PRO Équipe', marques: ['Ferco', 'Winkhaus', 'Roto', 'Siegenia', 'Hoppe', 'GU'] },
+  'foussier': { label: 'Foussier', marques: ['Ferco', 'Winkhaus', 'Roto', 'Hoppe', 'Wurth', 'Facom'] },
+  'boschat': { label: 'Boschat Laveix', marques: ['Ferco', 'Roto', 'Siegenia', 'Hoppe'] },
+  'laveix': { label: 'Boschat Laveix', marques: ['Ferco', 'Roto', 'Siegenia', 'Hoppe'] },
+  'boschat laveix': { label: 'Boschat Laveix', marques: ['Ferco', 'Roto', 'Siegenia', 'Hoppe'] },
+  'rey': { label: 'Rey', marques: [] },
+  'nerfs': { label: 'Nerfs', marques: [] },
 };
 
 // ── Fonction de catégorisation ───────────────────────────────────────
@@ -220,6 +246,66 @@ export function regrouperParCategorie(
   }
 
   return [...groupes.values()].sort((a, b) => b.nbRefs - a.nbRefs);
+}
+
+// ── Extraction ref fabricant depuis désignation ──────────────────────
+// Quand la facture vient d'un distributeur (PRO Équipe, Foussier, etc.),
+// la ref sur la facture est celle du distributeur. La ref fabricant
+// (ex: Ferco G-22158-00) se trouve dans la désignation.
+
+const PATTERNS_REF_FABRICANT: { marque: string; pattern: RegExp }[] = [
+  // Ferco : G-xxxxx-xx-x-x, E-xxxxx-xx-x-x, 6-xxxxx-xx-x-x, 9-xxxxx-xx-x-x
+  { marque: 'Ferco', pattern: /\b([GE69]-\d{5}-\d{2}-\d-\d)\b/ },
+  // Ferco court : G-22158, E-19736
+  { marque: 'Ferco', pattern: /\b([GE69]-\d{5}(?:-\d{2})?)\b/ },
+  // Winkhaus : activPilot, autoLock + ref
+  { marque: 'Winkhaus', pattern: /\b((?:activPilot|autoLock|STV|AV2)\s*[\w.-]+)\b/i },
+  // Roto : R600, R700, NT, NX
+  { marque: 'Roto', pattern: /\b((?:R[67]\d{2}|NT|NX)\s*[\w.-]+)\b/i },
+  // Siegenia : TITAN, A-TEC, SI
+  { marque: 'Siegenia', pattern: /\b((?:TITAN|A-TEC|SI)\s*[\w.-]+)\b/i },
+  // Hoppe : Atlanta, Secustik + ref num
+  { marque: 'Hoppe', pattern: /\b((?:Atlanta|Secustik|Luxembourg|Toulon)\s*[\w.-]*)\b/i },
+  // GU : BKS, Secury + ref
+  { marque: 'GU', pattern: /\b((?:BKS|Secury|GU)\s*[\w.-]+)\b/i },
+  // Ref générique alphanumérique avec tirets (ex: CR3P-ALU-BL)
+  { marque: '', pattern: /\b([A-Z]{2,4}-[A-Z0-9]{2,}-[A-Z0-9]{1,})\b/ },
+];
+
+export interface RefsExtraites {
+  refDistributeur: string;
+  refFabricant: string | null;
+  marqueFabricant: string | null;
+  isDistributeur: boolean;
+}
+
+export function extraireRefs(
+  refFacture: string,
+  designation: string,
+  fournisseur: string,
+): RefsExtraites {
+  const fLower = fournisseur.toLowerCase();
+  const distrib = Object.entries(DISTRIBUTEURS).find(([key]) => fLower.includes(key));
+  const isDistributeur = !!distrib;
+
+  if (!isDistributeur) {
+    return { refDistributeur: refFacture, refFabricant: null, marqueFabricant: null, isDistributeur: false };
+  }
+
+  // Chercher la ref fabricant dans la désignation
+  for (const { marque, pattern } of PATTERNS_REF_FABRICANT) {
+    const match = designation.match(pattern);
+    if (match) {
+      return {
+        refDistributeur: refFacture,
+        refFabricant: match[1],
+        marqueFabricant: marque || null,
+        isDistributeur: true,
+      };
+    }
+  }
+
+  return { refDistributeur: refFacture, refFabricant: null, marqueFabricant: null, isDistributeur: true };
 }
 
 // ── Export pour réutilisation ─────────────────────────────────────────
