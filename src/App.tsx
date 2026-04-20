@@ -7,6 +7,7 @@ import { SmartAssembly } from './atelier/components/SmartAssembly';
 import { PickToLight } from './atelier/components/PickToLight';
 import { BridgeAtelier } from './atelier/components/BridgeAtelier';
 import { StageInventaire } from './atelier/components/StageInventaire';
+import { PreparationLivraison } from './atelier/components/PreparationLivraison';
 import type { Affaire } from './types';
 
 type AppMode =
@@ -18,7 +19,8 @@ type AppMode =
   | 'smart_assembly'
   | 'bridge'
   | 'picktolight'
-  | 'stage_inventaire';
+  | 'stage_inventaire'
+  | 'preparation_livraison';
 
 // ── Page d'accueil — choix du portail ────────────────────────────────
 
@@ -164,6 +166,21 @@ function HubFabrication({ onSelect, onBack }: { onSelect: (mode: AppMode) => voi
       color: 'orange',
       ready: true,
     },
+    {
+      id: 'preparation_livraison' as AppMode,
+      label: 'Preparation & Livraison',
+      description: 'Bons de preparation, chargement camion par scan, tournee multi-clients, bon de livraison avec signature tablette.',
+      icon: (
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-emerald-400">
+          <rect x="1" y="3" width="15" height="13" rx="2" />
+          <path d="M16 8h4l3 3v5h-7V8z" />
+          <circle cx="5.5" cy="18.5" r="2.5" />
+          <circle cx="18.5" cy="18.5" r="2.5" />
+        </svg>
+      ),
+      color: 'emerald',
+      ready: true,
+    },
   ];
 
   return (
@@ -264,6 +281,9 @@ export default function App() {
   }
   if (mode === 'picktolight') {
     return <PickToLight onBack={() => setMode('fabrication')} />;
+  }
+  if (mode === 'preparation_livraison') {
+    return <PreparationLivraison onBack={() => setMode('fabrication')} />;
   }
   if (mode === 'stage_inventaire') {
     return <StageInventaire onBack={() => setMode('fabrication')} />;
