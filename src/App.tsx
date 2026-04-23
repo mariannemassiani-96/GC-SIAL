@@ -8,6 +8,7 @@ import { PickToLight } from './atelier/components/PickToLight';
 import { BridgeAtelier } from './atelier/components/BridgeAtelier';
 import { StageInventaire } from './atelier/components/StageInventaire';
 import { PreparationLivraison } from './atelier/components/PreparationLivraison';
+import { WorkshopApp } from './workshop/WorkshopApp';
 import type { Affaire } from './types';
 
 type AppMode =
@@ -20,7 +21,8 @@ type AppMode =
   | 'bridge'
   | 'picktolight'
   | 'stage_inventaire'
-  | 'preparation_livraison';
+  | 'preparation_livraison'
+  | 'workshop_layout';
 
 // ── Page d'accueil — choix du portail ────────────────────────────────
 
@@ -181,6 +183,20 @@ function HubFabrication({ onSelect, onBack }: { onSelect: (mode: AppMode) => voi
       color: 'emerald',
       ready: true,
     },
+    {
+      id: 'workshop_layout' as AppMode,
+      label: 'Plan Atelier',
+      description: 'Editeur de plan atelier — placement des postes, machines, flux de production, cotes.',
+      icon: (
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-violet-400">
+          <rect x="3" y="3" width="18" height="18" rx="2" />
+          <line x1="3" y1="9" x2="21" y2="9" />
+          <line x1="9" y1="9" x2="9" y2="21" />
+        </svg>
+      ),
+      color: 'violet',
+      ready: true,
+    },
   ];
 
   return (
@@ -284,6 +300,9 @@ export default function App() {
   }
   if (mode === 'preparation_livraison') {
     return <PreparationLivraison onBack={() => setMode('fabrication')} />;
+  }
+  if (mode === 'workshop_layout') {
+    return <WorkshopApp onHome={() => setMode('fabrication')} />;
   }
   if (mode === 'stage_inventaire') {
     return <StageInventaire onBack={() => setMode('fabrication')} />;
