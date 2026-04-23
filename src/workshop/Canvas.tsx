@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback, useImperativeHandle, forwardRef } from 'react';
-import type { Plan, Objet, Flux, ViolationContrainte, NiveauId, Annotation } from './types';
+import type { Plan, Objet, Flux, ViolationContrainte, NiveauId, Annotation, MurDessine } from './types';
 import { bbox, center, snap, distanceBords } from './geometry';
+import { murToPolygon, getEndpointHit, snapAngle, longueurMur } from './murTool';
 
 interface CanvasProps {
   plan: Plan;
@@ -17,10 +18,17 @@ interface CanvasProps {
   onUpdateAnnotation?: (id: string, patch: Partial<Annotation>) => void;
   onSelectAnnotation?: (id: string | null) => void;
   selectedAnnotationId?: string | null;
-  /** Mode outil : null = normal, 'annotation' = pose texte au clic */
-  tool?: 'select' | 'annotation';
+  /** Mode outil */
+  tool?: 'select' | 'annotation' | 'mur_ext' | 'cloison' | 'cloison_legere' | 'poteau_dessine';
   /** Appelé pour poser une annotation à x,y en cm */
   onPlaceAnnotation?: (x: number, y: number) => void;
+  /** Murs dessinés */
+  murs?: MurDessine[];
+  selectedMurId?: string | null;
+  onSelectMur?: (id: string | null) => void;
+  onUpdateMur?: (id: string, patch: Partial<MurDessine>) => void;
+  onDeleteMur?: (id: string) => void;
+  onMurDrawn?: (x1: number, y1: number, x2: number, y2: number) => void;
   showFlux: boolean;
   showContraintes: boolean;
   showOperateurs: boolean;
@@ -53,6 +61,7 @@ interface ViewBox {
 type DragState =
   | { kind: 'move'; id: string; startX: number; startY: number; origX: number; origY: number }
   | { kind: 'resize'; id: string; handle: 'nw' | 'ne' | 'sw' | 'se'; startX: number; startY: number; origBbox: { x: number; y: number; w: number; h: number }; origRot: number }
+  | { kind: 'mur_endpoint'; murId: string; endpoint: 'start' | 'end'; startX: number; startY: number }
   | { kind: 'pan'; startClientX: number; startClientY: number; origVb: ViewBox }
   | null;
 
@@ -62,6 +71,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(prop
     onSelect, onUpdateObjet, onDeleteObjet, onDropAt,
     onUpdateAnnotation, onSelectAnnotation, selectedAnnotationId,
     tool = 'select', onPlaceAnnotation,
+    murs = [], selectedMurId, onSelectMur, onUpdateMur, onDeleteMur: _onDeleteMur, onMurDrawn,
     showFlux, showContraintes, showOperateurs, showAutresNiveaux,
   } = props;
   const svgRef = useRef<SVGSVGElement>(null);
@@ -73,6 +83,8 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(prop
     h: plan.hauteurSite + 1000,
   }));
   const [cursor, setCursor] = useState<string>('default');
+  const [murDrawStart, setMurDrawStart] = useState<{ x: number; y: number } | null>(null);
+  const [murDrawPreview, setMurDrawPreview] = useState<{ x: number; y: number } | null>(null);
 
   // Recenter when site dimensions change significantly
   useEffect(() => {
@@ -139,6 +151,14 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(prop
   // --- Mouse move / up (global listeners while dragging) ---
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
+      // Preview mur en cours de dessin
+      if (murDrawStart && !dragRef.current) {
+        const p = screenToSVG(e.clientX, e.clientY);
+        const snapped = { x: snap(p.x, plan.tailleGrille), y: snap(p.y, plan.tailleGrille) };
+        const end = e.shiftKey ? snapAngle(murDrawStart.x, murDrawStart.y, snapped.x, snapped.y) : snapped;
+        setMurDrawPreview(end);
+      }
+
       const d = dragRef.current;
       if (!d) return;
 
@@ -151,6 +171,13 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(prop
       }
 
       const p = screenToSVG(e.clientX, e.clientY);
+
+      if (d.kind === 'mur_endpoint') {
+        const snapped = { x: snap(p.x, plan.tailleGrille), y: snap(p.y, plan.tailleGrille) };
+        const patch = d.endpoint === 'start' ? { x1: snapped.x, y1: snapped.y } : { x2: snapped.x, y2: snapped.y };
+        onUpdateMur?.(d.murId, patch);
+        return;
+      }
 
       if (d.kind === 'move') {
         const dx = p.x - d.startX;
@@ -283,10 +310,35 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(prop
       return;
     }
 
+    // Mode dessin mur : premier clic = départ, deuxième = fin
+    if (e.button === 0 && (tool === 'mur_ext' || tool === 'cloison' || tool === 'cloison_legere')) {
+      const p = screenToSVG(e.clientX, e.clientY);
+      const snapped = { x: snap(p.x, plan.tailleGrille), y: snap(p.y, plan.tailleGrille) };
+      if (!murDrawStart) {
+        setMurDrawStart(snapped);
+        setMurDrawPreview(snapped);
+      } else {
+        const end = e.shiftKey ? snapAngle(murDrawStart.x, murDrawStart.y, snapped.x, snapped.y) : snapped;
+        onMurDrawn?.(murDrawStart.x, murDrawStart.y, end.x, end.y);
+        setMurDrawStart(null);
+        setMurDrawPreview(null);
+      }
+      return;
+    }
+
+    // Mode poteau : clic unique
+    if (e.button === 0 && tool === 'poteau_dessine') {
+      const p = screenToSVG(e.clientX, e.clientY);
+      const snapped = { x: snap(p.x, plan.tailleGrille), y: snap(p.y, plan.tailleGrille) };
+      onMurDrawn?.(snapped.x, snapped.y, snapped.x + 30, snapped.y + 30);
+      return;
+    }
+
     // Left click on empty = deselect + pan
     if (e.button === 0) {
       onSelect(null);
       onSelectAnnotation?.(null);
+      onSelectMur?.(null);
       dragRef.current = {
         kind: 'pan',
         startClientX: e.clientX,
@@ -659,6 +711,63 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(prop
             pointerEvents="none"
           />
         ))}
+
+        {/* ── Murs dessinés ── */}
+        {murs.filter(m => m.niveau === niveauActif).map(m => {
+          const poly = murToPolygon(m);
+          if (!poly) return null;
+          const isSel = m.id === selectedMurId;
+          const len = longueurMur(m);
+          const mx = (m.x1 + m.x2) / 2;
+          const my = (m.y1 + m.y2) / 2;
+          return (
+            <g key={m.id}
+              onMouseDown={(e) => {
+                e.stopPropagation();
+                onSelectMur?.(m.id);
+                onSelect(null);
+                const ep = getEndpointHit(screenToSVG(e.clientX, e.clientY).x, screenToSVG(e.clientX, e.clientY).y, m, strokeBase * 20);
+                if (ep) {
+                  dragRef.current = { kind: 'mur_endpoint', murId: m.id, endpoint: ep, startX: ep === 'start' ? m.x1 : m.x2, startY: ep === 'start' ? m.y1 : m.y2 };
+                  setCursor('grab');
+                }
+              }}
+              onDoubleClick={() => {
+                const val = prompt(`Longueur du mur (cm) — actuel: ${len}cm`, String(len));
+                if (val) {
+                  const newLen = parseInt(val, 10);
+                  if (newLen > 0) {
+                    const dx = m.x2 - m.x1, dy = m.y2 - m.y1;
+                    const curLen = Math.sqrt(dx*dx + dy*dy);
+                    if (curLen > 0) {
+                      const ratio = newLen / curLen;
+                      onUpdateMur?.(m.id, { x2: Math.round(m.x1 + dx * ratio), y2: Math.round(m.y1 + dy * ratio) });
+                    }
+                  }
+                }
+              }}
+              style={{ cursor: 'pointer' }}>
+              <polygon points={poly} fill={m.couleur} stroke={isSel ? '#60a5fa' : '#1e293b'} strokeWidth={isSel ? strokeBase * 3 : strokeBase} opacity={0.85} />
+              {/* Endpoints */}
+              {isSel && (
+                <>
+                  <circle cx={m.x1} cy={m.y1} r={strokeBase * 8} fill="#60a5fa" stroke="#fff" strokeWidth={strokeBase * 2} style={{ cursor: 'grab' }} />
+                  <circle cx={m.x2} cy={m.y2} r={strokeBase * 8} fill="#60a5fa" stroke="#fff" strokeWidth={strokeBase * 2} style={{ cursor: 'grab' }} />
+                </>
+              )}
+              {/* Label longueur */}
+              <text x={mx} y={my - strokeBase * 12} textAnchor="middle" fontSize={strokeBase * 10} fill="#94a3b8" fontFamily="monospace">
+                {(len / 100).toFixed(2)}m
+              </text>
+            </g>
+          );
+        })}
+
+        {/* Preview mur en cours de dessin */}
+        {murDrawStart && murDrawPreview && (
+          <line x1={murDrawStart.x} y1={murDrawStart.y} x2={murDrawPreview.x} y2={murDrawPreview.y}
+            stroke="#60a5fa" strokeWidth={strokeBase * 4} strokeDasharray={`${strokeBase * 6} ${strokeBase * 4}`} opacity={0.7} />
+        )}
 
         {/* Objets non-zone */}
         {plan.objets.filter((o) => o.type !== 'zone').map((o) => (

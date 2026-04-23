@@ -1,7 +1,7 @@
 import { useRef, useState, useMemo, useCallback } from 'react';
 import { ArrowLeft, Home, Settings, Eye, EyeOff, ZoomIn, ZoomOut, Maximize, Building2, Type, Ruler, MousePointer2, Trash2 } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
-import type { Plan, Objet, Contrainte, Flux, ContrainteType, NiveauId, Annotation, Cotation } from './types';
+import type { Plan, Objet, Contrainte, Flux, ContrainteType, NiveauId, Annotation, Cotation, MurDessine, TypeMur } from './types';
 import type { Preset } from './presets';
 import { presetToObjet } from './presets';
 import { Canvas, type CanvasHandle } from './Canvas';
@@ -10,6 +10,7 @@ import { Inspector } from './Inspector';
 import { Stats } from './Stats';
 import { verifierContraintes } from './geometry';
 import { useCustomPresets } from './store';
+import { createMur } from './murTool';
 
 interface EditeurProps {
   plan: Plan;
@@ -27,8 +28,9 @@ export function Editeur({ plan, onUpdate, onBack, onHome }: EditeurProps) {
   const [showOperateurs, setShowOperateurs] = useState(true);
   const [showAutresNiveaux, setShowAutresNiveaux] = useState(true);
   const [showBatimentParams, setShowBatimentParams] = useState(false);
-  const [tool, setTool] = useState<'select' | 'annotation' | 'cotation'>('select');
+  const [tool, setTool] = useState<'select' | 'annotation' | 'cotation' | 'mur_ext' | 'cloison' | 'cloison_legere' | 'poteau_dessine'>('select');
   const [cotationFirst, setCotationFirst] = useState<string | null>(null);
+  const [selectedMurId, setSelectedMurId] = useState<string | null>(null);
 
   const canvasRef = useRef<CanvasHandle>(null);
   const dragPresetRef = useRef<Preset | null>(null);
@@ -54,6 +56,28 @@ export function Editeur({ plan, onUpdate, onBack, onHome }: EditeurProps) {
     }));
     if (selectedId === id) setSelectedId(null);
   }, [onUpdate, selectedId]);
+
+  // --- Mutations murs ---
+  const addMur = useCallback((m: MurDessine) => {
+    onUpdate((p) => ({ ...p, murs: [...(p.murs ?? []), m] }));
+  }, [onUpdate]);
+
+  const updateMur = useCallback((id: string, patch: Partial<MurDessine>) => {
+    onUpdate((p) => ({ ...p, murs: (p.murs ?? []).map((m) => (m.id === id ? { ...m, ...patch } : m)) }));
+  }, [onUpdate]);
+
+  const deleteMur = useCallback((id: string) => {
+    onUpdate((p) => ({ ...p, murs: (p.murs ?? []).filter((m) => m.id !== id) }));
+    if (selectedMurId === id) setSelectedMurId(null);
+  }, [onUpdate, selectedMurId]);
+
+  const handleMurDrawn = useCallback((x1: number, y1: number, x2: number, y2: number) => {
+    const typeMap: Record<string, TypeMur> = { mur_ext: 'mur_exterieur', cloison: 'cloison', cloison_legere: 'cloison_legere', poteau_dessine: 'poteau' };
+    const typeMur = typeMap[tool] ?? 'cloison';
+    const m = createMur(typeMur, niveauActif, x1, y1, x2, y2);
+    addMur(m);
+    setSelectedMurId(m.id);
+  }, [tool, niveauActif, addMur]);
 
   const addPreset = useCallback((p: Preset) => {
     // Place au centre du bâtiment
@@ -241,6 +265,22 @@ export function Editeur({ plan, onUpdate, onBack, onHome }: EditeurProps) {
           </ToolButton>
         </div>
 
+        {/* Outils murs */}
+        <div className="flex items-center bg-[#0f1117] rounded border border-[#252830] overflow-hidden">
+          <ToolButton active={tool === 'mur_ext'} onClick={() => setTool('mur_ext')} title="Mur exterieur (20cm)">
+            <svg width="13" height="13" viewBox="0 0 16 16"><rect x="1" y="5" width="14" height="6" rx="1" fill="currentColor" opacity=".8"/></svg>
+          </ToolButton>
+          <ToolButton active={tool === 'cloison'} onClick={() => setTool('cloison')} title="Cloison (10cm)">
+            <svg width="13" height="13" viewBox="0 0 16 16"><rect x="1" y="6" width="14" height="4" rx="1" fill="currentColor" opacity=".6"/></svg>
+          </ToolButton>
+          <ToolButton active={tool === 'cloison_legere'} onClick={() => setTool('cloison_legere')} title="Cloison legere (7cm)">
+            <svg width="13" height="13" viewBox="0 0 16 16"><rect x="1" y="6.5" width="14" height="3" rx="1" fill="currentColor" opacity=".4"/></svg>
+          </ToolButton>
+          <ToolButton active={tool === 'poteau_dessine'} onClick={() => setTool('poteau_dessine')} title="Poteau (30cm)">
+            <svg width="13" height="13" viewBox="0 0 16 16"><rect x="4" y="4" width="8" height="8" rx="1" fill="currentColor" opacity=".7"/></svg>
+          </ToolButton>
+        </div>
+
         <div className="h-4 w-px bg-[#252830]" />
 
         {/* Toggles */}
@@ -261,6 +301,8 @@ export function Editeur({ plan, onUpdate, onBack, onHome }: EditeurProps) {
           {tool === 'cotation' && (cotationFirst
             ? 'Cliquez sur un second objet pour coter la distance.'
             : 'Cliquez sur un premier objet à coter.')}
+          {(tool === 'mur_ext' || tool === 'cloison' || tool === 'cloison_legere') && 'Cliquez le point de depart du mur, puis le point de fin. Shift = snap 45deg.'}
+          {tool === 'poteau_dessine' && 'Cliquez pour placer un poteau.'}
           <button onClick={() => { setTool('select'); setCotationFirst(null); }} className="ml-auto text-blue-400 hover:text-blue-200 underline">
             Annuler
           </button>
@@ -295,6 +337,12 @@ export function Editeur({ plan, onUpdate, onBack, onHome }: EditeurProps) {
             selectedAnnotationId={selectedAnnotationId}
             tool={tool === 'cotation' ? 'select' : tool}
             onPlaceAnnotation={addAnnotation}
+            murs={plan.murs ?? []}
+            selectedMurId={selectedMurId}
+            onSelectMur={setSelectedMurId}
+            onUpdateMur={updateMur}
+            onDeleteMur={deleteMur}
+            onMurDrawn={handleMurDrawn}
             showFlux={showFlux}
             showContraintes={showContraintes}
             showOperateurs={showOperateurs}
