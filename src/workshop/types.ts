@@ -43,14 +43,18 @@ export interface Objet {
   /** Dimensions non-tournées (cm) */
   largeur: number;
   hauteur: number;
-  /** Rotation en degrés (0, 90, 180, 270) */
-  rotation: 0 | 90 | 180 | 270;
+  /** Rotation en degrés (pas de 45°) */
+  rotation: number;
   couleur?: string;
   operateurs: string[];
   capacite?: number;
   stockActuel?: number;
   tempsCycle?: number;
   notes?: string;
+  /** Hauteur de l'objet en cm (ex: machine 200cm, table 90cm) */
+  hauteurObjet?: number;
+  /** Position Z (hauteur du sol) en cm (ex: 0 = au sol, 200 = en mezzanine) */
+  positionZ?: number;
 }
 
 export type ContrainteType =

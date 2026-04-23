@@ -162,3 +162,50 @@ export function surfaceBatiment(plan: Plan): number {
 export function surfaceSite(plan: Plan): number {
   return plan.largeurSite * plan.hauteurSite;
 }
+
+// ── Opérations de groupe ─────────────────────────────────────────────
+
+
+/** Rotation d'un groupe d'objets de `angle` degrés autour de leur centre commun */
+export function rotateGroup(objets: Objet[], angle: number): Partial<Objet>[] {
+  if (objets.length === 0) return [];
+  const cx = objets.reduce((s, o) => s + o.x + o.largeur / 2, 0) / objets.length;
+  const cy = objets.reduce((s, o) => s + o.y + o.hauteur / 2, 0) / objets.length;
+  const rad = (angle * Math.PI) / 180;
+  return objets.map(o => {
+    const ocx = o.x + o.largeur / 2 - cx;
+    const ocy = o.y + o.hauteur / 2 - cy;
+    const nx = cx + ocx * Math.cos(rad) - ocy * Math.sin(rad) - o.largeur / 2;
+    const ny = cy + ocx * Math.sin(rad) + ocy * Math.cos(rad) - o.hauteur / 2;
+    return { id: o.id, x: Math.round(nx), y: Math.round(ny), rotation: ((o.rotation ?? 0) + angle) % 360 };
+  });
+}
+
+/** Miroir horizontal d'un groupe (flip autour de l'axe vertical central) */
+export function mirrorGroupH(objets: Objet[]): Partial<Objet>[] {
+  if (objets.length === 0) return [];
+  const minX = Math.min(...objets.map(o => o.x));
+  const maxX = Math.max(...objets.map(o => o.x + o.largeur));
+  return objets.map(o => ({
+    id: o.id,
+    x: Math.round(maxX - (o.x - minX) - o.largeur),
+    rotation: (360 - (o.rotation ?? 0)) % 360,
+  }));
+}
+
+/** Miroir vertical d'un groupe (flip autour de l'axe horizontal central) */
+export function mirrorGroupV(objets: Objet[]): Partial<Objet>[] {
+  if (objets.length === 0) return [];
+  const minY = Math.min(...objets.map(o => o.y));
+  const maxY = Math.max(...objets.map(o => o.y + o.hauteur));
+  return objets.map(o => ({
+    id: o.id,
+    y: Math.round(maxY - (o.y - minY) - o.hauteur),
+    rotation: (180 - (o.rotation ?? 0) + 360) % 360,
+  }));
+}
+
+/** Déplacement d'un groupe */
+export function moveGroup(objets: Objet[], dx: number, dy: number): Partial<Objet>[] {
+  return objets.map(o => ({ id: o.id, x: o.x + dx, y: o.y + dy }));
+}
