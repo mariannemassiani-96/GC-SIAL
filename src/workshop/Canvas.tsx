@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, useCallback, useImperativeHandle,
 import type { Plan, Objet, Flux, ViolationContrainte, NiveauId, Annotation, MurDessine } from './types';
 import { bbox, center, snap, distanceBords } from './geometry';
 import { murToPolygon, getEndpointHit, snapAngle, longueurMur } from './murTool';
+import { getBatimentPolygon, polygonToSvgPath } from './batimentGeometry';
 
 interface CanvasProps {
   plan: Plan;
@@ -483,25 +484,18 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(prop
           strokeDasharray={`${strokeBase * 10} ${strokeBase * 6}`}
         />
 
-        {/* Bâtiment — murs épais */}
-        <rect
-          x={b.x}
-          y={b.y}
-          width={b.largeur}
-          height={b.hauteur}
-          fill="#3b4252"
-          stroke="#4b5563"
-          strokeWidth={strokeBase * 1.5}
-        />
-        <rect
-          x={b.x + b.epaisseurMurs}
-          y={b.y + b.epaisseurMurs}
-          width={Math.max(0, b.largeur - 2 * b.epaisseurMurs)}
-          height={Math.max(0, b.hauteur - 2 * b.epaisseurMurs)}
-          fill="url(#grid-major)"
-          stroke="#64748b"
-          strokeWidth={strokeBase * 1}
-        />
+        {/* Bâtiment — murs épais (supporte rectangle, L, U) */}
+        {(() => {
+          const outerPoly = getBatimentPolygon(b);
+          const innerBat = { ...b, x: b.x + b.epaisseurMurs, y: b.y + b.epaisseurMurs, largeur: b.largeur - 2 * b.epaisseurMurs, hauteur: b.hauteur - 2 * b.epaisseurMurs, lBrancheX: b.lBrancheX ? b.lBrancheX - 2 * b.epaisseurMurs : undefined, lBrancheY: b.lBrancheY ? b.lBrancheY - 2 * b.epaisseurMurs : undefined, uOuverture: b.uOuverture ? b.uOuverture - 2 * b.epaisseurMurs : undefined, uProfondeur: b.uProfondeur ? b.uProfondeur - b.epaisseurMurs : undefined };
+          const innerPoly = getBatimentPolygon(innerBat);
+          return (
+            <>
+              <path d={polygonToSvgPath(outerPoly)} fill="#3b4252" stroke="#4b5563" strokeWidth={strokeBase * 1.5} />
+              <path d={polygonToSvgPath(innerPoly)} fill="url(#grid-major)" stroke="#64748b" strokeWidth={strokeBase * 1} />
+            </>
+          );
+        })()}
 
         {/* Cotes bâtiment */}
         <g pointerEvents="none">
