@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useCallback, useImperativeHandle, forwardRef } from 'react';
-import type { Plan, Objet, Flux, ViolationContrainte, NiveauId } from './types';
-import { bbox, center, snap } from './geometry';
+import type { Plan, Objet, Flux, ViolationContrainte, NiveauId, Annotation } from './types';
+import { bbox, center, snap, distanceBords } from './geometry';
 
 interface CanvasProps {
   plan: Plan;
@@ -13,6 +13,14 @@ interface CanvasProps {
   onDeleteObjet: (id: string) => void;
   /** Appelé au drop depuis la bibliothèque : coord site (cm) */
   onDropAt?: (clientX: number, clientY: number) => void;
+  /** Annotations */
+  onUpdateAnnotation?: (id: string, patch: Partial<Annotation>) => void;
+  onSelectAnnotation?: (id: string | null) => void;
+  selectedAnnotationId?: string | null;
+  /** Mode outil : null = normal, 'annotation' = pose texte au clic */
+  tool?: 'select' | 'annotation';
+  /** Appelé pour poser une annotation à x,y en cm */
+  onPlaceAnnotation?: (x: number, y: number) => void;
   showFlux: boolean;
   showContraintes: boolean;
   showOperateurs: boolean;
@@ -49,7 +57,13 @@ type DragState =
   | null;
 
 export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(props, ref) {
-  const { plan, selectedId, niveauActif, violations, onSelect, onUpdateObjet, onDeleteObjet, onDropAt, showFlux, showContraintes, showOperateurs, showAutresNiveaux } = props;
+  const {
+    plan, selectedId, niveauActif, violations,
+    onSelect, onUpdateObjet, onDeleteObjet, onDropAt,
+    onUpdateAnnotation, onSelectAnnotation, selectedAnnotationId,
+    tool = 'select', onPlaceAnnotation,
+    showFlux, showContraintes, showOperateurs, showAutresNiveaux,
+  } = props;
   const svgRef = useRef<SVGSVGElement>(null);
   const dragRef = useRef<DragState>(null);
   const [vb, setVb] = useState<ViewBox>(() => ({
@@ -143,7 +157,11 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(prop
         const dy = p.y - d.startY;
         const nx = snap(d.origX + dx, plan.tailleGrille);
         const ny = snap(d.origY + dy, plan.tailleGrille);
-        onUpdateObjet(d.id, { x: nx, y: ny });
+        if (d.id.startsWith('annot-')) {
+          onUpdateAnnotation?.(d.id.slice(6), { x: nx, y: ny });
+        } else {
+          onUpdateObjet(d.id, { x: nx, y: ny });
+        }
       }
 
       if (d.kind === 'resize') {
@@ -258,9 +276,17 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(prop
   };
 
   const onCanvasMouseDown = (e: React.MouseEvent<SVGSVGElement>) => {
+    // Si on est en mode annotation, clic = poser une annotation
+    if (e.button === 0 && tool === 'annotation' && onPlaceAnnotation) {
+      const p = screenToSVG(e.clientX, e.clientY);
+      onPlaceAnnotation(Math.round(p.x), Math.round(p.y));
+      return;
+    }
+
     // Left click on empty = deselect + pan
     if (e.button === 0) {
       onSelect(null);
+      onSelectAnnotation?.(null);
       dragRef.current = {
         kind: 'pan',
         startClientX: e.clientX,
@@ -295,6 +321,31 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(prop
       })
       .filter((x): x is { f: Flux; ax: number; ay: number; bx: number; by: number } => x !== null);
   }, [plan.flux, plan.objets, showFlux]);
+
+  // --- Cotations ---
+  const cotations = useMemo(() => {
+    const objMap = new Map(plan.objets.map((o) => [o.id, o]));
+    return (plan.cotations ?? [])
+      .filter((c) => c.niveau === niveauActif)
+      .map((c) => {
+        const getPt = (id?: string, pt?: { x: number; y: number }) => {
+          if (pt) return pt;
+          if (id) {
+            const o = objMap.get(id);
+            if (o) return center(o);
+          }
+          return null;
+        };
+        const a = getPt(c.fromObjetId, c.fromPoint);
+        const b = getPt(c.toObjetId, c.toPoint);
+        if (!a || !b) return null;
+        const oA = c.fromObjetId ? objMap.get(c.fromObjetId) : null;
+        const oB = c.toObjetId ? objMap.get(c.toObjetId) : null;
+        const dist = oA && oB ? distanceBords(oA, oB) : Math.hypot(a.x - b.x, a.y - b.y);
+        return { c, ax: a.x, ay: a.y, bx: b.x, by: b.y, dist };
+      })
+      .filter(<T,>(x: T | null): x is T => x !== null);
+  }, [plan.cotations, plan.objets, niveauActif]);
 
   // --- Contraintes violées ---
   const violationPairs = useMemo(() => {
@@ -484,29 +535,115 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(prop
           ))}
 
         {/* Flux dessinés sous objets (pour ne pas masquer) */}
-        {fluxLines.map(({ f, ax, ay, bx, by }) => (
-          <g key={f.id} pointerEvents="none">
-            <line
-              x1={ax}
-              y1={ay}
-              x2={bx}
-              y2={by}
-              stroke="#fbbf24"
-              strokeWidth={strokeBase * 3}
-              strokeOpacity={0.7}
-              markerEnd="url(#flux-arrow)"
+        {fluxLines.map(({ f, ax, ay, bx, by }) => {
+          const col = f.couleur ?? '#fbbf24';
+          const ep = f.epaisseur ?? 3;
+          return (
+            <g key={f.id} pointerEvents="none">
+              <defs>
+                <marker
+                  id={`flux-arrow-${f.id}`}
+                  viewBox="0 0 10 10"
+                  refX="9"
+                  refY="5"
+                  markerWidth="6"
+                  markerHeight="6"
+                  orient="auto"
+                >
+                  <path d="M 0 0 L 10 5 L 0 10 z" fill={col} />
+                </marker>
+              </defs>
+              <line
+                x1={ax}
+                y1={ay}
+                x2={bx}
+                y2={by}
+                stroke={col}
+                strokeWidth={strokeBase * ep}
+                strokeOpacity={0.75}
+                markerEnd={`url(#flux-arrow-${f.id})`}
+              />
+              <text
+                x={(ax + bx) / 2}
+                y={(ay + by) / 2 - 8 * strokeBase}
+                fontSize={22 * strokeBase}
+                fill={col}
+                textAnchor="middle"
+                fontWeight="600"
+              >
+                {f.label ? `${f.label} · ` : ''}{f.debit} u/h
+              </text>
+            </g>
+          );
+        })}
+
+        {/* Cotations (niveau actif uniquement) */}
+        {cotations.map(({ c, ax, ay, bx, by, dist }) => {
+          const col = c.couleur ?? '#22d3ee';
+          const mx = (ax + bx) / 2;
+          const my = (ay + by) / 2;
+          return (
+            <g key={c.id} pointerEvents="none">
+              <line
+                x1={ax}
+                y1={ay}
+                x2={bx}
+                y2={by}
+                stroke={col}
+                strokeWidth={strokeBase * 1.5}
+                strokeDasharray={`${strokeBase * 4} ${strokeBase * 3}`}
+              />
+              <circle cx={ax} cy={ay} r={strokeBase * 4} fill={col} />
+              <circle cx={bx} cy={by} r={strokeBase * 4} fill={col} />
+              <rect
+                x={mx - 60 * strokeBase}
+                y={my - 16 * strokeBase}
+                width={120 * strokeBase}
+                height={24 * strokeBase}
+                rx={strokeBase * 4}
+                fill="#0f1117"
+                stroke={col}
+                strokeWidth={strokeBase * 1}
+              />
+              <text
+                x={mx}
+                y={my + 2 * strokeBase}
+                fontSize={20 * strokeBase}
+                fill={col}
+                textAnchor="middle"
+                fontWeight="700"
+              >
+                {(dist / 100).toFixed(2)} m
+              </text>
+            </g>
+          );
+        })}
+
+        {/* Annotations du niveau actif */}
+        {(plan.annotations ?? [])
+          .filter((a) => a.niveau === niveauActif)
+          .map((a) => (
+            <AnnotationShape
+              key={a.id}
+              annotation={a}
+              strokeBase={strokeBase}
+              selected={a.id === selectedAnnotationId}
+              onMouseDown={(e) => {
+                e.stopPropagation();
+                onSelectAnnotation?.(a.id);
+                const p = screenToSVG(e.clientX, e.clientY);
+                dragRef.current = {
+                  kind: 'move',
+                  id: `annot-${a.id}`,
+                  startX: p.x,
+                  startY: p.y,
+                  origX: a.x,
+                  origY: a.y,
+                };
+                setCursor('grabbing');
+              }}
             />
-            <text
-              x={(ax + bx) / 2}
-              y={(ay + by) / 2 - 8 * strokeBase}
-              fontSize={22 * strokeBase}
-              fill="#fbbf24"
-              textAnchor="middle"
-            >
-              {f.debit} u/h
-            </text>
-          </g>
-        ))}
+          ))}
 
         {/* Contraintes violées */}
         {violationPairs.map((vp) => (
@@ -550,6 +687,39 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(prop
     </div>
   );
 });
+
+function AnnotationShape({
+  annotation, strokeBase, selected, onMouseDown,
+}: { annotation: Annotation; strokeBase: number; selected: boolean; onMouseDown: (e: React.MouseEvent) => void }) {
+  const couleur = annotation.couleur ?? '#f9fafb';
+  const size = annotation.taille ?? 40; // cm
+  return (
+    <g onMouseDown={onMouseDown} style={{ cursor: 'grab' }}>
+      <text
+        x={annotation.x}
+        y={annotation.y}
+        fontSize={size}
+        fill={couleur}
+        fontWeight="600"
+        textAnchor="start"
+      >
+        {annotation.texte}
+      </text>
+      {selected && (
+        <rect
+          x={annotation.x - 4 * strokeBase}
+          y={annotation.y - size - 2 * strokeBase}
+          width={annotation.texte.length * size * 0.6 + 8 * strokeBase}
+          height={size + 8 * strokeBase}
+          fill="none"
+          stroke="#3b82f6"
+          strokeWidth={strokeBase * 1.5}
+          strokeDasharray={`${strokeBase * 3} ${strokeBase * 2}`}
+        />
+      )}
+    </g>
+  );
+}
 
 interface ObjetShapeProps {
   objet: Objet;

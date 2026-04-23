@@ -76,6 +76,37 @@ export interface Flux {
   /** Pièces par heure */
   debit: number;
   label?: string;
+  /** Couleur du flux (hex). Par défaut jaune. */
+  couleur?: string;
+  /** Catégorie : matière, personnel, chariot, urgence… */
+  categorie?: string;
+  /** Trait épais ou normal */
+  epaisseur?: number;
+}
+
+export interface Annotation {
+  id: string;
+  /** Niveau sur lequel l'annotation apparaît */
+  niveau: NiveauId;
+  /** Coin haut-gauche (cm) */
+  x: number;
+  y: number;
+  texte: string;
+  couleur?: string;
+  /** Taille de la police en cm (pour rester à l'échelle) */
+  taille?: number;
+}
+
+export interface Cotation {
+  id: string;
+  niveau: NiveauId;
+  /** IDs des deux objets cotés (si définis) */
+  fromObjetId?: string;
+  toObjetId?: string;
+  /** Ou points libres (cm) */
+  fromPoint?: { x: number; y: number };
+  toPoint?: { x: number; y: number };
+  couleur?: string;
 }
 
 export interface Batiment {
@@ -105,6 +136,10 @@ export interface Plan {
   objets: Objet[];
   contraintes: Contrainte[];
   flux: Flux[];
+  /** Annotations texte libres */
+  annotations?: Annotation[];
+  /** Cotations (distances mesurées entre objets ou points) */
+  cotations?: Cotation[];
 }
 
 export interface ViolationContrainte {

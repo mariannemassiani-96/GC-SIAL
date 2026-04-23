@@ -1,7 +1,7 @@
 import { useRef, useState, useMemo, useCallback } from 'react';
-import { ArrowLeft, Home, Settings, Eye, EyeOff, ZoomIn, ZoomOut, Maximize, Building2 } from 'lucide-react';
+import { ArrowLeft, Home, Settings, Eye, EyeOff, ZoomIn, ZoomOut, Maximize, Building2, Type, Ruler, MousePointer2, Trash2 } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
-import type { Plan, Objet, Contrainte, Flux, ContrainteType, NiveauId } from './types';
+import type { Plan, Objet, Contrainte, Flux, ContrainteType, NiveauId, Annotation, Cotation } from './types';
 import type { Preset } from './presets';
 import { presetToObjet } from './presets';
 import { Canvas, type CanvasHandle } from './Canvas';
@@ -20,12 +20,15 @@ interface EditeurProps {
 
 export function Editeur({ plan, onUpdate, onBack, onHome }: EditeurProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedAnnotationId, setSelectedAnnotationId] = useState<string | null>(null);
   const [niveauActif, setNiveauActif] = useState<NiveauId>(plan.niveaux[0]?.id ?? 'rdc');
   const [showFlux, setShowFlux] = useState(true);
   const [showContraintes, setShowContraintes] = useState(true);
   const [showOperateurs, setShowOperateurs] = useState(true);
   const [showAutresNiveaux, setShowAutresNiveaux] = useState(true);
   const [showBatimentParams, setShowBatimentParams] = useState(false);
+  const [tool, setTool] = useState<'select' | 'annotation' | 'cotation'>('select');
+  const [cotationFirst, setCotationFirst] = useState<string | null>(null);
 
   const canvasRef = useRef<CanvasHandle>(null);
   const dragPresetRef = useRef<Preset | null>(null);
@@ -80,9 +83,13 @@ export function Editeur({ plan, onUpdate, onBack, onHome }: EditeurProps) {
     dragPresetRef.current = null;
   }, [addObjet, niveauActif]);
 
-  const addFlux = useCallback((from: string, to: string, debit: number) => {
-    const f: Flux = { id: uuidv4(), from, to, debit };
+  const addFlux = useCallback((from: string, to: string, debit: number, couleur: string, categorie: string) => {
+    const f: Flux = { id: uuidv4(), from, to, debit, couleur, categorie };
     onUpdate((p) => ({ ...p, flux: [...p.flux, f] }));
+  }, [onUpdate]);
+
+  const updateFlux = useCallback((id: string, patch: Partial<Flux>) => {
+    onUpdate((p) => ({ ...p, flux: p.flux.map((f) => (f.id === id ? { ...f, ...patch } : f)) }));
   }, [onUpdate]);
 
   const deleteFlux = useCallback((id: string) => {
@@ -96,6 +103,54 @@ export function Editeur({ plan, onUpdate, onBack, onHome }: EditeurProps) {
 
   const deleteContrainte = useCallback((id: string) => {
     onUpdate((p) => ({ ...p, contraintes: p.contraintes.filter((c) => c.id !== id) }));
+  }, [onUpdate]);
+
+  // --- Annotations ---
+  const addAnnotation = useCallback((x: number, y: number) => {
+    const texte = prompt('Texte de l\'annotation :', '');
+    if (!texte) return;
+    const a: Annotation = { id: uuidv4(), niveau: niveauActif, x, y, texte, couleur: '#f9fafb', taille: 40 };
+    onUpdate((p) => ({ ...p, annotations: [...(p.annotations ?? []), a] }));
+    setTool('select');
+    setSelectedAnnotationId(a.id);
+  }, [onUpdate, niveauActif]);
+
+  const updateAnnotation = useCallback((id: string, patch: Partial<Annotation>) => {
+    onUpdate((p) => ({
+      ...p,
+      annotations: (p.annotations ?? []).map((a) => (a.id === id ? { ...a, ...patch } : a)),
+    }));
+  }, [onUpdate]);
+
+  const deleteAnnotation = useCallback((id: string) => {
+    onUpdate((p) => ({ ...p, annotations: (p.annotations ?? []).filter((a) => a.id !== id) }));
+    if (selectedAnnotationId === id) setSelectedAnnotationId(null);
+  }, [onUpdate, selectedAnnotationId]);
+
+  // --- Cotation : clic sur objet 1 puis objet 2 ---
+  const handleObjectClick = useCallback((id: string | null) => {
+    if (tool === 'cotation' && id) {
+      if (!cotationFirst) {
+        setCotationFirst(id);
+      } else if (cotationFirst !== id) {
+        const c: Cotation = {
+          id: uuidv4(),
+          niveau: niveauActif,
+          fromObjetId: cotationFirst,
+          toObjetId: id,
+          couleur: '#22d3ee',
+        };
+        onUpdate((p) => ({ ...p, cotations: [...(p.cotations ?? []), c] }));
+        setCotationFirst(null);
+        setTool('select');
+      }
+    } else {
+      setSelectedId(id);
+    }
+  }, [tool, cotationFirst, niveauActif, onUpdate]);
+
+  const deleteCotation = useCallback((id: string) => {
+    onUpdate((p) => ({ ...p, cotations: (p.cotations ?? []).filter((c) => c.id !== id) }));
   }, [onUpdate]);
 
   const selectedObjet = plan.objets.find((o) => o.id === selectedId) ?? null;
@@ -173,6 +228,21 @@ export function Editeur({ plan, onUpdate, onBack, onHome }: EditeurProps) {
 
         <div className="h-4 w-px bg-[#252830]" />
 
+        {/* Outils */}
+        <div className="flex items-center bg-[#0f1117] rounded border border-[#252830] overflow-hidden">
+          <ToolButton active={tool === 'select'} onClick={() => { setTool('select'); setCotationFirst(null); }} title="Sélection">
+            <MousePointer2 size={13} />
+          </ToolButton>
+          <ToolButton active={tool === 'annotation'} onClick={() => { setTool('annotation'); setCotationFirst(null); }} title="Annotation texte">
+            <Type size={13} />
+          </ToolButton>
+          <ToolButton active={tool === 'cotation'} onClick={() => setTool('cotation')} title="Cotation (clic sur 2 objets)">
+            <Ruler size={13} />
+          </ToolButton>
+        </div>
+
+        <div className="h-4 w-px bg-[#252830]" />
+
         {/* Toggles */}
         <Toggle on={showFlux} onToggle={() => setShowFlux(!showFlux)} label="Flux" />
         <Toggle on={showContraintes} onToggle={() => setShowContraintes(!showContraintes)} label="Contraintes" />
@@ -183,6 +253,19 @@ export function Editeur({ plan, onUpdate, onBack, onHome }: EditeurProps) {
           <Settings size={14} />
         </IconButton>
       </div>
+
+      {/* Message mode outil actif */}
+      {tool !== 'select' && (
+        <div className="bg-blue-500/10 border-b border-blue-500/30 px-4 py-1.5 text-[11px] text-blue-300 flex items-center gap-2">
+          {tool === 'annotation' && 'Cliquez sur le plan pour poser une annotation texte.'}
+          {tool === 'cotation' && (cotationFirst
+            ? 'Cliquez sur un second objet pour coter la distance.'
+            : 'Cliquez sur un premier objet à coter.')}
+          <button onClick={() => { setTool('select'); setCotationFirst(null); }} className="ml-auto text-blue-400 hover:text-blue-200 underline">
+            Annuler
+          </button>
+        </div>
+      )}
 
       {/* Main area */}
       <div className="flex-1 flex min-h-0">
@@ -203,10 +286,15 @@ export function Editeur({ plan, onUpdate, onBack, onHome }: EditeurProps) {
             selectedId={selectedId}
             niveauActif={niveauActif}
             violations={violations}
-            onSelect={setSelectedId}
+            onSelect={handleObjectClick}
             onUpdateObjet={updateObjet}
             onDeleteObjet={deleteObjet}
             onDropAt={onDropAt}
+            onUpdateAnnotation={updateAnnotation}
+            onSelectAnnotation={setSelectedAnnotationId}
+            selectedAnnotationId={selectedAnnotationId}
+            tool={tool === 'cotation' ? 'select' : tool}
+            onPlaceAnnotation={addAnnotation}
             showFlux={showFlux}
             showContraintes={showContraintes}
             showOperateurs={showOperateurs}
@@ -221,6 +309,75 @@ export function Editeur({ plan, onUpdate, onBack, onHome }: EditeurProps) {
               onClose={() => setShowBatimentParams(false)}
             />
           )}
+
+          {/* Éditeur d'annotation flottant */}
+          {selectedAnnotationId && (() => {
+            const annot = (plan.annotations ?? []).find((a) => a.id === selectedAnnotationId);
+            if (!annot) return null;
+            return (
+              <div className="absolute bottom-10 left-3 bg-[#14161d] border border-[#252830] rounded shadow-2xl p-3 w-72 z-10">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-xs font-semibold text-gray-300">Annotation</h3>
+                  <button
+                    onClick={() => deleteAnnotation(annot.id)}
+                    className="text-red-400 hover:text-red-300 p-1"
+                    title="Supprimer"
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+                <textarea
+                  value={annot.texte}
+                  onChange={(e) => updateAnnotation(annot.id, { texte: e.target.value })}
+                  className="input min-h-[50px] mb-2"
+                />
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={annot.couleur ?? '#f9fafb'}
+                    onChange={(e) => updateAnnotation(annot.id, { couleur: e.target.value })}
+                    className="w-10 h-7 bg-[#0f1117] border border-[#252830] rounded cursor-pointer"
+                  />
+                  <label className="flex-1">
+                    <span className="text-[10px] text-gray-500 block">Taille (cm)</span>
+                    <input
+                      type="number"
+                      value={annot.taille ?? 40}
+                      onChange={(e) => updateAnnotation(annot.id, { taille: Number(e.target.value) })}
+                      min={10}
+                      max={500}
+                      className="input"
+                    />
+                  </label>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Liste des cotations si présentes */}
+          {(plan.cotations ?? []).length > 0 && (
+            <div className="absolute bottom-10 right-3 bg-[#14161d] border border-[#252830] rounded p-2 z-10 max-h-48 overflow-y-auto">
+              <div className="text-[10px] uppercase text-gray-500 mb-1 px-1">Cotations</div>
+              {(plan.cotations ?? []).map((c) => {
+                const a = plan.objets.find((o) => o.id === c.fromObjetId);
+                const b = plan.objets.find((o) => o.id === c.toObjetId);
+                return (
+                  <div key={c.id} className="flex items-center gap-2 text-[11px] px-1 py-0.5 hover:bg-[#181c25] rounded group">
+                    <div className="w-2 h-2 rounded-sm" style={{ background: c.couleur ?? '#22d3ee' }} />
+                    <span className="text-gray-400 truncate flex-1">
+                      {a?.nom ?? '?'} ↔ {b?.nom ?? '?'}
+                    </span>
+                    <button
+                      onClick={() => deleteCotation(c.id)}
+                      className="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-red-400"
+                    >
+                      <Trash2 size={11} />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         <div className="w-72 shrink-0">
@@ -233,6 +390,7 @@ export function Editeur({ plan, onUpdate, onBack, onHome }: EditeurProps) {
             onDuplicate={duplicateSelected}
             onSaveAsPreset={addCustom}
             onAddFlux={addFlux}
+            onUpdateFlux={updateFlux}
             onDeleteFlux={deleteFlux}
             onAddContrainte={addContrainte}
             onDeleteContrainte={deleteContrainte}
@@ -251,6 +409,18 @@ export function Editeur({ plan, onUpdate, onBack, onHome }: EditeurProps) {
         </div>
       </div>
     </div>
+  );
+}
+
+function ToolButton({ active, children, onClick, title }: { active: boolean; children: React.ReactNode; onClick: () => void; title: string }) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      className={`px-2 py-1 ${active ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-200'}`}
+    >
+      {children}
+    </button>
   );
 }
 

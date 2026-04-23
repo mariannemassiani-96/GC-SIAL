@@ -12,15 +12,25 @@ interface InspectorProps {
   onRotate: () => void;
   onDuplicate: () => void;
   onSaveAsPreset: (p: Preset) => void;
-  onAddFlux: (from: string, to: string, debit: number) => void;
+  onAddFlux: (from: string, to: string, debit: number, couleur: string, categorie: string) => void;
+  onUpdateFlux: (id: string, patch: Partial<import('./types').Flux>) => void;
   onDeleteFlux: (id: string) => void;
   onAddContrainte: (type: ContrainteType, a: string, b: string, valeur?: number) => void;
   onDeleteContrainte: (id: string) => void;
 }
 
+const FLUX_CATEGORIES: Array<{ id: string; label: string; couleur: string }> = [
+  { id: 'matiere', label: 'Matière / pièces', couleur: '#fbbf24' },
+  { id: 'personnel', label: 'Personnel', couleur: '#10b981' },
+  { id: 'chariot', label: 'Chariots', couleur: '#f97316' },
+  { id: 'urgent', label: 'Urgent', couleur: '#ef4444' },
+  { id: 'retour', label: 'Retour / vide', couleur: '#6366f1' },
+  { id: 'autre', label: 'Autre', couleur: '#94a3b8' },
+];
+
 export function Inspector(props: InspectorProps) {
   const { plan, objet, onUpdate, onDelete, onRotate, onDuplicate, onSaveAsPreset,
-          onAddFlux, onDeleteFlux, onAddContrainte, onDeleteContrainte } = props;
+          onAddFlux, onUpdateFlux, onDeleteFlux, onAddContrainte, onDeleteContrainte } = props;
 
   if (!objet) {
     return (
@@ -197,7 +207,7 @@ export function Inspector(props: InspectorProps) {
         </button>
       </div>
 
-      <FluxSection plan={plan} selectedId={objet.id} onAdd={onAddFlux} onDelete={onDeleteFlux} />
+      <FluxSection plan={plan} selectedId={objet.id} onAdd={onAddFlux} onUpdate={onUpdateFlux} onDelete={onDeleteFlux} />
       <ContraintesSection plan={plan} selectedId={objet.id} onAdd={onAddContrainte} onDelete={onDeleteContrainte} />
     </div>
   );
@@ -301,14 +311,18 @@ function OperateursField({ operateurs, onChange }: { operateurs: string[]; onCha
 interface FluxSectionProps {
   plan: Plan;
   selectedId: string;
-  onAdd: (from: string, to: string, debit: number) => void;
+  onAdd: (from: string, to: string, debit: number, couleur: string, categorie: string) => void;
+  onUpdate: (id: string, patch: Partial<import('./types').Flux>) => void;
   onDelete: (id: string) => void;
 }
 
-function FluxSection({ plan, selectedId, onAdd, onDelete }: FluxSectionProps) {
+function FluxSection({ plan, selectedId, onAdd, onUpdate, onDelete }: FluxSectionProps) {
   const [toId, setToId] = useState('');
   const [debit, setDebit] = useState(100);
+  const [categorie, setCategorie] = useState('matiere');
   const relatedFlux = plan.flux.filter((f) => f.from === selectedId || f.to === selectedId);
+
+  const catSel = FLUX_CATEGORIES.find((c) => c.id === categorie) ?? FLUX_CATEGORIES[0];
 
   return (
     <div className="border-t border-[#252830] p-3">
@@ -319,44 +333,79 @@ function FluxSection({ plan, selectedId, onAdd, onDelete }: FluxSectionProps) {
         {relatedFlux.map((f) => {
           const other = plan.objets.find((o) => o.id === (f.from === selectedId ? f.to : f.from));
           const direction = f.from === selectedId ? '→' : '←';
+          const col = f.couleur ?? '#fbbf24';
           return (
-            <div key={f.id} className="flex items-center gap-1.5 text-xs bg-[#181c25] rounded px-2 py-1">
-              <span className="text-yellow-400">{direction}</span>
-              <span className="flex-1 truncate">{other?.nom ?? '?'}</span>
-              <span className="text-gray-500 text-[10px]">{f.debit}/h</span>
-              <button onClick={() => onDelete(f.id)} className="text-gray-600 hover:text-red-400">
-                <Trash2 size={11} />
-              </button>
+            <div key={f.id} className="bg-[#181c25] rounded px-2 py-1 text-xs space-y-1">
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="color"
+                  value={col}
+                  onChange={(e) => onUpdate(f.id, { couleur: e.target.value })}
+                  className="w-5 h-5 bg-transparent border border-[#252830] rounded cursor-pointer"
+                  title="Couleur du flux"
+                />
+                <span style={{ color: col }}>{direction}</span>
+                <span className="flex-1 truncate text-gray-300">{other?.nom ?? '?'}</span>
+                <input
+                  type="number"
+                  value={f.debit}
+                  onChange={(e) => onUpdate(f.id, { debit: Number(e.target.value) })}
+                  className="w-14 bg-transparent border border-[#252830] rounded px-1 text-[10px] text-right"
+                  min={0}
+                />
+                <span className="text-gray-500 text-[10px]">u/h</span>
+                <button onClick={() => onDelete(f.id)} className="text-gray-600 hover:text-red-400">
+                  <Trash2 size={11} />
+                </button>
+              </div>
+              <input
+                value={f.label ?? ''}
+                onChange={(e) => onUpdate(f.id, { label: e.target.value })}
+                placeholder="Libellé (facultatif)…"
+                className="input text-[10px] py-0.5"
+              />
             </div>
           );
         })}
       </div>
-      <div className="grid grid-cols-[1fr_60px_auto] gap-1">
+      <div className="space-y-1">
         <select value={toId} onChange={(e) => setToId(e.target.value)} className="input text-[11px]">
           <option value="">Vers…</option>
           {plan.objets.filter((o) => o.id !== selectedId).map((o) => (
             <option key={o.id} value={o.id}>{o.nom}</option>
           ))}
         </select>
-        <input
-          type="number"
-          value={debit}
-          onChange={(e) => setDebit(Number(e.target.value))}
-          min={0}
-          className="input text-[11px]"
-          title="Débit (unités/heure)"
-        />
+        <div className="grid grid-cols-[1fr_60px] gap-1">
+          <select
+            value={categorie}
+            onChange={(e) => setCategorie(e.target.value)}
+            className="input text-[11px]"
+            style={{ borderLeftColor: catSel.couleur, borderLeftWidth: 3 }}
+          >
+            {FLUX_CATEGORIES.map((c) => (
+              <option key={c.id} value={c.id}>{c.label}</option>
+            ))}
+          </select>
+          <input
+            type="number"
+            value={debit}
+            onChange={(e) => setDebit(Number(e.target.value))}
+            min={0}
+            className="input text-[11px]"
+            placeholder="u/h"
+          />
+        </div>
         <button
           onClick={() => {
             if (toId) {
-              onAdd(selectedId, toId, debit);
+              onAdd(selectedId, toId, debit, catSel.couleur, categorie);
               setToId('');
             }
           }}
           disabled={!toId}
-          className="px-2 bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 border border-yellow-500/30 rounded disabled:opacity-40"
+          className="w-full px-2 py-1 bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 border border-yellow-500/30 rounded text-[11px] disabled:opacity-40 flex items-center justify-center gap-1"
         >
-          <Plus size={13} />
+          <Plus size={12} /> Ajouter ce flux
         </button>
       </div>
     </div>

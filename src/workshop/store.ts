@@ -47,6 +47,8 @@ function migratePlan(p: any): Plan {
     objets,
     contraintes: p.contraintes ?? [],
     flux: p.flux ?? [],
+    annotations: p.annotations ?? [],
+    cotations: p.cotations ?? [],
   };
 }
 
@@ -90,6 +92,8 @@ export function createEmptyPlan(nom = 'Nouveau site'): Plan {
     objets: [],
     contraintes: [],
     flux: [],
+    annotations: [],
+    cotations: [],
   };
 }
 
