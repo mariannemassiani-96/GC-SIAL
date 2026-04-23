@@ -154,11 +154,42 @@ export interface Plan {
   objets: Objet[];
   contraintes: Contrainte[];
   flux: Flux[];
+  /** Murs dessinés (par 2 points) */
+  murs?: MurDessine[];
   /** Annotations texte libres */
   annotations?: Annotation[];
   /** Cotations (distances mesurées entre objets ou points) */
   cotations?: Cotation[];
 }
+
+// ── Murs dessinés (par 2 points) ─────────────────────────────────────
+
+export type TypeMur = 'mur_exterieur' | 'cloison' | 'cloison_legere' | 'poteau';
+
+export interface MurDessine {
+  id: string;
+  type: TypeMur;
+  niveau: NiveauId;
+  /** Point de départ (cm) */
+  x1: number;
+  y1: number;
+  /** Point de fin (cm) */
+  x2: number;
+  y2: number;
+  /** Épaisseur en cm */
+  epaisseur: number;
+  /** Couleur */
+  couleur: string;
+  nom: string;
+  notes?: string;
+}
+
+export const DEFAULTS_MUR: Record<TypeMur, { epaisseur: number; couleur: string; label: string }> = {
+  mur_exterieur: { epaisseur: 20, couleur: '#475569', label: 'Mur exterieur' },
+  cloison: { epaisseur: 10, couleur: '#64748b', label: 'Cloison' },
+  cloison_legere: { epaisseur: 7, couleur: '#94a3b8', label: 'Cloison legere' },
+  poteau: { epaisseur: 30, couleur: '#334155', label: 'Poteau' },
+};
 
 export interface ViolationContrainte {
   contrainte: Contrainte;
