@@ -195,5 +195,23 @@ export function usePlans() {
     });
   }, []);
 
-  return { plans, addPlan, updatePlan, deletePlan, duplicatePlan };
+  const createVariante = useCallback((id: string, label?: string) => {
+    setPlans((prev) => {
+      const src = prev.find((p) => p.id === id);
+      if (!src) return prev;
+      const parentId = src.parentId ?? src.id;
+      const siblings = prev.filter((p) => p.parentId === parentId || p.id === parentId);
+      const maxVersion = Math.max(...siblings.map((p) => p.version ?? 1), 0);
+      const clone: Plan = JSON.parse(JSON.stringify(src));
+      clone.id = uuidv4();
+      clone.parentId = parentId;
+      clone.version = maxVersion + 1;
+      clone.varianteLabel = label ?? `Variante ${maxVersion + 1}`;
+      clone.nom = `${src.nom.replace(/ \(v\d+\)$/, '')} (v${maxVersion + 1})`;
+      clone.date = new Date().toISOString().slice(0, 10);
+      return [clone, ...prev];
+    });
+  }, []);
+
+  return { plans, addPlan, updatePlan, deletePlan, duplicatePlan, createVariante };
 }

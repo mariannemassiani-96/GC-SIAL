@@ -109,6 +109,8 @@ export interface Cotation {
   couleur?: string;
 }
 
+export type FormesBatiment = 'rectangle' | 'L' | 'U';
+
 export interface Batiment {
   /** Coin haut-gauche du bâtiment dans le site (cm) */
   x: number;
@@ -118,12 +120,28 @@ export interface Batiment {
   hauteur: number;
   /** Épaisseur des murs extérieurs (cm) */
   epaisseurMurs: number;
+  /** Forme du bâtiment (rectangle par défaut) */
+  forme?: FormesBatiment;
+  /** Pour forme L : largeur de la branche horizontale (cm) */
+  lBrancheX?: number;
+  /** Pour forme L : hauteur de la branche verticale (cm) */
+  lBrancheY?: number;
+  /** Pour forme U : largeur de l'ouverture centrale (cm) */
+  uOuverture?: number;
+  /** Pour forme U : profondeur de l'ouverture (cm) */
+  uProfondeur?: number;
 }
 
 export interface Plan {
   id: string;
   nom: string;
   date: string;
+  /** ID du plan parent (si c'est une variante) */
+  parentId?: string;
+  /** Numéro de version (1, 2, 3...) */
+  version?: number;
+  /** Description de la variante */
+  varianteLabel?: string;
   /** Dimensions du site total — bâtiment + parking + extérieurs (cm) */
   largeurSite: number;
   hauteurSite: number;
