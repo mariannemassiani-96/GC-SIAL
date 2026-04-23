@@ -11,10 +11,11 @@ interface ListePlansProps {
   onDelete: (id: string) => void;
   onCreateVariante: (id: string) => void;
   onImportDxf: (objets: import('./types').Objet[], fileName: string) => void;
+  onLoadSIAL?: () => void;
   onHome: () => void;
 }
 
-export function ListePlans({ plans, onSelect, onNew, onDuplicate, onDelete, onCreateVariante, onImportDxf, onHome }: ListePlansProps) {
+export function ListePlans({ plans, onSelect, onNew, onDuplicate, onDelete, onCreateVariante, onImportDxf, onLoadSIAL, onHome }: ListePlansProps) {
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -61,6 +62,11 @@ export function ListePlans({ plans, onSelect, onNew, onDuplicate, onDelete, onCr
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {onLoadSIAL && (
+              <button onClick={onLoadSIAL} className="inline-flex items-center gap-1.5 bg-green-600/20 hover:bg-green-600/30 text-green-400 text-sm rounded px-3.5 py-2 border border-green-500/30">
+                Plan SIAL Biguglia
+              </button>
+            )}
             <label className="inline-flex items-center gap-1.5 bg-[#252830] hover:bg-[#353840] text-gray-300 text-sm rounded px-3.5 py-2 cursor-pointer border border-[#353840]">
               <Upload size={14} /> Import DXF
               <input ref={fileRef} type="file" accept=".dxf" onChange={handleDxfUpload} className="hidden" />
