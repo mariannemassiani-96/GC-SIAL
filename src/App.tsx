@@ -6,6 +6,7 @@ import { SmartAssembly } from './atelier/components/SmartAssembly';
 import { BridgeAtelier } from './atelier/components/BridgeAtelier';
 import { StageInventaire } from './atelier/components/StageInventaire';
 import { PreparationLivraison } from './atelier/components/PreparationLivraison';
+import { ReceptionMatiere } from './atelier/components/ReceptionMatiere';
 import { WorkshopApp } from './workshop/WorkshopApp';
 import type { Affaire } from './types';
 
@@ -16,12 +17,26 @@ type AppMode =
   | 'bridge'
   | 'stage_inventaire'
   | 'preparation_livraison'
-  | 'workshop_layout';
+  | 'workshop_layout'
+  | 'reception_matiere';
 
 // ── Hub Fabrication (page d'accueil) ─────────────────────────────────
 
 function HubFabrication({ onSelect }: { onSelect: (mode: AppMode) => void }) {
   const apps = [
+    {
+      id: 'reception_matiere' as AppMode,
+      label: 'Reception Matiere',
+      description: 'Validation des livraisons fournisseurs — BL, sommiers, palettes, colis, controle quantitatif, reserves.',
+      icon: (
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-sky-400">
+          <rect x="1" y="3" width="15" height="13" rx="2" /><path d="M16 8h4l3 3v5h-7V8z" />
+          <circle cx="5.5" cy="18.5" r="2.5" /><circle cx="18.5" cy="18.5" r="2.5" />
+          <path d="M9 10l2 2 4-4" strokeWidth="2" />
+        </svg>
+      ),
+      color: 'sky',
+    },
     {
       id: 'gc' as AppMode,
       label: 'Configurateur Garde-Corps',
@@ -157,6 +172,7 @@ export default function App() {
     return <HubFabrication onSelect={setMode} />;
   }
 
+  if (mode === 'reception_matiere') return <ReceptionMatiere onBack={goHome} />;
   if (mode === 'smart_assembly') return <SmartAssembly onBack={goHome} />;
   if (mode === 'bridge') return <BridgeAtelier onBack={goHome} />;
   if (mode === 'stage_inventaire') return <StageInventaire onBack={goHome} />;
