@@ -46,14 +46,17 @@ export function Editeur({ plan, onUpdate, onBack, onHome }: EditeurProps) {
 
   // --- Mutations ---
   const updateObjet = useCallback((id: string, patch: Partial<Objet>) => {
+    snapshot(plan);
     onUpdate((p) => ({ ...p, objets: p.objets.map((o) => (o.id === id ? { ...o, ...patch } : o)) }));
-  }, [onUpdate]);
+  }, [onUpdate, snapshot, plan]);
 
   const addObjet = useCallback((o: Objet) => {
+    snapshot(plan);
     onUpdate((p) => ({ ...p, objets: [...p.objets, o] }));
-  }, [onUpdate]);
+  }, [onUpdate, snapshot, plan]);
 
   const deleteObjet = useCallback((id: string) => {
+    snapshot(plan);
     onUpdate((p) => ({
       ...p,
       objets: p.objets.filter((o) => o.id !== id),
@@ -61,21 +64,23 @@ export function Editeur({ plan, onUpdate, onBack, onHome }: EditeurProps) {
       contraintes: p.contraintes.filter((c) => c.objetA !== id && c.objetB !== id),
     }));
     if (selectedId === id) setSelectedId(null);
-  }, [onUpdate, selectedId]);
+  }, [onUpdate, selectedId, snapshot, plan]);
 
   // --- Mutations murs ---
   const addMur = useCallback((m: MurDessine) => {
+    snapshot(plan);
     onUpdate((p) => ({ ...p, murs: [...(p.murs ?? []), m] }));
-  }, [onUpdate]);
+  }, [onUpdate, snapshot, plan]);
 
   const updateMur = useCallback((id: string, patch: Partial<MurDessine>) => {
     onUpdate((p) => ({ ...p, murs: (p.murs ?? []).map((m) => (m.id === id ? { ...m, ...patch } : m)) }));
   }, [onUpdate]);
 
   const deleteMur = useCallback((id: string) => {
+    snapshot(plan);
     onUpdate((p) => ({ ...p, murs: (p.murs ?? []).filter((m) => m.id !== id) }));
     if (selectedMurId === id) setSelectedMurId(null);
-  }, [onUpdate, selectedMurId]);
+  }, [onUpdate, selectedMurId, snapshot, plan]);
 
   const handleMurDrawn = useCallback((x1: number, y1: number, x2: number, y2: number) => {
     const typeMap: Record<string, TypeMur> = { mur_ext: 'mur_exterieur', cloison: 'cloison', cloison_legere: 'cloison_legere', poteau_dessine: 'poteau' };

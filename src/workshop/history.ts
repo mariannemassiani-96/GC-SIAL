@@ -1,5 +1,5 @@
 // ── Système d'historique Undo/Redo pour le Plan Atelier ───────────────
-import { useCallback, useRef } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import type { Plan } from './types';
 
 const MAX_HISTORY = 50;
@@ -8,6 +8,8 @@ export function useHistory(initialPlan: Plan, onUpdate: (updates: Partial<Plan> 
   const undoStack = useRef<string[]>([]);
   const redoStack = useRef<string[]>([]);
   const lastSnapshot = useRef<string>(JSON.stringify(initialPlan));
+  const [undoCount, setUndoCount] = useState(0);
+  const [redoCount, setRedoCount] = useState(0);
 
   const snapshot = useCallback((plan: Plan) => {
     const json = JSON.stringify(plan);
@@ -16,6 +18,8 @@ export function useHistory(initialPlan: Plan, onUpdate: (updates: Partial<Plan> 
       if (undoStack.current.length > MAX_HISTORY) undoStack.current.shift();
       redoStack.current = [];
       lastSnapshot.current = json;
+      setUndoCount(undoStack.current.length);
+      setRedoCount(0);
     }
   }, []);
 
@@ -26,6 +30,8 @@ export function useHistory(initialPlan: Plan, onUpdate: (updates: Partial<Plan> 
     lastSnapshot.current = prev;
     const plan = JSON.parse(prev) as Plan;
     onUpdate(() => plan);
+    setUndoCount(undoStack.current.length);
+    setRedoCount(redoStack.current.length);
   }, [onUpdate]);
 
   const redo = useCallback(() => {
@@ -35,10 +41,9 @@ export function useHistory(initialPlan: Plan, onUpdate: (updates: Partial<Plan> 
     lastSnapshot.current = next;
     const plan = JSON.parse(next) as Plan;
     onUpdate(() => plan);
+    setUndoCount(undoStack.current.length);
+    setRedoCount(redoStack.current.length);
   }, [onUpdate]);
 
-  const canUndo = undoStack.current.length > 0;
-  const canRedo = redoStack.current.length > 0;
-
-  return { snapshot, undo, redo, canUndo, canRedo };
+  return { snapshot, undo, redo, canUndo: undoCount > 0, canRedo: redoCount > 0 };
 }

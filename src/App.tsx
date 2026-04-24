@@ -3,7 +3,6 @@ import { useAffaires, createEmptyAffaire } from './store/affaires';
 import { ListeAffaires } from './pages/ListeAffaires';
 import { Configurateur } from './pages/Configurateur';
 import { SmartAssembly } from './atelier/components/SmartAssembly';
-import { PickToLight } from './atelier/components/PickToLight';
 import { BridgeAtelier } from './atelier/components/BridgeAtelier';
 import { StageInventaire } from './atelier/components/StageInventaire';
 import { PreparationLivraison } from './atelier/components/PreparationLivraison';
@@ -15,7 +14,6 @@ type AppMode =
   | 'gc'
   | 'smart_assembly'
   | 'bridge'
-  | 'picktolight'
   | 'stage_inventaire'
   | 'preparation_livraison'
   | 'workshop_layout';
@@ -57,18 +55,6 @@ function HubFabrication({ onSelect }: { onSelect: (mode: AppMode) => void }) {
         </svg>
       ),
       color: 'cyan',
-    },
-    {
-      id: 'picktolight' as AppMode,
-      label: 'Pick-to-Light',
-      description: 'Dashboard des 14 casiers Ferco avec simulation LED. Test sequentiel, controle luminosite.',
-      icon: (
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-rose-400">
-          <circle cx="12" cy="12" r="3" />
-          <path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83" />
-        </svg>
-      ),
-      color: 'rose',
     },
     {
       id: 'stage_inventaire' as AppMode,
@@ -173,7 +159,6 @@ export default function App() {
 
   if (mode === 'smart_assembly') return <SmartAssembly onBack={goHome} />;
   if (mode === 'bridge') return <BridgeAtelier onBack={goHome} />;
-  if (mode === 'picktolight') return <PickToLight onBack={goHome} />;
   if (mode === 'stage_inventaire') return <StageInventaire onBack={goHome} />;
   if (mode === 'preparation_livraison') return <PreparationLivraison onBack={goHome} />;
   if (mode === 'workshop_layout') return <WorkshopApp onHome={goHome} />;

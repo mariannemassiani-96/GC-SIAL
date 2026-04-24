@@ -1,12 +1,25 @@
 import type { Objet, Flux, Plan, ViolationContrainte } from './types';
 
-/** Encombrement réel après rotation (toujours rectangle axis-aligned puisque 0/90/180/270) */
+/** Encombrement réel après rotation (axis-aligned bounding box) */
 export function bbox(o: Objet): { x: number; y: number; w: number; h: number } {
-  const swap = o.rotation === 90 || o.rotation === 270;
-  const w = swap ? o.hauteur : o.largeur;
-  const h = swap ? o.largeur : o.hauteur;
-  // x,y est le coin supérieur gauche avant rotation — on le conserve comme coin bbox
-  return { x: o.x, y: o.y, w, h };
+  const rot = ((o.rotation ?? 0) % 360 + 360) % 360;
+  // Fast path pour rotations à angle droit
+  if (rot === 0 || rot === 180) return { x: o.x, y: o.y, w: o.largeur, h: o.hauteur };
+  if (rot === 90 || rot === 270) return { x: o.x, y: o.y, w: o.hauteur, h: o.largeur };
+  // Rotation arbitraire — calculer le AABB des 4 coins tournés
+  const cx = o.x + o.largeur / 2;
+  const cy = o.y + o.hauteur / 2;
+  const rad = (rot * Math.PI) / 180;
+  const cos = Math.cos(rad), sin = Math.sin(rad);
+  const corners = [
+    { dx: -o.largeur / 2, dy: -o.hauteur / 2 },
+    { dx: o.largeur / 2, dy: -o.hauteur / 2 },
+    { dx: o.largeur / 2, dy: o.hauteur / 2 },
+    { dx: -o.largeur / 2, dy: o.hauteur / 2 },
+  ].map(c => ({ x: cx + c.dx * cos - c.dy * sin, y: cy + c.dx * sin + c.dy * cos }));
+  const xs = corners.map(c => c.x), ys = corners.map(c => c.y);
+  const minX = Math.min(...xs), minY = Math.min(...ys);
+  return { x: minX, y: minY, w: Math.max(...xs) - minX, h: Math.max(...ys) - minY };
 }
 
 export function center(o: Objet): { x: number; y: number } {

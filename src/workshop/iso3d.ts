@@ -105,7 +105,7 @@ export function isoBatimentWalls(bat: Batiment, hauteur: number, scale: number):
 
   // Mur arrière (haut)
   const backBox = isoBox(bat.x, bat.y, bat.largeur, e, h, 0, scale);
-  walls.push({ points: isoPointsToSvg([...backBox.top, ...backBox.left.reverse()].slice(0, 4)), fill: '#374151' });
+  walls.push({ points: isoPointsToSvg(backBox.top), fill: '#374151' });
 
   // Mur gauche
   const leftBox = isoBox(bat.x, bat.y, e, bat.hauteur, h, 0, scale);

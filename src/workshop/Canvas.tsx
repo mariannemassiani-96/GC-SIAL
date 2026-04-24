@@ -98,7 +98,8 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(prop
   }, [plan.largeurSite, plan.hauteurSite]);
 
   const screenToSVG = useCallback((clientX: number, clientY: number) => {
-    const rect = svgRef.current!.getBoundingClientRect();
+    if (!svgRef.current) return { x: 0, y: 0 };
+    const rect = svgRef.current.getBoundingClientRect();
     const px = (clientX - rect.left) / rect.width;
     const py = (clientY - rect.top) / rect.height;
     return { x: vb.x + px * vb.w, y: vb.y + py * vb.h };
@@ -763,8 +764,8 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(prop
             stroke="#60a5fa" strokeWidth={strokeBase * 4} strokeDasharray={`${strokeBase * 6} ${strokeBase * 4}`} opacity={0.7} />
         )}
 
-        {/* Objets non-zone */}
-        {plan.objets.filter((o) => o.type !== 'zone').map((o) => (
+        {/* Objets non-zone (filtered by niveau actif) */}
+        {plan.objets.filter((o) => o.type !== 'zone' && o.niveau === niveauActif).map((o) => (
           <ObjetShape
             key={o.id}
             objet={o}
