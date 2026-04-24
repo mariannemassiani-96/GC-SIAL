@@ -1,5 +1,5 @@
 import { useRef, useState, useMemo, useCallback, useEffect } from 'react';
-import { ArrowLeft, Home, Settings, Eye, EyeOff, ZoomIn, ZoomOut, Maximize, Building2, Type, Ruler, MousePointer2, Trash2, Undo2, Redo2, Download, FlipHorizontal2, FlipVertical2, RotateCw, Copy } from 'lucide-react';
+import { ArrowLeft, Home, Settings, Eye, EyeOff, ZoomIn, ZoomOut, Maximize, Building2, Type, Ruler, MousePointer2, Trash2, Undo2, Redo2, Download, FlipHorizontal2, FlipVertical2, RotateCw, Copy, Box } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import type { Plan, Objet, Contrainte, Flux, ContrainteType, NiveauId, Annotation, Cotation, MurDessine, TypeMur } from './types';
 import type { Preset } from './presets';
@@ -13,6 +13,7 @@ import { useCustomPresets } from './store';
 import { createMur } from './murTool';
 import { useHistory } from './history';
 import { exportSVG } from './exportPlan';
+import { View3D } from './View3D';
 
 interface EditeurProps {
   plan: Plan;
@@ -34,6 +35,7 @@ export function Editeur({ plan, onUpdate, onBack, onHome }: EditeurProps) {
   const [tool, setTool] = useState<'select' | 'annotation' | 'cotation' | 'mur_ext' | 'cloison' | 'cloison_legere' | 'poteau_dessine'>('select');
   const [cotationFirst, setCotationFirst] = useState<string | null>(null);
   const [selectedMurId, setSelectedMurId] = useState<string | null>(null);
+  const [show3D, setShow3D] = useState(false);
 
   const canvasRef = useRef<CanvasHandle>(null);
   const dragPresetRef = useRef<Preset | null>(null);
@@ -373,9 +375,12 @@ export function Editeur({ plan, onUpdate, onBack, onHome }: EditeurProps) {
 
         <div className="h-4 w-px bg-[#252830]" />
 
-        {/* Export */}
+        {/* Vue 3D + Export */}
         <div className="flex items-center bg-[#0f1117] rounded border border-[#252830] overflow-hidden">
-          <ToolButton active={false} onClick={() => { if (canvasRef.current) { const svg = document.querySelector('#workshop-canvas svg') as SVGSVGElement; if (svg) exportSVG(svg, plan); } }} title="Export SVG">
+          <ToolButton active={show3D} onClick={() => setShow3D(!show3D)} title="Vue 3D isometrique">
+            <Box size={13} />
+          </ToolButton>
+          <ToolButton active={false} onClick={() => { const svg = document.querySelector('svg') as SVGSVGElement; if (svg) exportSVG(svg, plan); }} title="Export SVG">
             <Download size={13} />
           </ToolButton>
         </div>
@@ -421,6 +426,9 @@ export function Editeur({ plan, onUpdate, onBack, onHome }: EditeurProps) {
         </div>
 
         <div className="flex-1 relative min-w-0">
+          {show3D ? (
+            <View3D plan={plan} niveauActif={niveauActif} onBack={() => setShow3D(false)} />
+          ) : (
           <Canvas
             ref={canvasRef}
             plan={plan}
@@ -447,6 +455,7 @@ export function Editeur({ plan, onUpdate, onBack, onHome }: EditeurProps) {
             showOperateurs={showOperateurs}
             showAutresNiveaux={showAutresNiveaux}
           />
+          )}
 
           {showBatimentParams && (
             <BatimentParams
