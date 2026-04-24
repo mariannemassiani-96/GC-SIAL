@@ -7,6 +7,7 @@ import { BridgeAtelier } from './atelier/components/BridgeAtelier';
 import { StageInventaire } from './atelier/components/StageInventaire';
 import { PreparationLivraison } from './atelier/components/PreparationLivraison';
 import { ReceptionMatiere } from './atelier/components/ReceptionMatiere';
+import { PosteCoupe } from './atelier/components/PosteCoupe';
 import { WorkshopApp } from './workshop/WorkshopApp';
 import type { Affaire } from './types';
 
@@ -18,7 +19,8 @@ type AppMode =
   | 'stage_inventaire'
   | 'preparation_livraison'
   | 'workshop_layout'
-  | 'reception_matiere';
+  | 'reception_matiere'
+  | 'poste_coupe';
 
 // ── Hub Fabrication (page d'accueil) ─────────────────────────────────
 
@@ -36,6 +38,17 @@ function HubFabrication({ onSelect }: { onSelect: (mode: AppMode) => void }) {
         </svg>
       ),
       color: 'sky',
+    },
+    {
+      id: 'poste_coupe' as AppMode,
+      label: 'Poste de Coupe',
+      description: 'Optimisation barres, preparation stock, validation coupes piece par piece, visualisation chutes.',
+      icon: (
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-red-400">
+          <path d="M6 9l6 6M14 9l-6 6" /><circle cx="10" cy="12" r="9" />
+        </svg>
+      ),
+      color: 'red',
     },
     {
       id: 'gc' as AppMode,
@@ -172,6 +185,7 @@ export default function App() {
     return <HubFabrication onSelect={setMode} />;
   }
 
+  if (mode === 'poste_coupe') return <PosteCoupe onBack={goHome} />;
   if (mode === 'reception_matiere') return <ReceptionMatiere onBack={goHome} />;
   if (mode === 'smart_assembly') return <SmartAssembly onBack={goHome} />;
   if (mode === 'bridge') return <BridgeAtelier onBack={goHome} />;
