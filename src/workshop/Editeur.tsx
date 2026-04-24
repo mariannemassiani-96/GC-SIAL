@@ -1,5 +1,5 @@
-import { useRef, useState, useMemo, useCallback } from 'react';
-import { ArrowLeft, Home, Settings, Eye, EyeOff, ZoomIn, ZoomOut, Maximize, Building2, Type, Ruler, MousePointer2, Trash2 } from 'lucide-react';
+import { useRef, useState, useMemo, useCallback, useEffect } from 'react';
+import { ArrowLeft, Home, Settings, Eye, EyeOff, ZoomIn, ZoomOut, Maximize, Building2, Type, Ruler, MousePointer2, Trash2, Undo2, Redo2, Download, FlipHorizontal2, FlipVertical2, RotateCw, Copy } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import type { Plan, Objet, Contrainte, Flux, ContrainteType, NiveauId, Annotation, Cotation, MurDessine, TypeMur } from './types';
 import type { Preset } from './presets';
@@ -8,9 +8,11 @@ import { Canvas, type CanvasHandle } from './Canvas';
 import { Library } from './Library';
 import { Inspector } from './Inspector';
 import { Stats } from './Stats';
-import { verifierContraintes } from './geometry';
+import { verifierContraintes, rotateGroup, mirrorGroupH, mirrorGroupV } from './geometry';
 import { useCustomPresets } from './store';
 import { createMur } from './murTool';
+import { useHistory } from './history';
+import { exportSVG } from './exportPlan';
 
 interface EditeurProps {
   plan: Plan;
@@ -21,6 +23,7 @@ interface EditeurProps {
 
 export function Editeur({ plan, onUpdate, onBack, onHome }: EditeurProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [selectedAnnotationId, setSelectedAnnotationId] = useState<string | null>(null);
   const [niveauActif, setNiveauActif] = useState<NiveauId>(plan.niveaux[0]?.id ?? 'rdc');
   const [showFlux, setShowFlux] = useState(true);
@@ -35,6 +38,7 @@ export function Editeur({ plan, onUpdate, onBack, onHome }: EditeurProps) {
   const canvasRef = useRef<CanvasHandle>(null);
   const dragPresetRef = useRef<Preset | null>(null);
   const { customs, addCustom, removeCustom } = useCustomPresets();
+  const { snapshot, undo, redo, canUndo, canRedo } = useHistory(plan, onUpdate);
 
   const violations = useMemo(() => verifierContraintes(plan), [plan]);
 
@@ -78,6 +82,62 @@ export function Editeur({ plan, onUpdate, onBack, onHome }: EditeurProps) {
     addMur(m);
     setSelectedMurId(m.id);
   }, [tool, niveauActif, addMur]);
+
+  // --- Actions de groupe ---
+  const selectedObjets = useMemo(() => plan.objets.filter(o => selectedIds.has(o.id)), [plan.objets, selectedIds]);
+
+
+  const rotateSelection = useCallback((angle: number) => {
+    snapshot(plan);
+    if (selectedObjets.length > 0) {
+      const patches = rotateGroup(selectedObjets, angle);
+      onUpdate(p => ({ ...p, objets: p.objets.map(o => { const patch = patches.find(pp => pp.id === o.id); return patch ? { ...o, ...patch } : o; }) }));
+    } else if (selectedId) {
+      const obj = plan.objets.find(o => o.id === selectedId);
+      if (obj) updateObjet(selectedId, { rotation: ((obj.rotation ?? 0) + angle) % 360 });
+    }
+  }, [selectedObjets, selectedId, plan, onUpdate, updateObjet, snapshot]);
+
+  const mirrorH = useCallback(() => {
+    snapshot(plan);
+    const targets = selectedObjets.length > 0 ? selectedObjets : plan.objets.filter(o => o.id === selectedId);
+    const patches = mirrorGroupH(targets);
+    onUpdate(p => ({ ...p, objets: p.objets.map(o => { const patch = patches.find(pp => pp.id === o.id); return patch ? { ...o, ...patch } : o; }) }));
+  }, [selectedObjets, selectedId, plan, onUpdate, snapshot]);
+
+  const mirrorV = useCallback(() => {
+    snapshot(plan);
+    const targets = selectedObjets.length > 0 ? selectedObjets : plan.objets.filter(o => o.id === selectedId);
+    const patches = mirrorGroupV(targets);
+    onUpdate(p => ({ ...p, objets: p.objets.map(o => { const patch = patches.find(pp => pp.id === o.id); return patch ? { ...o, ...patch } : o; }) }));
+  }, [selectedObjets, selectedId, plan, onUpdate, snapshot]);
+
+  const duplicateSelection = useCallback(() => {
+    snapshot(plan);
+    const targets = selectedObjets.length > 0 ? selectedObjets : plan.objets.filter(o => o.id === selectedId);
+    const clones = targets.map(o => ({ ...o, id: uuidv4(), nom: `${o.nom} (copie)`, x: o.x + 50, y: o.y + 50 }));
+    onUpdate(p => ({ ...p, objets: [...p.objets, ...clones] }));
+    setSelectedIds(new Set(clones.map(c => c.id)));
+  }, [selectedObjets, selectedId, plan, onUpdate, snapshot]);
+
+  // --- Raccourcis clavier globaux ---
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.ctrlKey || e.metaKey) {
+        if (e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
+        if (e.key === 'z' && e.shiftKey) { e.preventDefault(); redo(); }
+        if (e.key === 'Z') { e.preventDefault(); redo(); }
+        if (e.key === 'a') { e.preventDefault(); setSelectedIds(new Set(plan.objets.filter(o => o.niveau === niveauActif).map(o => o.id))); }
+        if (e.key === 'd') { e.preventDefault(); duplicateSelection(); }
+      }
+      if (e.key === 'r' || e.key === 'R') rotateSelection(e.shiftKey ? -45 : 45);
+      if (e.key === 'h') mirrorH();
+      if (e.key === 'v' && !e.ctrlKey) mirrorV();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [undo, redo, rotateSelection, mirrorH, mirrorV, duplicateSelection, plan.objets, niveauActif]);
 
   const addPreset = useCallback((p: Preset) => {
     // Place au centre du bâtiment
@@ -283,13 +343,52 @@ export function Editeur({ plan, onUpdate, onBack, onHome }: EditeurProps) {
 
         <div className="h-4 w-px bg-[#252830]" />
 
+        {/* Actions objet */}
+        <div className="flex items-center bg-[#0f1117] rounded border border-[#252830] overflow-hidden">
+          <ToolButton active={false} onClick={() => rotateSelection(45)} title="Rotation +45deg">
+            <RotateCw size={13} />
+          </ToolButton>
+          <ToolButton active={false} onClick={mirrorH} title="Miroir horizontal">
+            <FlipHorizontal2 size={13} />
+          </ToolButton>
+          <ToolButton active={false} onClick={mirrorV} title="Miroir vertical">
+            <FlipVertical2 size={13} />
+          </ToolButton>
+          <ToolButton active={false} onClick={duplicateSelection} title="Dupliquer selection">
+            <Copy size={13} />
+          </ToolButton>
+        </div>
+
+        <div className="h-4 w-px bg-[#252830]" />
+
+        {/* Undo/Redo */}
+        <div className="flex items-center bg-[#0f1117] rounded border border-[#252830] overflow-hidden">
+          <ToolButton active={false} onClick={undo} title="Annuler (Ctrl+Z)">
+            <Undo2 size={13} className={canUndo ? '' : 'opacity-30'} />
+          </ToolButton>
+          <ToolButton active={false} onClick={redo} title="Retablir (Ctrl+Shift+Z)">
+            <Redo2 size={13} className={canRedo ? '' : 'opacity-30'} />
+          </ToolButton>
+        </div>
+
+        <div className="h-4 w-px bg-[#252830]" />
+
+        {/* Export */}
+        <div className="flex items-center bg-[#0f1117] rounded border border-[#252830] overflow-hidden">
+          <ToolButton active={false} onClick={() => { if (canvasRef.current) { const svg = document.querySelector('#workshop-canvas svg') as SVGSVGElement; if (svg) exportSVG(svg, plan); } }} title="Export SVG">
+            <Download size={13} />
+          </ToolButton>
+        </div>
+
+        <div className="h-4 w-px bg-[#252830]" />
+
         {/* Toggles */}
         <Toggle on={showFlux} onToggle={() => setShowFlux(!showFlux)} label="Flux" />
         <Toggle on={showContraintes} onToggle={() => setShowContraintes(!showContraintes)} label="Contraintes" />
         <Toggle on={showOperateurs} onToggle={() => setShowOperateurs(!showOperateurs)} label="Opérateurs" />
         <Toggle on={showAutresNiveaux} onToggle={() => setShowAutresNiveaux(!showAutresNiveaux)} label="Autres niv." />
 
-        <IconButton title="Paramètres bâtiment" onClick={() => setShowBatimentParams(!showBatimentParams)}>
+        <IconButton title="Parametres batiment" onClick={() => setShowBatimentParams(!showBatimentParams)}>
           <Settings size={14} />
         </IconButton>
       </div>
