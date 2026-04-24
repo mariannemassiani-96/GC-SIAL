@@ -28,6 +28,15 @@ const FLUX_CATEGORIES: Array<{ id: string; label: string; couleur: string }> = [
   { id: 'autre', label: 'Autre', couleur: '#94a3b8' },
 ];
 
+function getDefaultH(type: string): number {
+  const d: Record<string, number> = {
+    machine: 200, poste: 90, convoyeur: 80, stock: 150, stock_tampon: 120,
+    mur: 350, porte: 210, fenetre: 120, colonne: 400, bureau: 75,
+    armoire: 200, salle: 300, equipement: 150, vehicule: 180, piece: 250,
+  };
+  return d[type] ?? 150;
+}
+
 export function Inspector(props: InspectorProps) {
   const { plan, objet, onUpdate, onDelete, onRotate, onDuplicate, onSaveAsPreset,
           onAddFlux, onUpdateFlux, onDeleteFlux, onAddContrainte, onDeleteContrainte } = props;
@@ -180,6 +189,34 @@ export function Inspector(props: InspectorProps) {
             />
           </Field>
         )}
+
+        {/* ── 3D : Hauteur et position Z ── */}
+        <div className="border-t border-[#252830] pt-3 mt-3">
+          <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">3D</h3>
+          <div className="grid grid-cols-2 gap-2">
+            <Field label="Hauteur objet (cm)">
+              <input
+                type="number"
+                value={objet.hauteurObjet ?? ''}
+                onChange={(e) => onUpdate({ hauteurObjet: e.target.value ? Number(e.target.value) : undefined })}
+                placeholder={String(getDefaultH(objet.type))}
+                className="input"
+                min={0}
+                max={2000}
+              />
+            </Field>
+            <Field label="Position Z (cm)">
+              <input
+                type="number"
+                value={objet.positionZ ?? 0}
+                onChange={(e) => onUpdate({ positionZ: Number(e.target.value) })}
+                className="input"
+                min={0}
+                max={2000}
+              />
+            </Field>
+          </div>
+        </div>
 
         <Field label="Notes">
           <textarea

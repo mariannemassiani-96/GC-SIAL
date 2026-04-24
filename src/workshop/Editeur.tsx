@@ -537,6 +537,55 @@ export function Editeur({ plan, onUpdate, onBack, onHome }: EditeurProps) {
         </div>
 
         <div className="w-72 shrink-0">
+          {selectedMurId && (() => {
+            const mur = (plan.murs ?? []).find(m => m.id === selectedMurId);
+            if (!mur) return null;
+            const len = Math.round(Math.sqrt((mur.x2 - mur.x1) ** 2 + (mur.y2 - mur.y1) ** 2));
+            return (
+              <div className="h-full bg-[#14161d] border-l border-[#252830] overflow-y-auto p-3 space-y-3">
+                <h2 className="text-xs font-semibold text-gray-300 uppercase tracking-wider">Mur selectionne</h2>
+                <div className="space-y-2">
+                  <div>
+                    <label className="text-[10px] text-gray-500 block mb-0.5">Nom</label>
+                    <input value={mur.nom} onChange={e => updateMur(mur.id, { nom: e.target.value })}
+                      className="w-full px-2 py-1 bg-[#0f1117] border border-[#252830] rounded text-xs text-gray-200 outline-none focus:border-blue-500" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-gray-500 block mb-0.5">Type</label>
+                    <select value={mur.type} onChange={e => { const t = e.target.value as any; const defs: Record<string, { epaisseur: number; couleur: string }> = { mur_exterieur: { epaisseur: 20, couleur: '#475569' }, cloison: { epaisseur: 10, couleur: '#64748b' }, cloison_legere: { epaisseur: 7, couleur: '#94a3b8' }, poteau: { epaisseur: 30, couleur: '#334155' } }; updateMur(mur.id, { type: t, epaisseur: defs[t]?.epaisseur ?? mur.epaisseur, couleur: defs[t]?.couleur ?? mur.couleur }); }}
+                      className="w-full px-2 py-1 bg-[#0f1117] border border-[#252830] rounded text-xs text-gray-200 outline-none">
+                      <option value="mur_exterieur">Mur exterieur (20cm)</option>
+                      <option value="cloison">Cloison (10cm)</option>
+                      <option value="cloison_legere">Cloison legere (7cm)</option>
+                      <option value="poteau">Poteau (30cm)</option>
+                    </select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[10px] text-gray-500 block mb-0.5">Epaisseur (cm)</label>
+                      <input type="number" value={mur.epaisseur} min={1} max={100}
+                        onChange={e => updateMur(mur.id, { epaisseur: Number(e.target.value) })}
+                        className="w-full px-2 py-1 bg-[#0f1117] border border-[#252830] rounded text-xs text-gray-200 outline-none" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-gray-500 block mb-0.5">Longueur</label>
+                      <span className="text-xs text-white font-mono">{(len / 100).toFixed(2)} m</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-gray-500 block mb-0.5">Couleur</label>
+                    <input type="color" value={mur.couleur} onChange={e => updateMur(mur.id, { couleur: e.target.value })}
+                      className="w-8 h-6 rounded border border-[#252830] cursor-pointer" />
+                  </div>
+                  <button onClick={() => deleteMur(mur.id)}
+                    className="w-full flex items-center justify-center gap-1.5 py-1.5 text-xs text-red-400 border border-red-500/30 rounded hover:bg-red-600/10">
+                    <Trash2 size={12} /> Supprimer ce mur
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
+          {!selectedMurId && (
           <Inspector
             plan={plan}
             objet={selectedObjet}
@@ -551,6 +600,7 @@ export function Editeur({ plan, onUpdate, onBack, onHome }: EditeurProps) {
             onAddContrainte={addContrainte}
             onDeleteContrainte={deleteContrainte}
           />
+          )}
         </div>
 
         <div className="w-64 shrink-0">
@@ -664,10 +714,37 @@ function BatimentParams({ plan, niveauActif, onUpdate, onClose }: BatimentParams
             />
           </div>
           <MetersInput
-            label="Épaisseur murs"
+            label="Epaisseur murs"
             valueCm={plan.batiment.epaisseurMurs}
             onChange={(v) => onUpdate((p) => ({ ...p, batiment: { ...p.batiment, epaisseurMurs: v } }))}
           />
+          <div>
+            <span className="block text-[10px] uppercase tracking-wide text-gray-500 mb-1">Forme</span>
+            <select
+              value={plan.batiment.forme ?? 'rectangle'}
+              onChange={(e) => onUpdate((p) => ({ ...p, batiment: { ...p.batiment, forme: e.target.value as any } }))}
+              className="w-full px-2 py-1 bg-[#0f1117] border border-[#252830] rounded text-xs text-gray-200 outline-none">
+              <option value="rectangle">Rectangle</option>
+              <option value="L">Forme en L</option>
+              <option value="U">Forme en U</option>
+            </select>
+          </div>
+          {plan.batiment.forme === 'L' && (
+            <div className="grid grid-cols-2 gap-2">
+              <MetersInput label="Branche X (L)" valueCm={plan.batiment.lBrancheX ?? Math.round(plan.batiment.largeur * 0.6)}
+                onChange={(v) => onUpdate((p) => ({ ...p, batiment: { ...p.batiment, lBrancheX: v } }))} />
+              <MetersInput label="Branche Y (L)" valueCm={plan.batiment.lBrancheY ?? Math.round(plan.batiment.hauteur * 0.6)}
+                onChange={(v) => onUpdate((p) => ({ ...p, batiment: { ...p.batiment, lBrancheY: v } }))} />
+            </div>
+          )}
+          {plan.batiment.forme === 'U' && (
+            <div className="grid grid-cols-2 gap-2">
+              <MetersInput label="Ouverture U" valueCm={plan.batiment.uOuverture ?? Math.round(plan.batiment.largeur * 0.4)}
+                onChange={(v) => onUpdate((p) => ({ ...p, batiment: { ...p.batiment, uOuverture: v } }))} />
+              <MetersInput label="Profondeur U" valueCm={plan.batiment.uProfondeur ?? Math.round(plan.batiment.hauteur * 0.5)}
+                onChange={(v) => onUpdate((p) => ({ ...p, batiment: { ...p.batiment, uProfondeur: v } }))} />
+            </div>
+          )}
         </Section>
 
         <Section label={`Niveau actif : ${niveau?.nom ?? ''}`}>
