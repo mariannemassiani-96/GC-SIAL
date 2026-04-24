@@ -130,14 +130,13 @@ export function Inspector(props: InspectorProps) {
 
         <Field label="Rotation">
           <select
-            value={objet.rotation}
-            onChange={(e) => onUpdate({ rotation: Number(e.target.value) as 0 | 90 | 180 | 270 })}
+            value={objet.rotation ?? 0}
+            onChange={(e) => onUpdate({ rotation: Number(e.target.value) })}
             className="input"
           >
-            <option value={0}>0°</option>
-            <option value={90}>90°</option>
-            <option value={180}>180°</option>
-            <option value={270}>270°</option>
+            {[0, 45, 90, 135, 180, 225, 270, 315].map(a => (
+              <option key={a} value={a}>{a}°</option>
+            ))}
           </select>
         </Field>
 
@@ -273,10 +272,9 @@ function IconBtn({ children, onClick, title, danger }: { children: React.ReactNo
 
 function InputMeters({ valueCm, onChangeCm }: { valueCm: number; onChangeCm: (cm: number) => void }) {
   const [local, setLocal] = useState((valueCm / 100).toFixed(2));
-  // sync when external value changes
   const vStr = (valueCm / 100).toFixed(2);
   if (local !== vStr && document.activeElement?.tagName !== 'INPUT') {
-    // not currently editing: accept external value
+    setLocal(vStr);
   }
   return (
     <input

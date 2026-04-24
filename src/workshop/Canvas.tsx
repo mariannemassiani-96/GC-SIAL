@@ -488,7 +488,8 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(prop
         {/* Bâtiment — murs épais (supporte rectangle, L, U) */}
         {(() => {
           const outerPoly = getBatimentPolygon(b);
-          const innerBat = { ...b, x: b.x + b.epaisseurMurs, y: b.y + b.epaisseurMurs, largeur: b.largeur - 2 * b.epaisseurMurs, hauteur: b.hauteur - 2 * b.epaisseurMurs, lBrancheX: b.lBrancheX ? b.lBrancheX - 2 * b.epaisseurMurs : undefined, lBrancheY: b.lBrancheY ? b.lBrancheY - 2 * b.epaisseurMurs : undefined, uOuverture: b.uOuverture ? b.uOuverture - 2 * b.epaisseurMurs : undefined, uProfondeur: b.uProfondeur ? b.uProfondeur - b.epaisseurMurs : undefined };
+          const e = b.epaisseurMurs;
+          const innerBat = { ...b, x: b.x + e, y: b.y + e, largeur: b.largeur - 2 * e, hauteur: b.hauteur - 2 * e, lBrancheX: b.lBrancheX ? b.lBrancheX - e : undefined, lBrancheY: b.lBrancheY ? b.lBrancheY - e : undefined, uOuverture: b.uOuverture ? b.uOuverture : undefined, uProfondeur: b.uProfondeur ? b.uProfondeur - e : undefined };
           const innerPoly = getBatimentPolygon(innerBat);
           return (
             <>

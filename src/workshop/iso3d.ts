@@ -60,9 +60,16 @@ export function isoPointsToSvg(pts: IsoPoint[]): string {
   return pts.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
 }
 
+function normalizeHex(hex: string): string {
+  let h = hex.replace('#', '');
+  if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+  if (!/^[0-9a-fA-F]{6}$/.test(h)) return '808080';
+  return h;
+}
+
 /** Assombrit une couleur hex */
 export function darken(hex: string, factor: number): string {
-  const h = hex.replace('#', '');
+  const h = normalizeHex(hex);
   const r = Math.round(parseInt(h.slice(0, 2), 16) * (1 - factor));
   const g = Math.round(parseInt(h.slice(2, 4), 16) * (1 - factor));
   const b = Math.round(parseInt(h.slice(4, 6), 16) * (1 - factor));
@@ -71,7 +78,7 @@ export function darken(hex: string, factor: number): string {
 
 /** Éclaircit une couleur hex */
 export function lighten(hex: string, factor: number): string {
-  const h = hex.replace('#', '');
+  const h = normalizeHex(hex);
   const r = Math.min(255, Math.round(parseInt(h.slice(0, 2), 16) * (1 + factor)));
   const g = Math.min(255, Math.round(parseInt(h.slice(2, 4), 16) * (1 + factor)));
   const b = Math.min(255, Math.round(parseInt(h.slice(4, 6), 16) * (1 + factor)));

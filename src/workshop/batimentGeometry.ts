@@ -77,7 +77,7 @@ export function getSurfaceBatiment(b: Batiment): number {
     const ouv = (b.uOuverture ?? Math.round(b.largeur * 0.4));
     const prof = (b.uProfondeur ?? Math.round(b.hauteur * 0.5));
     const fullRect = lInt * hInt;
-    const cutout = (ouv - 2 * e) * (prof - e);
+    const cutout = Math.max(0, ouv - 2 * e) * Math.max(0, prof - e);
     return fullRect - cutout;
   }
 

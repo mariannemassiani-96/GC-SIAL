@@ -138,9 +138,10 @@ export function Editeur({ plan, onUpdate, onBack, onHome }: EditeurProps) {
         if (e.key === 'a') { e.preventDefault(); setSelectedIds(new Set(plan.objets.filter(o => o.niveau === niveauActif).map(o => o.id))); }
         if (e.key === 'd') { e.preventDefault(); duplicateSelection(); }
       }
-      if (e.key === 'r' || e.key === 'R') rotateSelection(e.shiftKey ? -45 : 45);
-      if (e.key === 'h') mirrorH();
-      if (e.key === 'v' && !e.ctrlKey) mirrorV();
+      const hasSelection = selectedId || selectedObjets.length > 0;
+      if (hasSelection && (e.key === 'r' || e.key === 'R')) rotateSelection(e.shiftKey ? -45 : 45);
+      if (hasSelection && e.key === 'h') mirrorH();
+      if (hasSelection && e.key === 'v' && !e.ctrlKey) mirrorV();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -811,6 +812,8 @@ function Section({ label, children }: { label: string; children: React.ReactNode
 
 function MetersInput({ label, valueCm, onChange }: { label: string; valueCm: number; onChange: (cm: number) => void }) {
   const [local, setLocal] = useState((valueCm / 100).toFixed(2));
+  const vStr = (valueCm / 100).toFixed(2);
+  if (local !== vStr && document.activeElement?.tagName !== 'INPUT') { setLocal(vStr); }
   return (
     <label className="block">
       <span className="block text-[10px] uppercase tracking-wide text-gray-500 mb-1">{label} (m)</span>
