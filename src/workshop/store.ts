@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import type { Plan, Objet, ObjetType, Contrainte, Flux, NiveauId } from './types';
 import { CATALOG } from './catalog';

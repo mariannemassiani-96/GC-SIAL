@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { ArrowLeft, Plus, Save, Eye, EyeOff, UserPlus, Shield, Users } from 'lucide-react';
+import { ArrowLeft, Save, Eye, EyeOff, UserPlus, Shield, Users } from 'lucide-react';
 import { listUsers, createUser, updateUser, type UserFull } from './api';
 import { useAuth } from './AuthContext';
 

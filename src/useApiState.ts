@@ -18,7 +18,7 @@ export function useApiState<T>(
     }
   });
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState<boolean>(true);
   const timerRef = useRef<ReturnType<typeof setTimeout>>();
   const mountedRef = useRef(true);
 

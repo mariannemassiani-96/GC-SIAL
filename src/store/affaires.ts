@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import type { Affaire, Travee, TraveeConfig } from '../types';
 import { useApiState } from '../useApiState';
