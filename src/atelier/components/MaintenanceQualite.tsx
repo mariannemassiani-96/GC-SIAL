@@ -85,7 +85,22 @@ interface NonConformite {
   statut: 'ouverte' | 'en_cours' | 'cloturee';
 }
 
-type Tab = 'machines' | 'maintenance' | 'qualite' | 'dashboard';
+interface LigneAMDEC {
+  id: string;
+  machineId: string;
+  sousEnsemble: string;
+  modeDefaillance: string;
+  cause: string;
+  effetProduction: string;
+  frequence: number;      // 1-10
+  gravite: number;        // 1-10
+  detectabilite: number;  // 1-10
+  actionPreventive: string;
+  frequenceAction: string;
+  responsable: string;
+}
+
+type Tab = 'machines' | 'maintenance' | 'amdec' | 'qualite' | 'dashboard';
 
 const CATEGORIES_MACHINE = ['Decoupe', 'Usinage', 'Assemblage', 'Finition', 'Manutention', 'Autre'];
 const TYPES_DEFAUT = ['Dimensionnel', 'Assemblage', 'Vitrage', 'Quincaillerie', 'Finition', 'Conformite commande', 'Autre'];
@@ -98,6 +113,7 @@ const SK = {
   interventions: 'sial-mq-interventions',
   postes: 'sial-mq-postes',
   nc: 'sial-mq-nc',
+  amdec: 'sial-mq-amdec',
 };
 
 
@@ -143,16 +159,19 @@ export function MaintenanceQualite({ onBack }: Props) {
   const [interventions, setInterventions] = useApiState<Intervention[]>('maintenance', 'interventions', SK.interventions, []);
   const [postes, setPostes] = useApiState<PosteQualite[]>('maintenance', 'postes', SK.postes, DEMO_POSTES);
   const [ncs, setNcs] = useApiState<NonConformite[]>('maintenance', 'nc', SK.nc, DEMO_NC);
+  const [amdec, setAmdec] = useApiState<LigneAMDEC[]>('maintenance', 'amdec', SK.amdec, []);
 
   const savM = useCallback((n: Machine[]) => { setMachines(n); }, [setMachines]);
   const savO = useCallback((n: OperationMaint[]) => { setOperations(n); }, [setOperations]);
   const savI = useCallback((n: Intervention[]) => { setInterventions(n); }, [setInterventions]);
   const savP = useCallback((n: PosteQualite[]) => { setPostes(n); }, [setPostes]);
   const savN = useCallback((n: NonConformite[]) => { setNcs(n); }, [setNcs]);
+  const savA = useCallback((n: LigneAMDEC[]) => { setAmdec(n); }, [setAmdec]);
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: 'machines', label: 'Machines', icon: <Settings size={14} /> },
     { id: 'maintenance', label: 'Maintenance', icon: <Wrench size={14} /> },
+    { id: 'amdec', label: 'AMDEC', icon: <AlertTriangle size={14} /> },
     { id: 'qualite', label: 'Qualite', icon: <CheckSquare size={14} /> },
     { id: 'dashboard', label: 'Tableau de bord', icon: <BarChart3 size={14} /> },
   ];
@@ -185,6 +204,7 @@ export function MaintenanceQualite({ onBack }: Props) {
       <main className="flex-1 overflow-y-auto">
         {tab === 'machines' && <TabMachines machines={machines} onSave={savM} />}
         {tab === 'maintenance' && <TabMaintenance machines={machines} operations={operations} interventions={interventions} onSaveOps={savO} onSaveInt={savI} />}
+        {tab === 'amdec' && <TabAMDEC machines={machines} lignes={amdec} onSave={savA} />}
         {tab === 'qualite' && <TabQualite postes={postes} ncs={ncs} onSavePostes={savP} onSaveNc={savN} />}
         {tab === 'dashboard' && <TabDashboardMQ machines={machines} operations={operations} interventions={interventions} postes={postes} ncs={ncs} />}
       </main>
@@ -486,6 +506,178 @@ function TabQualite({ postes, ncs, onSavePostes, onSaveNc }: {
               <input value={n.actionCorrective} onChange={e => onSaveNc(ncs.map(nn => nn.id === n.id ? { ...nn, actionCorrective: e.target.value } : nn))} placeholder="Action corrective..." className="w-full bg-transparent text-[10px] text-gray-400 outline-none mt-1" />
             </div>
           ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Tab AMDEC ───────────────────────────────────────────────────────
+
+function iprNiveau(ipr: number): { label: string; color: string; bg: string } {
+  if (ipr > 100) return { label: 'CRITIQUE', color: 'text-red-400', bg: 'bg-red-600/20 border-red-500/30' };
+  if (ipr >= 40) return { label: 'MODERE', color: 'text-amber-400', bg: 'bg-amber-600/20 border-amber-500/30' };
+  return { label: 'FAIBLE', color: 'text-green-400', bg: 'bg-green-600/20 border-green-500/30' };
+}
+
+function TabAMDEC({ machines, lignes, onSave }: { machines: Machine[]; lignes: LigneAMDEC[]; onSave: (l: LigneAMDEC[]) => void }) {
+  const [filtreMachine, setFiltreMachine] = useState<string>('tous');
+  const [tri, setTri] = useState<'ipr' | 'machine'>('ipr');
+
+  const addLigne = () => {
+    onSave([...lignes, {
+      id: uid(), machineId: machines[0]?.id ?? '', sousEnsemble: '', modeDefaillance: '',
+      cause: '', effetProduction: '', frequence: 1, gravite: 1, detectabilite: 1,
+      actionPreventive: '', frequenceAction: '', responsable: '',
+    }]);
+  };
+
+  const update = (id: string, patch: Partial<LigneAMDEC>) => onSave(lignes.map(l => l.id === id ? { ...l, ...patch } : l));
+  const remove = (id: string) => onSave(lignes.filter(l => l.id !== id));
+
+  const filtered = lignes
+    .filter(l => filtreMachine === 'tous' || l.machineId === filtreMachine)
+    .sort((a, b) => {
+      if (tri === 'ipr') return (b.frequence * b.gravite * b.detectabilite) - (a.frequence * a.gravite * a.detectabilite);
+      return a.machineId.localeCompare(b.machineId);
+    });
+
+  const totalCritique = lignes.filter(l => l.frequence * l.gravite * l.detectabilite > 100).length;
+  const totalModere = lignes.filter(l => { const ipr = l.frequence * l.gravite * l.detectabilite; return ipr >= 40 && ipr <= 100; }).length;
+
+  return (
+    <div className="max-w-7xl mx-auto px-4 py-6 space-y-4">
+      {/* Header */}
+      <div className="bg-[#181a20] border border-[#2a2d35] rounded-xl p-4">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h2 className="text-sm font-bold text-white">AMDEC — Analyse des Modes de Defaillance, Effets et Criticite</h2>
+            <p className="text-[10px] text-gray-500 mt-0.5">Objectif : Maintenance Preventive</p>
+          </div>
+          <div className="flex gap-2 text-[10px]">
+            <span className="px-2 py-1 rounded bg-red-600/20 text-red-400 border border-red-500/30">{totalCritique} critique{totalCritique > 1 ? 's' : ''}</span>
+            <span className="px-2 py-1 rounded bg-amber-600/20 text-amber-400 border border-amber-500/30">{totalModere} modere{totalModere > 1 ? 's' : ''}</span>
+            <span className="px-2 py-1 rounded bg-green-600/20 text-green-400 border border-green-500/30">{lignes.length - totalCritique - totalModere} faible{lignes.length - totalCritique - totalModere > 1 ? 's' : ''}</span>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-4 text-[10px] text-gray-500">
+          <div><span className="text-blue-400 font-bold">F</span> Frequence : 1=Tres rare | 5=Occasionnelle | 10=Quotidienne</div>
+          <div><span className="text-amber-400 font-bold">G</span> Gravite : 1=Aucun impact | 5=Arret partiel | 10=Arret long + securite</div>
+          <div><span className="text-red-400 font-bold">D</span> Detectabilite : 1=Tres facile | 5=Instruments | 10=Indetectable</div>
+          <div><span className="text-white font-bold">IPR</span> = F x G x D — &lt;40 Faible | 40-100 Modere | &gt;100 Critique</div>
+        </div>
+      </div>
+
+      {/* Controls */}
+      <div className="flex items-center gap-3">
+        <select value={filtreMachine} onChange={e => setFiltreMachine(e.target.value)} className="px-2 py-1.5 bg-[#252830] border border-[#353840] rounded-lg text-xs text-white outline-none">
+          <option value="tous">Toutes machines</option>
+          {machines.map(m => <option key={m.id} value={m.id}>{m.nom}</option>)}
+        </select>
+        <button onClick={() => setTri(tri === 'ipr' ? 'machine' : 'ipr')} className="px-3 py-1.5 rounded-lg text-xs border text-gray-500 border-[#353840] hover:text-white">
+          Tri : {tri === 'ipr' ? 'IPR decroissant' : 'Par machine'}
+        </button>
+        <div className="flex-1" />
+        <button onClick={addLigne} className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-lg">
+          <Plus size={14} /> Nouvelle ligne
+        </button>
+      </div>
+
+      {/* Table */}
+      {filtered.length === 0 ? (
+        <div className="text-center py-12 text-gray-500 text-sm">Aucune analyse AMDEC. Cliquez sur "Nouvelle ligne" pour commencer.</div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-[11px] border-collapse">
+            <thead>
+              <tr className="bg-[#181a20] border-b border-[#2a2d35]">
+                <th className="px-2 py-2 text-left text-gray-500 font-medium">Machine</th>
+                <th className="px-2 py-2 text-left text-gray-500 font-medium">Sous-ensemble</th>
+                <th className="px-2 py-2 text-left text-gray-500 font-medium">Mode de defaillance</th>
+                <th className="px-2 py-2 text-left text-gray-500 font-medium">Cause</th>
+                <th className="px-2 py-2 text-left text-gray-500 font-medium">Effet production</th>
+                <th className="px-2 py-2 text-center text-blue-400 font-bold w-10">F</th>
+                <th className="px-2 py-2 text-center text-amber-400 font-bold w-10">G</th>
+                <th className="px-2 py-2 text-center text-red-400 font-bold w-10">D</th>
+                <th className="px-2 py-2 text-center text-white font-bold w-14">IPR</th>
+                <th className="px-2 py-2 text-left text-gray-500 font-medium">Action preventive</th>
+                <th className="px-2 py-2 text-left text-gray-500 font-medium w-20">Freq.</th>
+                <th className="px-2 py-2 text-left text-gray-500 font-medium w-24">Responsable</th>
+                <th className="px-2 py-2 w-8"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map(l => {
+                const ipr = l.frequence * l.gravite * l.detectabilite;
+                const niv = iprNiveau(ipr);
+                const mach = machines.find(m => m.id === l.machineId);
+                return (
+                  <tr key={l.id} className="border-b border-[#2a2d35]/40 hover:bg-[#181a20]/50">
+                    <td className="px-2 py-1.5">
+                      <select value={l.machineId} onChange={e => update(l.id, { machineId: e.target.value })} className="bg-[#252830] border border-[#353840] rounded px-1 py-0.5 text-white outline-none w-full">
+                        {machines.map(m => <option key={m.id} value={m.id}>{m.nom}</option>)}
+                      </select>
+                    </td>
+                    <td className="px-2 py-1.5"><input value={l.sousEnsemble} onChange={e => update(l.id, { sousEnsemble: e.target.value })} placeholder="Composant..." className="bg-transparent text-white outline-none w-full" /></td>
+                    <td className="px-2 py-1.5"><input value={l.modeDefaillance} onChange={e => update(l.id, { modeDefaillance: e.target.value })} placeholder="Mode de defaillance..." className="bg-transparent text-white outline-none w-full" /></td>
+                    <td className="px-2 py-1.5"><input value={l.cause} onChange={e => update(l.id, { cause: e.target.value })} placeholder="Cause..." className="bg-transparent text-gray-300 outline-none w-full" /></td>
+                    <td className="px-2 py-1.5"><input value={l.effetProduction} onChange={e => update(l.id, { effetProduction: e.target.value })} placeholder="Effet..." className="bg-transparent text-gray-300 outline-none w-full" /></td>
+                    <td className="px-1 py-1.5 text-center">
+                      <select value={l.frequence} onChange={e => update(l.id, { frequence: Number(e.target.value) })} className="bg-[#252830] border border-[#353840] rounded px-0.5 py-0.5 text-blue-400 text-center outline-none w-10">
+                        {[1,2,3,4,5,6,7,8,9,10].map(v => <option key={v} value={v}>{v}</option>)}
+                      </select>
+                    </td>
+                    <td className="px-1 py-1.5 text-center">
+                      <select value={l.gravite} onChange={e => update(l.id, { gravite: Number(e.target.value) })} className="bg-[#252830] border border-[#353840] rounded px-0.5 py-0.5 text-amber-400 text-center outline-none w-10">
+                        {[1,2,3,4,5,6,7,8,9,10].map(v => <option key={v} value={v}>{v}</option>)}
+                      </select>
+                    </td>
+                    <td className="px-1 py-1.5 text-center">
+                      <select value={l.detectabilite} onChange={e => update(l.id, { detectabilite: Number(e.target.value) })} className="bg-[#252830] border border-[#353840] rounded px-0.5 py-0.5 text-red-400 text-center outline-none w-10">
+                        {[1,2,3,4,5,6,7,8,9,10].map(v => <option key={v} value={v}>{v}</option>)}
+                      </select>
+                    </td>
+                    <td className="px-2 py-1.5 text-center">
+                      <span className={`inline-block px-2 py-0.5 rounded border text-[10px] font-bold ${niv.bg} ${niv.color}`}>{ipr}</span>
+                    </td>
+                    <td className="px-2 py-1.5"><input value={l.actionPreventive} onChange={e => update(l.id, { actionPreventive: e.target.value })} placeholder="Action..." className="bg-transparent text-gray-300 outline-none w-full" /></td>
+                    <td className="px-2 py-1.5">
+                      <select value={l.frequenceAction} onChange={e => update(l.id, { frequenceAction: e.target.value })} className="bg-[#252830] border border-[#353840] rounded px-1 py-0.5 text-gray-300 outline-none w-full">
+                        <option value="">—</option>
+                        {Object.entries(FREQ_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                      </select>
+                    </td>
+                    <td className="px-2 py-1.5"><input value={l.responsable} onChange={e => update(l.id, { responsable: e.target.value })} placeholder="Qui..." className="bg-transparent text-gray-300 outline-none w-full" /></td>
+                    <td className="px-1 py-1.5"><button onClick={() => remove(l.id)} className="text-gray-600 hover:text-red-400"><Trash2 size={12} /></button></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Matrice IPR résumé */}
+      {lignes.length > 0 && (
+        <div className="bg-[#181a20] border border-[#2a2d35] rounded-xl p-4">
+          <h3 className="text-xs text-gray-500 uppercase tracking-wider mb-3">Synthese IPR par machine</h3>
+          {machines.filter(m => lignes.some(l => l.machineId === m.id)).map(m => {
+            const ml = lignes.filter(l => l.machineId === m.id);
+            const maxIPR = Math.max(...ml.map(l => l.frequence * l.gravite * l.detectabilite));
+            const avgIPR = Math.round(ml.reduce((s, l) => s + l.frequence * l.gravite * l.detectabilite, 0) / ml.length);
+            const niv = iprNiveau(maxIPR);
+            return (
+              <div key={m.id} className="flex items-center gap-3 mb-2">
+                <span className="text-xs text-gray-400 w-48 truncate">{m.nom}</span>
+                <div className="flex-1 h-4 bg-[#252830] rounded-full overflow-hidden">
+                  <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(maxIPR / 10, 100)}%`, backgroundColor: maxIPR > 100 ? '#ef4444' : maxIPR >= 40 ? '#f59e0b' : '#22c55e' }} />
+                </div>
+                <span className={`text-[10px] font-bold w-16 text-right ${niv.color}`}>max {maxIPR}</span>
+                <span className="text-[10px] text-gray-500 w-16 text-right">moy {avgIPR}</span>
+                <span className="text-[10px] text-gray-600 w-8 text-right">{ml.length}L</span>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
