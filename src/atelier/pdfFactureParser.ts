@@ -179,10 +179,33 @@ async function extractPagesFromPDF(file: File): Promise<PageText[]> {
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i);
     const content = await page.getTextContent();
-    const text = content.items
-      .map(item => ('str' in item ? (item as { str: string }).str : ''))
-      .join(' ');
-    pages.push({ pageNum: i, text });
+
+    // Group text items by Y position to reconstruct lines
+    const items = content.items
+      .filter((item): item is { str: string; transform: number[] } => 'str' in item && 'transform' in item)
+      .map(item => ({ str: item.str, x: item.transform[4], y: Math.round(item.transform[5]) }));
+
+    if (items.length === 0) { pages.push({ pageNum: i, text: '' }); continue; }
+
+    // Sort by Y descending (top of page first), then X ascending
+    items.sort((a, b) => b.y - a.y || a.x - b.x);
+
+    // Group items within 3px Y tolerance into same line
+    const lines: string[] = [];
+    let currentY = items[0].y;
+    let currentLine: string[] = [];
+
+    for (const item of items) {
+      if (Math.abs(item.y - currentY) > 3) {
+        lines.push(currentLine.join(' ').trim());
+        currentLine = [];
+        currentY = item.y;
+      }
+      if (item.str.trim()) currentLine.push(item.str.trim());
+    }
+    if (currentLine.length > 0) lines.push(currentLine.join(' ').trim());
+
+    pages.push({ pageNum: i, text: lines.filter(Boolean).join('\n') });
   }
   return pages;
 }
