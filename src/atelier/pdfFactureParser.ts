@@ -16,6 +16,7 @@ export interface FactureParsed {
   numFacture: string;
   lignes: LigneFactureParsed[];
   texteBrut: string;
+  pages: number[];
 }
 
 const FOURNISSEURS_PATTERNS: { nom: string; patterns: RegExp[] }[] = [
@@ -77,8 +78,6 @@ function parseLignes(text: string): LigneFactureParsed[] {
   const lignes: LigneFactureParsed[] = [];
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
 
-  // Pattern: reference + designation + quantite + prix unitaire + total
-  // Many invoice formats have lines like: REF DESIGNATION QTE PU TOTAL
   const linePattern = /^([A-Z0-9][\w\-./]{2,20})\s+(.{10,80}?)\s+(\d+[.,]?\d*)\s+(\d+[.,]\d{2})\s+(\d+[.,]\d{2})\s*$/;
 
   for (const line of lines) {
@@ -95,7 +94,6 @@ function parseLignes(text: string): LigneFactureParsed[] {
     }
   }
 
-  // Fallback: looser pattern if nothing found
   if (lignes.length === 0) {
     const loosePattern = /([A-Z0-9][\w\-./]{2,20})\s+(.{5,}?)\s+(\d+)\s+(\d+[.,]\d{2})/;
     for (const line of lines) {
@@ -115,7 +113,9 @@ function parseLignes(text: string): LigneFactureParsed[] {
   return lignes;
 }
 
-async function extractTextFromPDF(file: File): Promise<string> {
+interface PageText { pageNum: number; text: string; }
+
+async function extractPagesFromPDF(file: File): Promise<PageText[]> {
   const pdfjsLib = await import('pdfjs-dist');
   const version = (pdfjsLib as unknown as { version: string }).version;
   const gwo = pdfjsLib as unknown as { GlobalWorkerOptions: typeof GlobalWorkerOptions };
@@ -125,26 +125,54 @@ async function extractTextFromPDF(file: File): Promise<string> {
   const getDoc = (pdfjsLib as unknown as { getDocument: typeof GetDocumentFn }).getDocument;
   const pdf = await getDoc({ data: new Uint8Array(buffer) }).promise;
 
-  const pages: string[] = [];
+  const pages: PageText[] = [];
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i);
     const content = await page.getTextContent();
     const text = content.items
       .map(item => ('str' in item ? (item as { str: string }).str : ''))
       .join(' ');
-    pages.push(text);
+    pages.push({ pageNum: i, text });
   }
-  return pages.join('\n');
+  return pages;
 }
 
-export async function parseFacturePDF(file: File): Promise<FactureParsed> {
-  const text = await extractTextFromPDF(file);
+export async function parseFacturePDF(file: File): Promise<FactureParsed[]> {
+  const pages = await extractPagesFromPDF(file);
 
-  return {
-    fournisseur: detectFournisseur(text),
-    dateFacture: detectDate(text),
-    numFacture: detectNumFacture(text),
-    lignes: parseLignes(text),
-    texteBrut: text,
-  };
+  // Group consecutive pages by detected supplier
+  const groups: { fournisseur: string; pages: PageText[] }[] = [];
+
+  for (const page of pages) {
+    const fournisseur = detectFournisseur(page.text);
+    const last = groups[groups.length - 1];
+    if (last && last.fournisseur === fournisseur && fournisseur !== '') {
+      last.pages.push(page);
+    } else {
+      groups.push({ fournisseur, pages: [page] });
+    }
+  }
+
+  // Merge groups with unknown supplier ('') into previous group if exists
+  const merged: typeof groups = [];
+  for (const g of groups) {
+    if (g.fournisseur === '' && merged.length > 0) {
+      merged[merged.length - 1].pages.push(...g.pages);
+    } else {
+      merged.push(g);
+    }
+  }
+  const finalGroups = merged.length > 0 ? merged : groups;
+
+  return finalGroups.map(g => {
+    const fullText = g.pages.map(p => p.text).join('\n');
+    return {
+      fournisseur: g.fournisseur || '',
+      dateFacture: detectDate(fullText),
+      numFacture: detectNumFacture(fullText),
+      lignes: parseLignes(fullText),
+      texteBrut: fullText,
+      pages: g.pages.map(p => p.pageNum),
+    };
+  });
 }
