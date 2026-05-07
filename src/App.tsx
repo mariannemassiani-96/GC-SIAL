@@ -8,6 +8,7 @@ import { StageInventaire } from './atelier/components/StageInventaire';
 import { PreparationLivraison } from './atelier/components/PreparationLivraison';
 import { ReceptionMatiere } from './atelier/components/ReceptionMatiere';
 import { PosteCoupe } from './atelier/components/PosteCoupe';
+import { MaintenanceQualite } from './atelier/components/MaintenanceQualite';
 import { WorkshopApp } from './workshop/WorkshopApp';
 import type { Affaire } from './types';
 
@@ -20,7 +21,8 @@ type AppMode =
   | 'preparation_livraison'
   | 'workshop_layout'
   | 'reception_matiere'
-  | 'poste_coupe';
+  | 'poste_coupe'
+  | 'maintenance_qualite';
 
 // ── Hub Fabrication (page d'accueil) ─────────────────────────────────
 
@@ -119,6 +121,17 @@ function HubFabrication({ onSelect }: { onSelect: (mode: AppMode) => void }) {
       ),
       color: 'violet',
     },
+    {
+      id: 'maintenance_qualite' as AppMode,
+      label: 'Maintenance & Qualite',
+      description: 'Fiches machines, plan preventif, criticite, procedures qualite, non-conformites, TNC.',
+      icon: (
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-lime-400">
+          <path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z" />
+        </svg>
+      ),
+      color: 'lime',
+    },
   ];
 
   return (
@@ -186,6 +199,7 @@ export default function App() {
   }
 
   if (mode === 'poste_coupe') return <PosteCoupe onBack={goHome} />;
+  if (mode === 'maintenance_qualite') return <MaintenanceQualite onBack={goHome} />;
   if (mode === 'reception_matiere') return <ReceptionMatiere onBack={goHome} />;
   if (mode === 'smart_assembly') return <SmartAssembly onBack={goHome} />;
   if (mode === 'bridge') return <BridgeAtelier onBack={goHome} />;
