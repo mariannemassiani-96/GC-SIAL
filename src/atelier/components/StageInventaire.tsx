@@ -415,17 +415,23 @@ function TabFactures({ factures, consolidated, onUpdate, fournisseursExclus, onE
   return (
     <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
       {/* Import Preview Modal */}
-      {importMode && preview && (
+      {importMode && (
         <div className="bg-[#181a20] border-2 border-green-500/40 rounded-xl p-5 space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-bold text-green-400">Import facture — Verification</h3>
-            <button onClick={() => { setImportMode(false); setPreview(null); }} className="text-gray-500 hover:text-white"><X size={16} /></button>
+            <button onClick={() => { setImportMode(false); setPreview(null); setParseError(null); }} className="text-gray-500 hover:text-white"><X size={16} /></button>
           </div>
+
+          {parsing && (
+            <div className="text-center py-8 text-gray-400 text-sm">Lecture du PDF en cours...</div>
+          )}
 
           {parseError && (
             <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2 text-xs text-amber-400">{parseError}</div>
           )}
 
+          {!parsing && preview && (
+          <>
           <div className="grid grid-cols-3 gap-3">
             <div>
               <label className="block text-[10px] text-gray-500 mb-1">Fournisseur</label>
@@ -504,8 +510,19 @@ function TabFactures({ factures, consolidated, onUpdate, fournisseursExclus, onE
               className="flex items-center gap-1.5 px-4 py-2 bg-green-600 hover:bg-green-500 disabled:bg-green-600/30 disabled:text-green-400/50 text-white text-xs font-semibold rounded-lg transition-colors">
               <Download size={14} /> Importer {preview.lignes.length} ligne{preview.lignes.length > 1 ? 's' : ''}
             </button>
-            <button onClick={() => { setImportMode(false); setPreview(null); }} className="px-4 py-2 text-xs text-gray-400 hover:text-white">Annuler</button>
+            <button onClick={() => { setImportMode(false); setPreview(null); setParseError(null); }} className="px-4 py-2 text-xs text-gray-400 hover:text-white">Annuler</button>
           </div>
+          </>
+          )}
+
+          {!parsing && !preview && !parseError && (
+            <div className="text-center py-6">
+              <p className="text-sm text-gray-400 mb-3">Selectionnez un fichier PDF</p>
+              <button onClick={() => fileRef.current?.click()} className="px-4 py-2 bg-green-600 hover:bg-green-500 text-white text-xs font-semibold rounded-lg">
+                <FileUp size={14} className="inline mr-1.5" /> Choisir un PDF
+              </button>
+            </div>
+          )}
         </div>
       )}
 

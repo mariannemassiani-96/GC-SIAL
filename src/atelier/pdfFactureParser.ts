@@ -117,10 +117,13 @@ function parseLignes(text: string): LigneFactureParsed[] {
 
 async function extractTextFromPDF(file: File): Promise<string> {
   const pdfjsLib = await import('pdfjs-dist');
-  (pdfjsLib as unknown as { GlobalWorkerOptions: typeof GlobalWorkerOptions }).GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+  const version = (pdfjsLib as unknown as { version: string }).version;
+  const gwo = pdfjsLib as unknown as { GlobalWorkerOptions: typeof GlobalWorkerOptions };
+  gwo.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${version}/build/pdf.worker.min.mjs`;
 
   const buffer = await file.arrayBuffer();
-  const pdf = await (pdfjsLib as unknown as { getDocument: typeof GetDocumentFn }).getDocument({ data: buffer }).promise;
+  const getDoc = (pdfjsLib as unknown as { getDocument: typeof GetDocumentFn }).getDocument;
+  const pdf = await getDoc({ data: new Uint8Array(buffer) }).promise;
 
   const pages: string[] = [];
   for (let i = 1; i <= pdf.numPages; i++) {
