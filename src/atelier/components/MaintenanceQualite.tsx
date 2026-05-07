@@ -610,7 +610,6 @@ function TabAMDEC({ machines, lignes, onSave }: { machines: Machine[]; lignes: L
               {filtered.map(l => {
                 const ipr = l.frequence * l.gravite * l.detectabilite;
                 const niv = iprNiveau(ipr);
-                const mach = machines.find(m => m.id === l.machineId);
                 return (
                   <tr key={l.id} className="border-b border-[#2a2d35]/40 hover:bg-[#181a20]/50">
                     <td className="px-2 py-1.5">
