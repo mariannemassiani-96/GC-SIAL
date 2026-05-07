@@ -342,7 +342,9 @@ function TabFactures({ factures, consolidated, onUpdate, fournisseursExclus, onE
   const [importMode, setImportMode] = useState(false);
   const [parsing, setParsing] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
-  const [preview, setPreview] = useState<FactureParsed | null>(null);
+  const [previews, setPreviews] = useState<FactureParsed[]>([]);
+  const [excluded, setExcluded] = useState<Set<number>>(new Set());
+  const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
   const [showBrut, setShowBrut] = useState(false);
   const [showExclus, setShowExclus] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -359,11 +361,14 @@ function TabFactures({ factures, consolidated, onUpdate, fournisseursExclus, onE
     if (!file.name.toLowerCase().endsWith('.pdf')) { setParseError('Fichier PDF requis'); return; }
     setParsing(true);
     setParseError(null);
-    setPreview(null);
+    setPreviews([]);
+    setExcluded(new Set());
     try {
-      const result = await parseFacturePDF(file);
-      setPreview(result);
-      if (result.lignes.length === 0) setParseError('Aucune ligne detectee automatiquement. Vous pouvez ajouter les lignes manuellement ci-dessous.');
+      const results = await parseFacturePDF(file);
+      setPreviews(results);
+      setExpandedIdx(0);
+      if (results.length === 0) setParseError('Aucune facture detectee dans ce PDF.');
+      else if (results.every(r => r.lignes.length === 0)) setParseError('Aucune ligne detectee automatiquement. Vous pouvez ajouter les lignes manuellement.');
     } catch (err: unknown) {
       setParseError(err instanceof Error ? err.message : 'Erreur de lecture du PDF');
     } finally {
@@ -372,43 +377,51 @@ function TabFactures({ factures, consolidated, onUpdate, fournisseursExclus, onE
     }
   };
 
-  const updatePreviewField = (field: keyof FactureParsed, value: string) => {
-    if (preview) setPreview({ ...preview, [field]: value });
+  const updatePreviewField = (idx: number, field: string, value: string) => {
+    setPreviews(prev => prev.map((p, i) => i === idx ? { ...p, [field]: value } : p));
   };
 
-  const updatePreviewLigne = (index: number, field: string, value: string | number) => {
-    if (!preview) return;
-    const lignes = [...preview.lignes];
-    lignes[index] = { ...lignes[index], [field]: value };
-    setPreview({ ...preview, lignes });
+  const updatePreviewLigne = (idx: number, lineIdx: number, field: string, value: string | number) => {
+    setPreviews(prev => prev.map((p, i) => {
+      if (i !== idx) return p;
+      const lignes = [...p.lignes];
+      lignes[lineIdx] = { ...lignes[lineIdx], [field]: value };
+      return { ...p, lignes };
+    }));
   };
 
-  const addPreviewLigne = () => {
-    if (!preview) return;
-    setPreview({ ...preview, lignes: [...preview.lignes, { ref: '', designation: '', coloris: '', conditionnement: '', qte: 1, prixUnitaireHT: 0, totalLigneHT: 0 }] });
+  const addPreviewLigne = (idx: number) => {
+    setPreviews(prev => prev.map((p, i) => i === idx ? { ...p, lignes: [...p.lignes, { ref: '', designation: '', coloris: '', conditionnement: '', qte: 1, prixUnitaireHT: 0, totalLigneHT: 0 }] } : p));
   };
 
-  const removePreviewLigne = (index: number) => {
-    if (!preview) return;
-    setPreview({ ...preview, lignes: preview.lignes.filter((_, i) => i !== index) });
+  const removePreviewLigne = (idx: number, lineIdx: number) => {
+    setPreviews(prev => prev.map((p, i) => i === idx ? { ...p, lignes: p.lignes.filter((_, li) => li !== lineIdx) } : p));
+  };
+
+  const toggleExcluded = (idx: number) => {
+    setExcluded(prev => { const s = new Set(prev); if (s.has(idx)) s.delete(idx); else s.add(idx); return s; });
   };
 
   const confirmImport = () => {
-    if (!preview || preview.lignes.length === 0) return;
-    const newFacture: Facture = {
-      id: `F-${Date.now()}`,
-      fournisseur: preview.fournisseur || 'Inconnu',
-      dateFacture: preview.dateFacture || new Date().toISOString().slice(0, 10),
-      numFacture: preview.numFacture || `IMP-${Date.now().toString(36).toUpperCase()}`,
-      lignes: preview.lignes.map(l => ({ ...l, totalLigneHT: l.totalLigneHT || l.qte * l.prixUnitaireHT })),
-    };
-    onUpdate([...factures, newFacture]);
-    setPreview(null);
+    const toImport = previews.filter((p, i) => !excluded.has(i) && p.lignes.length > 0);
+    if (toImport.length === 0) return;
+    const newFactures: Facture[] = toImport.map((p, i) => ({
+      id: `F-${Date.now()}-${i}`,
+      fournisseur: p.fournisseur || 'Inconnu',
+      dateFacture: p.dateFacture || new Date().toISOString().slice(0, 10),
+      numFacture: p.numFacture || `IMP-${Date.now().toString(36).toUpperCase()}-${i}`,
+      lignes: p.lignes.map(l => ({ ...l, totalLigneHT: l.totalLigneHT || l.qte * l.prixUnitaireHT })),
+    }));
+    onUpdate([...factures, ...newFactures]);
+    setPreviews([]);
+    setExcluded(new Set());
     setImportMode(false);
   };
 
   const handleManualCreate = () => {
-    setPreview({ fournisseur: '', dateFacture: new Date().toISOString().slice(0, 10), numFacture: '', lignes: [], texteBrut: '' });
+    setPreviews([{ fournisseur: '', dateFacture: new Date().toISOString().slice(0, 10), numFacture: '', lignes: [], texteBrut: '', pages: [] }]);
+    setExcluded(new Set());
+    setExpandedIdx(0);
     setImportMode(true);
   };
 
@@ -418,104 +431,131 @@ function TabFactures({ factures, consolidated, onUpdate, fournisseursExclus, onE
       {importMode && (
         <div className="bg-[#181a20] border-2 border-green-500/40 rounded-xl p-5 space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-green-400">Import facture — Verification</h3>
-            <button onClick={() => { setImportMode(false); setPreview(null); setParseError(null); }} className="text-gray-500 hover:text-white"><X size={16} /></button>
+            <h3 className="text-sm font-bold text-green-400">
+              Import factures — {previews.length > 1 ? `${previews.length} fournisseurs detectes` : 'Verification'}
+            </h3>
+            <button onClick={() => { setImportMode(false); setPreviews([]); setParseError(null); }} className="text-gray-500 hover:text-white"><X size={16} /></button>
           </div>
 
-          {parsing && (
-            <div className="text-center py-8 text-gray-400 text-sm">Lecture du PDF en cours...</div>
-          )}
+          {parsing && <div className="text-center py-8 text-gray-400 text-sm">Lecture du PDF en cours...</div>}
+          {parseError && <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2 text-xs text-amber-400">{parseError}</div>}
 
-          {parseError && (
-            <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2 text-xs text-amber-400">{parseError}</div>
-          )}
-
-          {!parsing && preview && (
+          {!parsing && previews.length > 0 && (
           <>
-          <div className="grid grid-cols-3 gap-3">
-            <div>
-              <label className="block text-[10px] text-gray-500 mb-1">Fournisseur</label>
-              <select value={preview.fournisseur} onChange={e => updatePreviewField('fournisseur', e.target.value)}
-                className="w-full px-2.5 py-1.5 bg-[#0f1117] border border-[#2a2d35] rounded-lg text-xs text-white outline-none focus:border-green-500/50">
-                <option value="">— Selectionner —</option>
-                {FOURNISSEURS_CONNUS.map(f => <option key={f} value={f}>{f}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-[10px] text-gray-500 mb-1">N. facture</label>
-              <input value={preview.numFacture} onChange={e => updatePreviewField('numFacture', e.target.value)}
-                className="w-full px-2.5 py-1.5 bg-[#0f1117] border border-[#2a2d35] rounded-lg text-xs text-white outline-none focus:border-green-500/50" />
-            </div>
-            <div>
-              <label className="block text-[10px] text-gray-500 mb-1">Date facture</label>
-              <input type="date" value={preview.dateFacture} onChange={e => updatePreviewField('dateFacture', e.target.value)}
-                className="w-full px-2.5 py-1.5 bg-[#0f1117] border border-[#2a2d35] rounded-lg text-xs text-white outline-none focus:border-green-500/50" />
-            </div>
-          </div>
-
-          {/* Lignes */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs text-gray-400">{preview.lignes.length} ligne{preview.lignes.length > 1 ? 's' : ''} detectee{preview.lignes.length > 1 ? 's' : ''}</span>
-              <button onClick={addPreviewLigne} className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300"><Plus size={12} /> Ajouter ligne</button>
-            </div>
-            {preview.lignes.length > 0 && (
-              <div className="overflow-x-auto">
-                <table className="w-full text-[11px]">
-                  <thead>
-                    <tr className="border-b border-[#2a2d35] text-gray-500">
-                      <th className="text-left px-2 py-1.5">Ref</th>
-                      <th className="text-left px-2 py-1.5">Designation</th>
-                      <th className="text-left px-2 py-1.5 w-20">Coloris</th>
-                      <th className="text-left px-2 py-1.5 w-24">Condit.</th>
-                      <th className="text-center px-2 py-1.5 w-14">Qte</th>
-                      <th className="text-right px-2 py-1.5 w-20">PU HT</th>
-                      <th className="text-right px-2 py-1.5 w-20">Total HT</th>
-                      <th className="w-8"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {preview.lignes.map((l, i) => (
-                      <tr key={i} className="border-b border-[#2a2d35]/30">
-                        <td className="px-2 py-1"><input value={l.ref} onChange={e => updatePreviewLigne(i, 'ref', e.target.value)} className="bg-[#252830] border border-[#353840] rounded px-1.5 py-0.5 text-amber-400 w-full outline-none" /></td>
-                        <td className="px-2 py-1"><input value={l.designation} onChange={e => updatePreviewLigne(i, 'designation', e.target.value)} className="bg-transparent text-white w-full outline-none" /></td>
-                        <td className="px-2 py-1"><input value={l.coloris} onChange={e => updatePreviewLigne(i, 'coloris', e.target.value)} className="bg-transparent text-gray-400 w-full outline-none" /></td>
-                        <td className="px-2 py-1"><input value={l.conditionnement} onChange={e => updatePreviewLigne(i, 'conditionnement', e.target.value)} className="bg-transparent text-gray-400 w-full outline-none" /></td>
-                        <td className="px-2 py-1"><input type="number" value={l.qte} onChange={e => updatePreviewLigne(i, 'qte', Number(e.target.value))} className="bg-[#252830] border border-[#353840] rounded px-1 py-0.5 text-white text-center w-full outline-none" /></td>
-                        <td className="px-2 py-1"><input type="number" step="0.01" value={l.prixUnitaireHT} onChange={e => updatePreviewLigne(i, 'prixUnitaireHT', Number(e.target.value))} className="bg-[#252830] border border-[#353840] rounded px-1 py-0.5 text-white text-right w-full outline-none" /></td>
-                        <td className="px-2 py-1 text-right text-gray-300">{(l.totalLigneHT || l.qte * l.prixUnitaireHT).toFixed(2)}</td>
-                        <td className="px-1 py-1"><button onClick={() => removePreviewLigne(i)} className="text-gray-600 hover:text-red-400"><Trash2 size={12} /></button></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            {/* Liste des factures detectees */}
+            {previews.length > 1 && (
+              <div className="flex flex-wrap gap-2">
+                {previews.map((p, idx) => (
+                  <div key={idx} className="flex items-center gap-1">
+                    <button onClick={() => toggleExcluded(idx)}
+                      className={`px-2 py-1 rounded text-[10px] border transition-colors ${excluded.has(idx)
+                        ? 'bg-red-600/20 text-red-400 border-red-500/30 line-through'
+                        : 'bg-green-600/10 text-green-400 border-green-500/30'}`}>
+                      {excluded.has(idx) ? 'Exclu' : 'Inclus'}
+                    </button>
+                    <button onClick={() => setExpandedIdx(expandedIdx === idx ? null : idx)}
+                      className={`px-3 py-1 rounded text-xs border transition-colors ${expandedIdx === idx
+                        ? 'bg-blue-600/20 text-blue-400 border-blue-500/40'
+                        : excluded.has(idx) ? 'text-gray-600 border-[#353840] line-through' : 'text-gray-300 border-[#353840] hover:border-blue-500/30'}`}>
+                      {p.fournisseur || `Fournisseur inconnu`} <span className="text-gray-500">p.{p.pages.join(',')}</span> ({p.lignes.length}L)
+                    </button>
+                  </div>
+                ))}
               </div>
             )}
-          </div>
 
-          {/* Texte brut toggle */}
-          {preview.texteBrut && (
-            <div>
-              <button onClick={() => setShowBrut(!showBrut)} className="flex items-center gap-1 text-[10px] text-gray-500 hover:text-gray-300">
-                <Eye size={10} /> {showBrut ? 'Masquer' : 'Voir'} texte brut extrait
+            {/* Detail de la facture selectionnee */}
+            {expandedIdx !== null && previews[expandedIdx] && (() => {
+              const pv = previews[expandedIdx];
+              const idx = expandedIdx;
+              const isExcl = excluded.has(idx);
+              return (
+                <div className={`space-y-3 ${isExcl ? 'opacity-40' : ''}`}>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-[10px] text-gray-500 mb-1">Fournisseur {pv.pages.length > 0 && <span className="text-gray-600">(p.{pv.pages.join(',')})</span>}</label>
+                      <select value={pv.fournisseur} onChange={e => updatePreviewField(idx, 'fournisseur', e.target.value)}
+                        className="w-full px-2.5 py-1.5 bg-[#0f1117] border border-[#2a2d35] rounded-lg text-xs text-white outline-none focus:border-green-500/50">
+                        <option value="">— Selectionner —</option>
+                        {FOURNISSEURS_CONNUS.map(f => <option key={f} value={f}>{f}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-gray-500 mb-1">N. facture</label>
+                      <input value={pv.numFacture} onChange={e => updatePreviewField(idx, 'numFacture', e.target.value)}
+                        className="w-full px-2.5 py-1.5 bg-[#0f1117] border border-[#2a2d35] rounded-lg text-xs text-white outline-none focus:border-green-500/50" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-gray-500 mb-1">Date facture</label>
+                      <input type="date" value={pv.dateFacture} onChange={e => updatePreviewField(idx, 'dateFacture', e.target.value)}
+                        className="w-full px-2.5 py-1.5 bg-[#0f1117] border border-[#2a2d35] rounded-lg text-xs text-white outline-none focus:border-green-500/50" />
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs text-gray-400">{pv.lignes.length} ligne{pv.lignes.length > 1 ? 's' : ''}</span>
+                      <button onClick={() => addPreviewLigne(idx)} className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300"><Plus size={12} /> Ajouter ligne</button>
+                    </div>
+                    {pv.lignes.length > 0 && (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-[11px]">
+                          <thead>
+                            <tr className="border-b border-[#2a2d35] text-gray-500">
+                              <th className="text-left px-2 py-1.5">Ref</th>
+                              <th className="text-left px-2 py-1.5">Designation</th>
+                              <th className="text-left px-2 py-1.5 w-20">Coloris</th>
+                              <th className="text-left px-2 py-1.5 w-24">Condit.</th>
+                              <th className="text-center px-2 py-1.5 w-14">Qte</th>
+                              <th className="text-right px-2 py-1.5 w-20">PU HT</th>
+                              <th className="text-right px-2 py-1.5 w-20">Total HT</th>
+                              <th className="w-8"></th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {pv.lignes.map((l, li) => (
+                              <tr key={li} className="border-b border-[#2a2d35]/30">
+                                <td className="px-2 py-1"><input value={l.ref} onChange={e => updatePreviewLigne(idx, li, 'ref', e.target.value)} className="bg-[#252830] border border-[#353840] rounded px-1.5 py-0.5 text-amber-400 w-full outline-none" /></td>
+                                <td className="px-2 py-1"><input value={l.designation} onChange={e => updatePreviewLigne(idx, li, 'designation', e.target.value)} className="bg-transparent text-white w-full outline-none" /></td>
+                                <td className="px-2 py-1"><input value={l.coloris} onChange={e => updatePreviewLigne(idx, li, 'coloris', e.target.value)} className="bg-transparent text-gray-400 w-full outline-none" /></td>
+                                <td className="px-2 py-1"><input value={l.conditionnement} onChange={e => updatePreviewLigne(idx, li, 'conditionnement', e.target.value)} className="bg-transparent text-gray-400 w-full outline-none" /></td>
+                                <td className="px-2 py-1"><input type="number" value={l.qte} onChange={e => updatePreviewLigne(idx, li, 'qte', Number(e.target.value))} className="bg-[#252830] border border-[#353840] rounded px-1 py-0.5 text-white text-center w-full outline-none" /></td>
+                                <td className="px-2 py-1"><input type="number" step="0.01" value={l.prixUnitaireHT} onChange={e => updatePreviewLigne(idx, li, 'prixUnitaireHT', Number(e.target.value))} className="bg-[#252830] border border-[#353840] rounded px-1 py-0.5 text-white text-right w-full outline-none" /></td>
+                                <td className="px-2 py-1 text-right text-gray-300">{(l.totalLigneHT || l.qte * l.prixUnitaireHT).toFixed(2)}</td>
+                                <td className="px-1 py-1"><button onClick={() => removePreviewLigne(idx, li)} className="text-gray-600 hover:text-red-400"><Trash2 size={12} /></button></td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+
+                  {pv.texteBrut && (
+                    <div>
+                      <button onClick={() => setShowBrut(!showBrut)} className="flex items-center gap-1 text-[10px] text-gray-500 hover:text-gray-300">
+                        <Eye size={10} /> {showBrut ? 'Masquer' : 'Voir'} texte brut extrait
+                      </button>
+                      {showBrut && (
+                        <pre className="mt-2 bg-[#0f1117] border border-[#2a2d35] rounded-lg p-3 text-[10px] text-gray-400 max-h-40 overflow-auto whitespace-pre-wrap">{pv.texteBrut}</pre>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            <div className="flex gap-2 pt-2">
+              <button onClick={confirmImport} disabled={previews.filter((p, i) => !excluded.has(i) && p.lignes.length > 0).length === 0}
+                className="flex items-center gap-1.5 px-4 py-2 bg-green-600 hover:bg-green-500 disabled:bg-green-600/30 disabled:text-green-400/50 text-white text-xs font-semibold rounded-lg transition-colors">
+                <Download size={14} /> Importer {previews.filter((p, i) => !excluded.has(i)).length} facture{previews.filter((_, i) => !excluded.has(i)).length > 1 ? 's' : ''}
               </button>
-              {showBrut && (
-                <pre className="mt-2 bg-[#0f1117] border border-[#2a2d35] rounded-lg p-3 text-[10px] text-gray-400 max-h-40 overflow-auto whitespace-pre-wrap">{preview.texteBrut}</pre>
-              )}
+              <button onClick={() => { setImportMode(false); setPreviews([]); setParseError(null); }} className="px-4 py-2 text-xs text-gray-400 hover:text-white">Annuler</button>
             </div>
-          )}
-
-          <div className="flex gap-2 pt-2">
-            <button onClick={confirmImport} disabled={preview.lignes.length === 0}
-              className="flex items-center gap-1.5 px-4 py-2 bg-green-600 hover:bg-green-500 disabled:bg-green-600/30 disabled:text-green-400/50 text-white text-xs font-semibold rounded-lg transition-colors">
-              <Download size={14} /> Importer {preview.lignes.length} ligne{preview.lignes.length > 1 ? 's' : ''}
-            </button>
-            <button onClick={() => { setImportMode(false); setPreview(null); setParseError(null); }} className="px-4 py-2 text-xs text-gray-400 hover:text-white">Annuler</button>
-          </div>
           </>
           )}
 
-          {!parsing && !preview && !parseError && (
+          {!parsing && previews.length === 0 && !parseError && (
             <div className="text-center py-6">
               <p className="text-sm text-gray-400 mb-3">Selectionnez un fichier PDF</p>
               <button onClick={() => fileRef.current?.click()} className="px-4 py-2 bg-green-600 hover:bg-green-500 text-white text-xs font-semibold rounded-lg">
