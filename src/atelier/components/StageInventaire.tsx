@@ -1,10 +1,11 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { categoriserArticle, CATEGORIES } from '../categorisation';
 import { DotationPostes } from './DotationPostes';
 import { ProgressionStage } from './ProgressionStage';
 import { DEMO_VITRAGES, type VitrageFacture } from '../vitrageAnalyse';
 import { useApiState } from '../../useApiState';
-import { ArrowLeft, FileText, ClipboardList, CheckSquare, BarChart3, TrendingUp, Layers, AlertTriangle, ClipboardCheck, Briefcase, MessageCircle, Upload, Download, Plus, Search, Trash2, Sparkles, X, Send } from 'lucide-react';
+import { parseFacturePDF, type FactureParsed } from '../pdfFactureParser';
+import { ArrowLeft, FileText, ClipboardList, CheckSquare, BarChart3, TrendingUp, Layers, AlertTriangle, ClipboardCheck, Briefcase, MessageCircle, Upload, Download, Plus, Search, Trash2, Sparkles, X, Send, FileUp, Eye } from 'lucide-react';
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -326,11 +327,177 @@ export function StageInventaire({ onBack }: Props) {
 
 // ── Tab Factures ─────────────────────────────────────────────────────
 
+const FOURNISSEURS_CONNUS = [
+  'Kawneer', 'Rehau', 'Ferco', 'Wurth', 'PRO Equipe', 'Foussier',
+  'Boschat Laveix', 'Rey', 'Nerfs', 'Saint-Gobain', 'Somfy',
+  'Hoppe', 'Sika', 'Vitrage Insulaire', 'Autre',
+];
+
 function TabFactures({ factures, consolidated, onUpdate }: { factures: Facture[]; consolidated: RefConsolidee[]; onUpdate: (f: Facture[]) => void }) {
   const [viewMode, setViewMode] = useState<'factures' | 'consolidee'>('consolidee');
+  const [importMode, setImportMode] = useState(false);
+  const [parsing, setParsing] = useState(false);
+  const [parseError, setParseError] = useState<string | null>(null);
+  const [preview, setPreview] = useState<FactureParsed | null>(null);
+  const [showBrut, setShowBrut] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith('.pdf')) { setParseError('Fichier PDF requis'); return; }
+    setParsing(true);
+    setParseError(null);
+    setPreview(null);
+    try {
+      const result = await parseFacturePDF(file);
+      setPreview(result);
+      if (result.lignes.length === 0) setParseError('Aucune ligne detectee automatiquement. Vous pouvez ajouter les lignes manuellement ci-dessous.');
+    } catch (err: unknown) {
+      setParseError(err instanceof Error ? err.message : 'Erreur de lecture du PDF');
+    } finally {
+      setParsing(false);
+      if (fileRef.current) fileRef.current.value = '';
+    }
+  };
+
+  const updatePreviewField = (field: keyof FactureParsed, value: string) => {
+    if (preview) setPreview({ ...preview, [field]: value });
+  };
+
+  const updatePreviewLigne = (index: number, field: string, value: string | number) => {
+    if (!preview) return;
+    const lignes = [...preview.lignes];
+    lignes[index] = { ...lignes[index], [field]: value };
+    setPreview({ ...preview, lignes });
+  };
+
+  const addPreviewLigne = () => {
+    if (!preview) return;
+    setPreview({ ...preview, lignes: [...preview.lignes, { ref: '', designation: '', coloris: '', conditionnement: '', qte: 1, prixUnitaireHT: 0, totalLigneHT: 0 }] });
+  };
+
+  const removePreviewLigne = (index: number) => {
+    if (!preview) return;
+    setPreview({ ...preview, lignes: preview.lignes.filter((_, i) => i !== index) });
+  };
+
+  const confirmImport = () => {
+    if (!preview || preview.lignes.length === 0) return;
+    const newFacture: Facture = {
+      id: `F-${Date.now()}`,
+      fournisseur: preview.fournisseur || 'Inconnu',
+      dateFacture: preview.dateFacture || new Date().toISOString().slice(0, 10),
+      numFacture: preview.numFacture || `IMP-${Date.now().toString(36).toUpperCase()}`,
+      lignes: preview.lignes.map(l => ({ ...l, totalLigneHT: l.totalLigneHT || l.qte * l.prixUnitaireHT })),
+    };
+    onUpdate([...factures, newFacture]);
+    setPreview(null);
+    setImportMode(false);
+  };
+
+  const handleManualCreate = () => {
+    setPreview({ fournisseur: '', dateFacture: new Date().toISOString().slice(0, 10), numFacture: '', lignes: [], texteBrut: '' });
+    setImportMode(true);
+  };
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
+      {/* Import Preview Modal */}
+      {importMode && preview && (
+        <div className="bg-[#181a20] border-2 border-green-500/40 rounded-xl p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold text-green-400">Import facture — Verification</h3>
+            <button onClick={() => { setImportMode(false); setPreview(null); }} className="text-gray-500 hover:text-white"><X size={16} /></button>
+          </div>
+
+          {parseError && (
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2 text-xs text-amber-400">{parseError}</div>
+          )}
+
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="block text-[10px] text-gray-500 mb-1">Fournisseur</label>
+              <select value={preview.fournisseur} onChange={e => updatePreviewField('fournisseur', e.target.value)}
+                className="w-full px-2.5 py-1.5 bg-[#0f1117] border border-[#2a2d35] rounded-lg text-xs text-white outline-none focus:border-green-500/50">
+                <option value="">— Selectionner —</option>
+                {FOURNISSEURS_CONNUS.map(f => <option key={f} value={f}>{f}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] text-gray-500 mb-1">N. facture</label>
+              <input value={preview.numFacture} onChange={e => updatePreviewField('numFacture', e.target.value)}
+                className="w-full px-2.5 py-1.5 bg-[#0f1117] border border-[#2a2d35] rounded-lg text-xs text-white outline-none focus:border-green-500/50" />
+            </div>
+            <div>
+              <label className="block text-[10px] text-gray-500 mb-1">Date facture</label>
+              <input type="date" value={preview.dateFacture} onChange={e => updatePreviewField('dateFacture', e.target.value)}
+                className="w-full px-2.5 py-1.5 bg-[#0f1117] border border-[#2a2d35] rounded-lg text-xs text-white outline-none focus:border-green-500/50" />
+            </div>
+          </div>
+
+          {/* Lignes */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs text-gray-400">{preview.lignes.length} ligne{preview.lignes.length > 1 ? 's' : ''} detectee{preview.lignes.length > 1 ? 's' : ''}</span>
+              <button onClick={addPreviewLigne} className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300"><Plus size={12} /> Ajouter ligne</button>
+            </div>
+            {preview.lignes.length > 0 && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-[11px]">
+                  <thead>
+                    <tr className="border-b border-[#2a2d35] text-gray-500">
+                      <th className="text-left px-2 py-1.5">Ref</th>
+                      <th className="text-left px-2 py-1.5">Designation</th>
+                      <th className="text-left px-2 py-1.5 w-20">Coloris</th>
+                      <th className="text-left px-2 py-1.5 w-24">Condit.</th>
+                      <th className="text-center px-2 py-1.5 w-14">Qte</th>
+                      <th className="text-right px-2 py-1.5 w-20">PU HT</th>
+                      <th className="text-right px-2 py-1.5 w-20">Total HT</th>
+                      <th className="w-8"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {preview.lignes.map((l, i) => (
+                      <tr key={i} className="border-b border-[#2a2d35]/30">
+                        <td className="px-2 py-1"><input value={l.ref} onChange={e => updatePreviewLigne(i, 'ref', e.target.value)} className="bg-[#252830] border border-[#353840] rounded px-1.5 py-0.5 text-amber-400 w-full outline-none" /></td>
+                        <td className="px-2 py-1"><input value={l.designation} onChange={e => updatePreviewLigne(i, 'designation', e.target.value)} className="bg-transparent text-white w-full outline-none" /></td>
+                        <td className="px-2 py-1"><input value={l.coloris} onChange={e => updatePreviewLigne(i, 'coloris', e.target.value)} className="bg-transparent text-gray-400 w-full outline-none" /></td>
+                        <td className="px-2 py-1"><input value={l.conditionnement} onChange={e => updatePreviewLigne(i, 'conditionnement', e.target.value)} className="bg-transparent text-gray-400 w-full outline-none" /></td>
+                        <td className="px-2 py-1"><input type="number" value={l.qte} onChange={e => updatePreviewLigne(i, 'qte', Number(e.target.value))} className="bg-[#252830] border border-[#353840] rounded px-1 py-0.5 text-white text-center w-full outline-none" /></td>
+                        <td className="px-2 py-1"><input type="number" step="0.01" value={l.prixUnitaireHT} onChange={e => updatePreviewLigne(i, 'prixUnitaireHT', Number(e.target.value))} className="bg-[#252830] border border-[#353840] rounded px-1 py-0.5 text-white text-right w-full outline-none" /></td>
+                        <td className="px-2 py-1 text-right text-gray-300">{(l.totalLigneHT || l.qte * l.prixUnitaireHT).toFixed(2)}</td>
+                        <td className="px-1 py-1"><button onClick={() => removePreviewLigne(i)} className="text-gray-600 hover:text-red-400"><Trash2 size={12} /></button></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* Texte brut toggle */}
+          {preview.texteBrut && (
+            <div>
+              <button onClick={() => setShowBrut(!showBrut)} className="flex items-center gap-1 text-[10px] text-gray-500 hover:text-gray-300">
+                <Eye size={10} /> {showBrut ? 'Masquer' : 'Voir'} texte brut extrait
+              </button>
+              {showBrut && (
+                <pre className="mt-2 bg-[#0f1117] border border-[#2a2d35] rounded-lg p-3 text-[10px] text-gray-400 max-h-40 overflow-auto whitespace-pre-wrap">{preview.texteBrut}</pre>
+              )}
+            </div>
+          )}
+
+          <div className="flex gap-2 pt-2">
+            <button onClick={confirmImport} disabled={preview.lignes.length === 0}
+              className="flex items-center gap-1.5 px-4 py-2 bg-green-600 hover:bg-green-500 disabled:bg-green-600/30 disabled:text-green-400/50 text-white text-xs font-semibold rounded-lg transition-colors">
+              <Download size={14} /> Importer {preview.lignes.length} ligne{preview.lignes.length > 1 ? 's' : ''}
+            </button>
+            <button onClick={() => { setImportMode(false); setPreview(null); }} className="px-4 py-2 text-xs text-gray-400 hover:text-white">Annuler</button>
+          </div>
+        </div>
+      )}
+
       {/* Actions */}
       <div className="flex items-center justify-between">
         <div className="flex gap-2">
@@ -344,6 +511,15 @@ function TabFactures({ factures, consolidated, onUpdate }: { factures: Facture[]
           </button>
         </div>
         <div className="flex gap-2">
+          <input ref={fileRef} type="file" accept=".pdf" onChange={handleFileSelect} className="hidden" />
+          <button onClick={() => { setImportMode(true); fileRef.current?.click(); }} disabled={parsing}
+            className="flex items-center gap-1 px-3 py-1.5 text-xs bg-green-600/10 border border-green-500/30 text-green-400 rounded-lg hover:bg-green-600/20">
+            <FileUp size={12} /> {parsing ? 'Lecture PDF...' : 'Importer PDF'}
+          </button>
+          <button onClick={handleManualCreate}
+            className="flex items-center gap-1 px-3 py-1.5 text-xs bg-blue-600/10 border border-blue-500/30 text-blue-400 rounded-lg hover:bg-blue-600/20">
+            <Plus size={12} /> Saisie manuelle
+          </button>
           <button onClick={() => onUpdate(DEMO_FACTURES)} className="flex items-center gap-1 px-3 py-1.5 text-xs bg-amber-600/10 border border-amber-500/30 text-amber-400 rounded-lg">
             <Upload size={12} /> Charger demo
           </button>
