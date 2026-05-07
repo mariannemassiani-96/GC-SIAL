@@ -1,4 +1,4 @@
-const API_URL = import.meta.env.VITE_API_URL || 'https://groupe-vista.fr/api-sial';
+const API_URL = import.meta.env.VITE_API_URL || 'https://pro.groupe-vista.fr/api-sial';
 
 let token: string | null = localStorage.getItem('sial_token');
 
