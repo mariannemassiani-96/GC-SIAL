@@ -56,6 +56,9 @@ interface ArticleTerrain {
   statut: string;
   dateCreation: string;
   suggestionIA?: string;
+  niveauMinMaxPose: boolean;
+  etiquettePosee: boolean;
+  emplacementFutur: string;  // MAG/X/XX/X ou P/POSTE/N
 }
 
 interface Props { onBack: () => void; }
@@ -107,14 +110,14 @@ const DEMO_FACTURES: Facture[] = [
 ];
 
 const DEMO_ARTICLES: ArticleTerrain[] = [
-  { id: 'A1', ref: 'VA6338Z', designation: 'Vis autoforeuse 6.3x38 zinguee', famille: 'VISSERIE', sousFamille: 'Vis autoforeuse', fournisseur: 'Wurth', emplacement: 'Etagere 1 gauche', qte: 1200, unite: 'piece', note: 'Tres utilise, reappro frequent', zone5S: 'Zone A Visserie', emplacementOdoo: 'MAG/A/01/A', decisionStock: 'Stock permanent', seuilMin: 500, qteReappro: 1000, noteDecision: 'Kanban 2 boites', statut: 'Valide', dateCreation: '2026-03-15' },
-  { id: 'A2', ref: 'CR3P-ALU-BL', designation: 'Cremone 3 points ALU blanc', famille: 'QUINCAILLERIE', sousFamille: 'Cremone', fournisseur: 'Ferco', emplacement: 'Armoire 2', qte: 8, unite: 'piece', note: '', zone5S: 'Zone B Quincaillerie', emplacementOdoo: 'MAG/B/02/A', decisionStock: 'Stock securite', seuilMin: 5, qteReappro: 20, noteDecision: '', statut: 'Valide', dateCreation: '2026-03-15' },
-  { id: 'A3', ref: 'JB08GR', designation: 'Joint brosse gris 8mm', famille: 'JOINT', sousFamille: 'Joint brosse', fournisseur: 'Rehau', emplacement: 'Etagere 3', qte: 150, unite: 'metre', note: 'Mesure approximative', zone5S: 'Zone C Joints', emplacementOdoo: 'MAG/C/03/A', decisionStock: 'Stock permanent', seuilMin: 50, qteReappro: 200, noteDecision: '', statut: 'En cours', dateCreation: '2026-03-16' },
-  { id: 'A4', ref: 'CH850PVC', designation: 'Cheville PVC 8x50', famille: 'VISSERIE', sousFamille: 'Cheville', fournisseur: 'Wurth', emplacement: 'Etagere 1 droite', qte: 450, unite: 'piece', note: '', zone5S: 'Zone A Visserie', emplacementOdoo: 'MAG/A/01/B', decisionStock: 'Stock securite', seuilMin: 200, qteReappro: 500, noteDecision: '', statut: 'A traiter', dateCreation: '2026-03-17' },
-  { id: 'A5', ref: 'PO-ALU-AN', designation: 'Poignee olive ALU anodise', famille: 'ACCESSOIRE', sousFamille: 'Poignee', fournisseur: 'Hoppe', emplacement: 'Vitrine 1', qte: 15, unite: 'piece', note: 'Differentes tailles melangees', zone5S: 'Zone E Accessoires', emplacementOdoo: 'MAG/E/01/A', decisionStock: 'Commande a la demande', seuilMin: 0, qteReappro: 0, noteDecision: 'Commander par chantier', statut: 'A traiter', dateCreation: '2026-03-18' },
-  { id: 'A6', ref: 'E-19736-00', designation: 'Gache galet dormant 43mm', famille: 'QUINCAILLERIE', sousFamille: 'Gache', fournisseur: 'Ferco', emplacement: 'Bac 5', qte: 85, unite: 'piece', note: '', zone5S: 'Zone B Quincaillerie', emplacementOdoo: 'MAG/B/05/A', decisionStock: 'Stock permanent', seuilMin: 30, qteReappro: 100, noteDecision: '', statut: 'En cours', dateCreation: '2026-03-18' },
-  { id: 'A7', ref: '6-39148-20', designation: 'Compas OF axe 13mm', famille: 'QUINCAILLERIE', sousFamille: 'Compas', fournisseur: 'Ferco', emplacement: 'Casier 3', qte: 22, unite: 'piece', note: '', zone5S: 'Zone B Quincaillerie', emplacementOdoo: 'MAG/B/03/B', decisionStock: 'Stock securite', seuilMin: 10, qteReappro: 40, noteDecision: '', statut: 'A traiter', dateCreation: '2026-03-19' },
-  { id: 'A8', ref: 'EC-EPDM-10', designation: 'Equerre EPDM 10mm', famille: 'CONSOMMABLE', sousFamille: 'Equerre', fournisseur: 'Wurth', emplacement: 'Tiroir 7', qte: 0, unite: 'piece', note: 'Stock vide a verifier', zone5S: 'Zone D Consommables', emplacementOdoo: 'MAG/D/07/A', decisionStock: '', seuilMin: 0, qteReappro: 0, noteDecision: '', statut: 'A traiter', dateCreation: '2026-03-20' },
+  { id: 'A1', ref: 'VA6338Z', designation: 'Vis autoforeuse 6.3x38 zinguee', famille: 'VISSERIE', sousFamille: 'Vis autoforeuse', fournisseur: 'Wurth', emplacement: 'Etagere 1 gauche', qte: 1200, unite: 'piece', note: 'Tres utilise, reappro frequent', zone5S: 'Zone A Visserie', emplacementOdoo: 'MAG/A/01/A', decisionStock: 'Stock permanent', seuilMin: 500, qteReappro: 1000, noteDecision: 'Kanban 2 boites', statut: 'Valide', niveauMinMaxPose: false, etiquettePosee: false, emplacementFutur: '', dateCreation: '2026-03-15' },
+  { id: 'A2', ref: 'CR3P-ALU-BL', designation: 'Cremone 3 points ALU blanc', famille: 'QUINCAILLERIE', sousFamille: 'Cremone', fournisseur: 'Ferco', emplacement: 'Armoire 2', qte: 8, unite: 'piece', note: '', zone5S: 'Zone B Quincaillerie', emplacementOdoo: 'MAG/B/02/A', decisionStock: 'Stock securite', seuilMin: 5, qteReappro: 20, noteDecision: '', statut: 'Valide', niveauMinMaxPose: false, etiquettePosee: false, emplacementFutur: '', dateCreation: '2026-03-15' },
+  { id: 'A3', ref: 'JB08GR', designation: 'Joint brosse gris 8mm', famille: 'JOINT', sousFamille: 'Joint brosse', fournisseur: 'Rehau', emplacement: 'Etagere 3', qte: 150, unite: 'metre', note: 'Mesure approximative', zone5S: 'Zone C Joints', emplacementOdoo: 'MAG/C/03/A', decisionStock: 'Stock permanent', seuilMin: 50, qteReappro: 200, noteDecision: '', statut: 'En cours', niveauMinMaxPose: false, etiquettePosee: false, emplacementFutur: '', dateCreation: '2026-03-16' },
+  { id: 'A4', ref: 'CH850PVC', designation: 'Cheville PVC 8x50', famille: 'VISSERIE', sousFamille: 'Cheville', fournisseur: 'Wurth', emplacement: 'Etagere 1 droite', qte: 450, unite: 'piece', note: '', zone5S: 'Zone A Visserie', emplacementOdoo: 'MAG/A/01/B', decisionStock: 'Stock securite', seuilMin: 200, qteReappro: 500, noteDecision: '', statut: 'A traiter', niveauMinMaxPose: false, etiquettePosee: false, emplacementFutur: '', dateCreation: '2026-03-17' },
+  { id: 'A5', ref: 'PO-ALU-AN', designation: 'Poignee olive ALU anodise', famille: 'ACCESSOIRE', sousFamille: 'Poignee', fournisseur: 'Hoppe', emplacement: 'Vitrine 1', qte: 15, unite: 'piece', note: 'Differentes tailles melangees', zone5S: 'Zone E Accessoires', emplacementOdoo: 'MAG/E/01/A', decisionStock: 'Commande a la demande', seuilMin: 0, qteReappro: 0, noteDecision: 'Commander par chantier', statut: 'A traiter', niveauMinMaxPose: false, etiquettePosee: false, emplacementFutur: '', dateCreation: '2026-03-18' },
+  { id: 'A6', ref: 'E-19736-00', designation: 'Gache galet dormant 43mm', famille: 'QUINCAILLERIE', sousFamille: 'Gache', fournisseur: 'Ferco', emplacement: 'Bac 5', qte: 85, unite: 'piece', note: '', zone5S: 'Zone B Quincaillerie', emplacementOdoo: 'MAG/B/05/A', decisionStock: 'Stock permanent', seuilMin: 30, qteReappro: 100, noteDecision: '', statut: 'En cours', niveauMinMaxPose: false, etiquettePosee: false, emplacementFutur: '', dateCreation: '2026-03-18' },
+  { id: 'A7', ref: '6-39148-20', designation: 'Compas OF axe 13mm', famille: 'QUINCAILLERIE', sousFamille: 'Compas', fournisseur: 'Ferco', emplacement: 'Casier 3', qte: 22, unite: 'piece', note: '', zone5S: 'Zone B Quincaillerie', emplacementOdoo: 'MAG/B/03/B', decisionStock: 'Stock securite', seuilMin: 10, qteReappro: 40, noteDecision: '', statut: 'A traiter', niveauMinMaxPose: false, etiquettePosee: false, emplacementFutur: '', dateCreation: '2026-03-19' },
+  { id: 'A8', ref: 'EC-EPDM-10', designation: 'Equerre EPDM 10mm', famille: 'CONSOMMABLE', sousFamille: 'Equerre', fournisseur: 'Wurth', emplacement: 'Tiroir 7', qte: 0, unite: 'piece', note: 'Stock vide a verifier', zone5S: 'Zone D Consommables', emplacementOdoo: 'MAG/D/07/A', decisionStock: '', seuilMin: 0, qteReappro: 0, noteDecision: '', statut: 'A traiter', niveauMinMaxPose: false, etiquettePosee: false, emplacementFutur: '', dateCreation: '2026-03-20' },
 ];
 
 // ── Helpers ───────────────────────────────────────────────────────────
@@ -204,6 +207,7 @@ export function StageInventaire({ onBack }: Props) {
       id: uid(), ref: '', designation: '', famille: 'VISSERIE', sousFamille: '', fournisseur: '',
       emplacement: '', qte: 0, unite: 'piece', note: '', zone5S: '', emplacementOdoo: '',
       decisionStock: '', seuilMin: 0, qteReappro: 0, noteDecision: '', statut: 'A traiter',
+      niveauMinMaxPose: false, etiquettePosee: false, emplacementFutur: '',
       dateCreation: new Date().toISOString().slice(0, 10),
     };
     updateArticles([newArt, ...articles]);
