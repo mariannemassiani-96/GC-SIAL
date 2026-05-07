@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { categoriserArticle, CATEGORIES } from '../categorisation';
 import { DotationPostes } from './DotationPostes';
+import { ProgressionStage } from './ProgressionStage';
 import { DEMO_VITRAGES, type VitrageFacture } from '../vitrageAnalyse';
 import { ArrowLeft, FileText, ClipboardList, CheckSquare, BarChart3, TrendingUp, Layers, AlertTriangle, ClipboardCheck, Briefcase, MessageCircle, Upload, Download, Plus, Search, Trash2, Sparkles, X, Send } from 'lucide-react';
 
@@ -605,6 +606,9 @@ function TabDashboard({ articles, consolidated, factures }: { articles: ArticleT
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
+      {/* Progression S1-S8 */}
+      <ProgressionStage />
+
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <KPI label="Articles recenses" value={articles.length} color="text-white" />
