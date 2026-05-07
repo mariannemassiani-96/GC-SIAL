@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import type { FicheMontage, FercoPiece } from '../types';
 import { DEMO_FICHE } from '../types';
 import { ArrowLeft, ScanBarcode, CheckCircle2, RotateCcw, Keyboard, Upload, Database } from 'lucide-react';
+import { useApiState } from '../../useApiState';
 
 interface SmartAssemblyProps {
   onBack: () => void;
@@ -18,14 +19,13 @@ export function SmartAssembly({ onBack }: SmartAssemblyProps) {
   const [statJour, setStatJour] = useState(0);
   const scanRef = useRef<HTMLInputElement>(null);
 
-  // ── Stocker les fiches en localStorage ──
-  const getDB = useCallback((): Record<string, FicheMontage> => {
-    try { return JSON.parse(localStorage.getItem('sial-assembly-db') ?? '{}'); } catch { return {}; }
-  }, []);
+  const [assemblyDB, setAssemblyDB] = useApiState<Record<string, FicheMontage>>('assembly', 'fiches', 'sial-assembly-db', {});
+
+  const getDB = useCallback((): Record<string, FicheMontage> => assemblyDB, [assemblyDB]);
 
   const saveDB = useCallback((db: Record<string, FicheMontage>) => {
-    localStorage.setItem('sial-assembly-db', JSON.stringify(db));
-  }, []);
+    setAssemblyDB(db);
+  }, [setAssemblyDB]);
 
   // ── Focus auto sur l'input scanner ──
   useEffect(() => {

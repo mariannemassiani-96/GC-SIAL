@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { ArrowLeft, Truck, Package, ScanBarcode, Check, MapPin, Phone, AlertTriangle, Pen } from 'lucide-react';
 import { DEMO_TOURNEE, getOrdreChargement, getOrdreLivraison, getTotalPoids, getStatutTournee } from '../livraisonTypes';
 import type { Tournee, CommandeClient, MenuiserieLivraison, SignatureLivraison } from '../livraisonTypes';
+import { useApiState } from '../../useApiState';
 
 interface Props { onBack: () => void; }
 
@@ -9,13 +10,8 @@ type Ecran = 'tournees' | 'preparation' | 'chargement' | 'livraison' | 'signatur
 
 const STORAGE_KEY = 'sial_livraisons';
 
-function loadTournees(): Tournee[] {
-  try { const raw = localStorage.getItem(STORAGE_KEY); return raw ? JSON.parse(raw) : [DEMO_TOURNEE]; } catch { return [DEMO_TOURNEE]; }
-}
-function saveTournees(t: Tournee[]) { localStorage.setItem(STORAGE_KEY, JSON.stringify(t)); }
-
 export function PreparationLivraison({ onBack }: Props) {
-  const [tournees, setTournees] = useState<Tournee[]>(loadTournees);
+  const [tournees, setTournees] = useApiState<Tournee[]>('livraison', 'tournees', STORAGE_KEY, [DEMO_TOURNEE]);
   const [ecran, setEcran] = useState<Ecran>('tournees');
   const [tourneeActiveId, setTourneeActiveId] = useState<string | null>(null);
   const [commandeActiveId, setCommandeActiveId] = useState<string | null>(null);
@@ -25,7 +21,7 @@ export function PreparationLivraison({ onBack }: Props) {
   const tourneeActive = tournees.find(t => t.id === tourneeActiveId) ?? null;
   const commandeActive = tourneeActive?.commandes.find(c => c.id === commandeActiveId) ?? null;
 
-  const persist = useCallback((next: Tournee[]) => { setTournees(next); saveTournees(next); }, []);
+  const persist = useCallback((next: Tournee[]) => { setTournees(next); }, [setTournees]);
 
   const updateMenuiserieStatut = useCallback((tourneeId: string, menuiserieId: string, statut: MenuiserieLivraison['statut']) => {
     const next = tournees.map(t => t.id === tourneeId ? {

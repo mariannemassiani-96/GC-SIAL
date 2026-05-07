@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { ArrowLeft, Upload, Check, Search, ChevronDown, ChevronRight, Scissors, Package } from 'lucide-react';
 import { v4 as uid } from 'uuid';
+import { useApiState } from '../../useApiState';
 
 interface Props { onBack: () => void; }
 
@@ -43,10 +44,6 @@ const PROFIL_COLORS: Record<string, string> = {
   '180020': '#c84b7a', '180030': '#7a4bc8', '180040': '#c87a4b',
 };
 
-function loadOrdres(): OrdreCoupe[] {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '[]'); } catch { return []; }
-}
-function saveOrdres(o: OrdreCoupe[]) { localStorage.setItem(STORAGE_KEY, JSON.stringify(o)); }
 
 // ── Données démo ─────────────────────────────────────────────────────
 
@@ -97,14 +94,11 @@ const DEMO: OrdreCoupe[] = [{
 // ── Composant principal ──────────────────────────────────────────────
 
 export function PosteCoupe({ onBack }: Props) {
-  const [ordres, setOrdres] = useState<OrdreCoupe[]>(() => {
-    const saved = loadOrdres();
-    return saved.length > 0 ? saved : DEMO;
-  });
+  const [ordres, setOrdres] = useApiState<OrdreCoupe[]>('coupe', 'ordres', STORAGE_KEY, DEMO);
   const [selectedOrdreId, setSelectedOrdreId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
 
-  const persist = useCallback((next: OrdreCoupe[]) => { setOrdres(next); saveOrdres(next); }, []);
+  const persist = useCallback((next: OrdreCoupe[]) => { setOrdres(next); }, [setOrdres]);
 
   const selectedOrdre = ordres.find(o => o.id === selectedOrdreId) ?? null;
 

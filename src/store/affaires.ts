@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import type { Affaire, Travee, TraveeConfig } from '../types';
+import { useApiState } from '../useApiState';
 
 const STORAGE_KEY = 'sial-gc-affaires';
 
@@ -15,18 +16,6 @@ const DEFAULT_CONFIG: TraveeConfig = {
   fixD: 'libre',
   hauteur: 1050,
 };
-
-function loadAffaires(): Affaire[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw) as Affaire[];
-      // Migration: old format had config on Affaire, not on Travee
-      return parsed.map(migrateAffaire);
-    }
-  } catch { /* ignore */ }
-  return [];
-}
 
 /** Migrate old format (config on Affaire) to new format (config on Travee) */
 function migrateAffaire(a: any): Affaire {
@@ -74,10 +63,6 @@ function migrateAffaire(a: any): Affaire {
   };
 }
 
-function saveAffaires(affaires: Affaire[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(affaires));
-}
-
 export function createEmptyAffaire(): Affaire {
   const now = new Date();
   const year = now.getFullYear();
@@ -121,11 +106,8 @@ export function duplicateTravee(source: Travee, newIndex: number): Travee {
 }
 
 export function useAffaires() {
-  const [affaires, setAffaires] = useState<Affaire[]>(loadAffaires);
-
-  useEffect(() => {
-    saveAffaires(affaires);
-  }, [affaires]);
+  const [rawAffaires, setAffaires] = useApiState<Affaire[]>('gc', 'affaires', STORAGE_KEY, []);
+  const affaires = rawAffaires.map(migrateAffaire);
 
   const addAffaire = useCallback((affaire?: Affaire) => {
     const newAffaire = affaire ?? createEmptyAffaire();

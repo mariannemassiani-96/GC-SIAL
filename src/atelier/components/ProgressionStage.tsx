@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { Check } from 'lucide-react';
+import { useApiState } from '../../useApiState';
 
 const STORAGE_KEY = 'sial-progression-s1s8';
 
@@ -77,19 +78,12 @@ const PROGRAMME: SemaineTache[] = [
   ]},
 ];
 
-function loadProgression(): Record<string, boolean> {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}'); } catch { return {}; }
-}
-function saveProgression(p: Record<string, boolean>) { localStorage.setItem(STORAGE_KEY, JSON.stringify(p)); }
-
 export function ProgressionStage() {
-  const [checked, setChecked] = useState<Record<string, boolean>>(loadProgression);
+  const [checked, setChecked] = useApiState<Record<string, boolean>>('stock', 'progression', STORAGE_KEY, {});
 
   const toggle = useCallback((key: string) => {
-    const next = { ...checked, [key]: !checked[key] };
-    setChecked(next);
-    saveProgression(next);
-  }, [checked]);
+    setChecked((prev: Record<string, boolean>) => ({ ...prev, [key]: !prev[key] }));
+  }, [setChecked]);
 
   const totalTaches = PROGRAMME.reduce((s, sem) => s + sem.taches.length, 0);
   const totalFaites = Object.values(checked).filter(Boolean).length;

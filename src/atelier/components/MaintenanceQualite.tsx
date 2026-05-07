@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { ArrowLeft, Plus,  Settings, Wrench, CheckSquare, BarChart3, Trash2, ChevronDown, AlertTriangle, Star } from 'lucide-react';
 import { v4 as uid } from 'uuid';
+import { useApiState } from '../../useApiState';
 
 interface Props { onBack: () => void; }
 
@@ -99,8 +100,6 @@ const SK = {
   nc: 'sial-mq-nc',
 };
 
-function ld<T>(key: string, fb: T): T { try { return JSON.parse(localStorage.getItem(key) ?? 'null') ?? fb; } catch { return fb; } }
-function sv<T>(key: string, d: T) { localStorage.setItem(key, JSON.stringify(d)); }
 
 function getCriticite(m: Machine): { score: number; niveau: string; couleur: string } {
   const s = m.scoreUsage + m.scoreImpact + m.scoreCout;
@@ -139,17 +138,17 @@ const DEMO_NC: NonConformite[] = [
 
 export function MaintenanceQualite({ onBack }: Props) {
   const [tab, setTab] = useState<Tab>('machines');
-  const [machines, setMachines] = useState<Machine[]>(() => ld(SK.machines, DEMO_MACHINES));
-  const [operations, setOperations] = useState<OperationMaint[]>(() => ld(SK.operations, []));
-  const [interventions, setInterventions] = useState<Intervention[]>(() => ld(SK.interventions, []));
-  const [postes, setPostes] = useState<PosteQualite[]>(() => ld(SK.postes, DEMO_POSTES));
-  const [ncs, setNcs] = useState<NonConformite[]>(() => ld(SK.nc, DEMO_NC));
+  const [machines, setMachines] = useApiState<Machine[]>('maintenance', 'machines', SK.machines, DEMO_MACHINES);
+  const [operations, setOperations] = useApiState<OperationMaint[]>('maintenance', 'operations', SK.operations, []);
+  const [interventions, setInterventions] = useApiState<Intervention[]>('maintenance', 'interventions', SK.interventions, []);
+  const [postes, setPostes] = useApiState<PosteQualite[]>('maintenance', 'postes', SK.postes, DEMO_POSTES);
+  const [ncs, setNcs] = useApiState<NonConformite[]>('maintenance', 'nc', SK.nc, DEMO_NC);
 
-  const savM = useCallback((n: Machine[]) => { setMachines(n); sv(SK.machines, n); }, []);
-  const savO = useCallback((n: OperationMaint[]) => { setOperations(n); sv(SK.operations, n); }, []);
-  const savI = useCallback((n: Intervention[]) => { setInterventions(n); sv(SK.interventions, n); }, []);
-  const savP = useCallback((n: PosteQualite[]) => { setPostes(n); sv(SK.postes, n); }, []);
-  const savN = useCallback((n: NonConformite[]) => { setNcs(n); sv(SK.nc, n); }, []);
+  const savM = useCallback((n: Machine[]) => { setMachines(n); }, [setMachines]);
+  const savO = useCallback((n: OperationMaint[]) => { setOperations(n); }, [setOperations]);
+  const savI = useCallback((n: Intervention[]) => { setInterventions(n); }, [setInterventions]);
+  const savP = useCallback((n: PosteQualite[]) => { setPostes(n); }, [setPostes]);
+  const savN = useCallback((n: NonConformite[]) => { setNcs(n); }, [setNcs]);
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: 'machines', label: 'Machines', icon: <Settings size={14} /> },

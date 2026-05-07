@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import type { Plan, Objet, ObjetType, Contrainte, Flux, NiveauId } from './types';
 import { CATALOG } from './catalog';
+import { useApiState } from '../useApiState';
 
 const STORAGE_KEY = 'sial-workshop-plans';
 
@@ -52,22 +53,6 @@ function migratePlan(p: any): Plan {
   };
 }
 
-function loadPlans(): Plan[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      return (parsed as any[]).map(migratePlan);
-    }
-  } catch {
-    /* ignore */
-  }
-  return [];
-}
-
-function savePlans(plans: Plan[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(plans));
-}
 
 export function createEmptyPlan(nom = 'Nouveau site'): Plan {
   // Site 50×30m, bâtiment 30×20m centré
@@ -129,22 +114,8 @@ export function createFlux(from: string, to: string, debit = 100): Flux {
 import type { Preset } from './presets';
 const CUSTOM_PRESETS_KEY = 'sial-workshop-custom-presets';
 
-function loadCustomPresets(): Preset[] {
-  try {
-    const raw = localStorage.getItem(CUSTOM_PRESETS_KEY);
-    if (raw) return JSON.parse(raw) as Preset[];
-  } catch {
-    /* ignore */
-  }
-  return [];
-}
-
 export function useCustomPresets() {
-  const [customs, setCustoms] = useState<Preset[]>(loadCustomPresets);
-
-  useEffect(() => {
-    localStorage.setItem(CUSTOM_PRESETS_KEY, JSON.stringify(customs));
-  }, [customs]);
+  const [customs, setCustoms] = useApiState<Preset[]>('workshop', 'presets', CUSTOM_PRESETS_KEY, []);
 
   const addCustom = useCallback((p: Preset) => {
     setCustoms((prev) => [p, ...prev.filter((x) => x.nom !== p.nom)]);
@@ -158,11 +129,8 @@ export function useCustomPresets() {
 }
 
 export function usePlans() {
-  const [plans, setPlans] = useState<Plan[]>(loadPlans);
-
-  useEffect(() => {
-    savePlans(plans);
-  }, [plans]);
+  const [rawPlans, setPlans] = useApiState<Plan[]>('workshop', 'plans', STORAGE_KEY, []);
+  const plans = rawPlans.map(migratePlan);
 
   const addPlan = useCallback((plan?: Plan) => {
     const p = plan ?? createEmptyPlan();

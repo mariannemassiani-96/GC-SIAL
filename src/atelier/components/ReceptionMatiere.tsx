@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { ArrowLeft, Plus, Search, Truck, Check, AlertTriangle, Download, Trash2 } from 'lucide-react';
 import { v4 as uid } from 'uuid';
+import { useApiState } from '../../useApiState';
 
 interface Props { onBack: () => void; }
 
@@ -43,10 +44,6 @@ const FOURNISSEURS = [
 
 const STORAGE_KEY = 'sial-receptions';
 
-function loadReceptions(): ReceptionLivraison[] {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '[]'); } catch { return []; }
-}
-function saveReceptions(r: ReceptionLivraison[]) { localStorage.setItem(STORAGE_KEY, JSON.stringify(r)); }
 
 // ── Données démo ─────────────────────────────────────────────────────
 
@@ -75,17 +72,14 @@ const DEMO: ReceptionLivraison[] = [
 // ── Composant principal ──────────────────────────────────────────────
 
 export function ReceptionMatiere({ onBack }: Props) {
-  const [receptions, setReceptions] = useState<ReceptionLivraison[]>(() => {
-    const saved = loadReceptions();
-    return saved.length > 0 ? saved : DEMO;
-  });
+  const [receptions, setReceptions] = useApiState<ReceptionLivraison[]>('reception', 'livraisons', STORAGE_KEY, DEMO);
   const [view, setView] = useState<'liste' | 'nouvelle' | 'detail'>('liste');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
 
   const persist = useCallback((next: ReceptionLivraison[]) => {
-    setReceptions(next); saveReceptions(next);
-  }, []);
+    setReceptions(next);
+  }, [setReceptions]);
 
   const selected = receptions.find(r => r.id === selectedId) ?? null;
 

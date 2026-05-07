@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { Plus, Trash2, ChevronDown, Search, Download } from 'lucide-react';
 import { v4 as uid } from 'uuid';
+import { useApiState } from '../../useApiState';
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -33,10 +34,6 @@ const STATUT_LABELS: Record<string, { label: string; color: string }> = {
 
 const STORAGE_KEY = 'sial-dotations-postes';
 
-function loadPostes(): PosteTravail[] {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null') ?? DEMO_POSTES; } catch { return DEMO_POSTES; }
-}
-function savePostes(p: PosteTravail[]) { localStorage.setItem(STORAGE_KEY, JSON.stringify(p)); }
 
 // ── Données démo ─────────────────────────────────────────────────────
 
@@ -82,12 +79,12 @@ interface DotationPostesProps {
 }
 
 export function DotationPostes({ postes: externalPostes, onUpdate: externalUpdate }: DotationPostesProps) {
-  const [internalPostes, setInternalPostes] = useState<PosteTravail[]>(loadPostes);
+  const [internalPostes, setInternalPostes] = useApiState<PosteTravail[]>('stock', 'dotations', STORAGE_KEY, DEMO_POSTES);
   const postes = externalPostes ?? internalPostes;
   const setPostes = useCallback((next: PosteTravail[]) => {
     if (externalUpdate) externalUpdate(next);
-    else { setInternalPostes(next); savePostes(next); }
-  }, [externalUpdate]);
+    else setInternalPostes(next);
+  }, [externalUpdate, setInternalPostes]);
 
   const [selPosteId, setSelPosteId] = useState<string | null>(null);
   const [search, setSearch] = useState('');

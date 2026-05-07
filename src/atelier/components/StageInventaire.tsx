@@ -3,6 +3,7 @@ import { categoriserArticle, CATEGORIES } from '../categorisation';
 import { DotationPostes } from './DotationPostes';
 import { ProgressionStage } from './ProgressionStage';
 import { DEMO_VITRAGES, type VitrageFacture } from '../vitrageAnalyse';
+import { useApiState } from '../../useApiState';
 import { ArrowLeft, FileText, ClipboardList, CheckSquare, BarChart3, TrendingUp, Layers, AlertTriangle, ClipboardCheck, Briefcase, MessageCircle, Upload, Download, Plus, Search, Trash2, Sparkles, X, Send } from 'lucide-react';
 
 // ── Types ────────────────────────────────────────────────────────────
@@ -124,10 +125,6 @@ const DEMO_ARTICLES: ArticleTerrain[] = [
 
 // ── Helpers ───────────────────────────────────────────────────────────
 
-function loadData<T>(key: string, fallback: T): T {
-  try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : fallback; } catch { return fallback; }
-}
-function saveData<T>(key: string, data: T) { localStorage.setItem(key, JSON.stringify(data)); }
 
 function consoliderFactures(factures: Facture[]): RefConsolidee[] {
   const map = new Map<string, { lignes: (LigneFacture & { date: string; fournisseur: string })[] }>();
@@ -159,10 +156,10 @@ function uid() { return Date.now().toString(36) + Math.random().toString(36).sli
 
 export function StageInventaire({ onBack }: Props) {
   const [tab, setTab] = useState<Tab>('factures');
-  const [factures, setFactures] = useState<Facture[]>(() => loadData(STORAGE_FACTURES, DEMO_FACTURES));
-  const [articles, setArticles] = useState<ArticleTerrain[]>(() => loadData(STORAGE_ARTICLES, DEMO_ARTICLES));
-  const [vitrages] = useState<VitrageFacture[]>(() => loadData('sial_vitrages', DEMO_VITRAGES));
-  const [corrections, setCorrections] = useState<Record<string, string>>(() => loadData("sial_corrections", {}));
+  const [factures, setFactures] = useApiState<Facture[]>('stock', 'factures', STORAGE_FACTURES, DEMO_FACTURES);
+  const [articles, setArticles] = useApiState<ArticleTerrain[]>('stock', 'articles', STORAGE_ARTICLES, DEMO_ARTICLES);
+  const [vitrages] = useApiState<VitrageFacture[]>('stock', 'vitrages', 'sial_vitrages', DEMO_VITRAGES);
+  const [corrections, setCorrections] = useApiState<Record<string, string>>('stock', 'corrections', 'sial_corrections', {});
   const [showChat, setShowChat] = useState(false);
   const [chatMessages, setChatMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
   const [chatInput, setChatInput] = useState('');
@@ -170,22 +167,17 @@ export function StageInventaire({ onBack }: Props) {
 
   const consolidated = consoliderFactures(factures);
 
-
   const updateArticles = useCallback((next: ArticleTerrain[]) => {
     setArticles(next);
-    saveData(STORAGE_ARTICLES, next);
-  }, []);
+  }, [setArticles]);
 
   const updateFactures = useCallback((next: Facture[]) => {
     setFactures(next);
-    saveData(STORAGE_FACTURES, next);
-  }, []);
+  }, [setFactures]);
 
   const learnCategorie = useCallback((ref: string, categorie: string) => {
-    const next = { ...corrections, [ref]: categorie };
-    setCorrections(next);
-    saveData('sial_corrections', next);
-  }, [corrections]);
+    setCorrections((prev: Record<string, string>) => ({ ...prev, [ref]: categorie }));
+  }, [setCorrections]);
 
   // ── Chat IA ──
   const sendChat = useCallback(async () => {
