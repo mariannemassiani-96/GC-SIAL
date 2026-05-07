@@ -548,7 +548,7 @@ function TabFactures({ factures, consolidated, onUpdate, fournisseursExclus, onE
             <div className="flex gap-2 pt-2">
               <button onClick={confirmImport} disabled={previews.filter((p, i) => !excluded.has(i) && p.lignes.length > 0).length === 0}
                 className="flex items-center gap-1.5 px-4 py-2 bg-green-600 hover:bg-green-500 disabled:bg-green-600/30 disabled:text-green-400/50 text-white text-xs font-semibold rounded-lg transition-colors">
-                <Download size={14} /> Importer {previews.filter((p, i) => !excluded.has(i)).length} facture{previews.filter((_, i) => !excluded.has(i)).length > 1 ? 's' : ''}
+                <Download size={14} /> Importer {previews.filter((_, i) => !excluded.has(i)).length} facture{previews.filter((_, i) => !excluded.has(i)).length > 1 ? 's' : ''}
               </button>
               <button onClick={() => { setImportMode(false); setPreviews([]); setParseError(null); }} className="px-4 py-2 text-xs text-gray-400 hover:text-white">Annuler</button>
             </div>
