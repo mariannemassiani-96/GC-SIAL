@@ -14,7 +14,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     headers: headers(),
     body: body ? JSON.stringify(body) : undefined,
   });
-  if (res.status === 401) {
+  if (res.status === 401 && token) {
     token = null;
     localStorage.removeItem('sial_token');
     localStorage.removeItem('sial_user');
