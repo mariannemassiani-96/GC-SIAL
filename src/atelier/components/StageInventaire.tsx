@@ -474,11 +474,12 @@ function TabFactures({ factures, consolidated, onUpdate, fournisseursExclus, onE
                   <div className="grid grid-cols-3 gap-3">
                     <div>
                       <label className="block text-[10px] text-gray-500 mb-1">Fournisseur {pv.pages.length > 0 && <span className="text-gray-600">(p.{pv.pages.join(',')})</span>}</label>
-                      <select value={pv.fournisseur} onChange={e => updatePreviewField(idx, 'fournisseur', e.target.value)}
-                        className="w-full px-2.5 py-1.5 bg-[#0f1117] border border-[#2a2d35] rounded-lg text-xs text-white outline-none focus:border-green-500/50">
-                        <option value="">— Selectionner —</option>
-                        {FOURNISSEURS_CONNUS.map(f => <option key={f} value={f}>{f}</option>)}
-                      </select>
+                      <input list="fournisseurs-list" value={pv.fournisseur} onChange={e => updatePreviewField(idx, 'fournisseur', e.target.value)}
+                        placeholder="Saisir ou choisir..."
+                        className="w-full px-2.5 py-1.5 bg-[#0f1117] border border-[#2a2d35] rounded-lg text-xs text-white outline-none focus:border-green-500/50" />
+                      <datalist id="fournisseurs-list">
+                        {FOURNISSEURS_CONNUS.map(f => <option key={f} value={f} />)}
+                      </datalist>
                     </div>
                     <div>
                       <label className="block text-[10px] text-gray-500 mb-1">N. facture</label>

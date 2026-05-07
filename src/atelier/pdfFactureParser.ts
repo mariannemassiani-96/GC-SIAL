@@ -24,7 +24,7 @@ const FOURNISSEURS_PATTERNS: { nom: string; patterns: RegExp[] }[] = [
   { nom: 'Ferco', patterns: [/ferco/i, /g-u\s*ferco/i, /gretsch.unitas/i] },
   { nom: 'Rehau', patterns: [/rehau/i] },
   { nom: 'Kawneer', patterns: [/kawneer/i, /alcoa.*kawneer/i] },
-  { nom: 'PRO Equipe', patterns: [/pro\s*[ée]quipe/i, /pro\s*equipe/i] },
+  { nom: 'PRO Equipe', patterns: [/pro\s*[ée]quipe/i, /proequip/i] },
   { nom: 'Foussier', patterns: [/foussier/i] },
   { nom: 'Boschat Laveix', patterns: [/boschat/i, /laveix/i] },
   { nom: 'Rey', patterns: [/ets\s*rey/i, /rey\s*s\.?a/i] },
@@ -32,9 +32,43 @@ const FOURNISSEURS_PATTERNS: { nom: string; patterns: RegExp[] }[] = [
   { nom: 'Saint-Gobain', patterns: [/saint.gobain/i, /sglass/i] },
   { nom: 'Somfy', patterns: [/somfy/i] },
   { nom: 'Hoppe', patterns: [/hoppe/i] },
-  { nom: 'Sika', patterns: [/sika/i] },
-  { nom: 'Vitrage Insulaire', patterns: [/vitrage\s*insulaire/i] },
+  { nom: 'Sika', patterns: [/\bsika\b/i] },
+  { nom: 'Isula Vitrage', patterns: [/isula\s*vitrage/i, /vitrage\s*insulaire/i] },
+  { nom: 'Manitou', patterns: [/\bmanitou\b/i] },
+  { nom: 'Marcantoni', patterns: [/marcantoni/i] },
+  { nom: 'Synerglass', patterns: [/synerglass/i] },
 ];
+
+// Words that indicate a line is NOT an article
+const BLACKLIST_WORDS = [
+  /\bgreffe\b/i, /\btribunal\b/i, /\bcommerce\b/i, /\bsiret\b/i,
+  /\bsiren\b/i, /\bape\b/i, /\brcs\b/i, /\btva\s*intracom/i,
+  /\bn[°o]\s*tva/i, /\badresse\b/i, /\blivraison\b/i, /\bfacture\b.*n[°o]/i,
+  /\bpage\b/i, /\bclient\b/i, /\bbonlivraison\b/i, /\bbon\s*de\s*livraison/i,
+  /\btotal\s*(ht|ttc|tva)/i, /\bsous.total/i, /\bmontant/i,
+  /\bconditions\b/i, /\breglement\b/i, /\bpaiement\b/i, /\becheance\b/i,
+  /\biban\b/i, /\bbic\b/i, /\bbanque\b/i, /\bswift\b/i,
+  /\bdate\b.*\b(facture|emission|commande)\b/i,
+  /\breferences?\b.*\b(client|commande)\b/i, /\bvos\s*ref/i, /\bnos\s*ref/i,
+  /\bcode\s*postal/i, /\btel[:\s]/i, /\bfax\b/i, /\bemail\b/i, /\bwww\./i,
+  /\bcapital\b/i, /\bfondee?\b/i, /\bsociete\b/i,
+  /\bprotection\s*individuel/i, /\bhandling\b/i,
+  /^\s*date\s*$/i, /^\s*siret\s*$/i, /^\s*n[°o]\s*$/i,
+];
+
+function isBlacklisted(text: string): boolean {
+  return BLACKLIST_WORDS.some(p => p.test(text));
+}
+
+// A valid article ref typically has letters+numbers, not just words
+function isValidRef(ref: string): boolean {
+  if (ref.length < 3 || ref.length > 30) return false;
+  // Must contain at least one digit
+  if (!/\d/.test(ref)) return false;
+  // Must not be a common non-ref pattern
+  if (/^(page|date|siret|total|sous|tva|ht|ttc|net)\b/i.test(ref)) return false;
+  return true;
+}
 
 function detectFournisseur(text: string): string {
   for (const f of FOURNISSEURS_PATTERNS) {
@@ -59,7 +93,9 @@ function detectNumFacture(text: string): string {
   const patterns = [
     /(?:facture|invoice|fact\.?)\s*(?:n[°o.]?\s*)?[:\s]*([A-Z0-9][\w\-/]{3,20})/i,
     /(?:n[°o.]?\s*(?:de\s*)?(?:facture|fact))\s*[:\s]*([A-Z0-9][\w\-/]{3,20})/i,
-    /(?:BL|bon)\s*(?:n[°o.]?\s*)?[:\s]*([A-Z0-9][\w\-/]{3,20})/i,
+    /\b(ISULV\d{2}\s*\d+)\b/i,
+    /\b(FA[- ]?\d{4,})\b/i,
+    /\b(BL[- ]?\d{4,})\b/i,
   ];
   for (const p of patterns) {
     const m = text.match(p);
@@ -78,39 +114,53 @@ function parseLignes(text: string): LigneFactureParsed[] {
   const lignes: LigneFactureParsed[] = [];
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
 
-  const linePattern = /^([A-Z0-9][\w\-./]{2,20})\s+(.{10,80}?)\s+(\d+[.,]?\d*)\s+(\d+[.,]\d{2})\s+(\d+[.,]\d{2})\s*$/;
-
   for (const line of lines) {
-    const m = line.match(linePattern);
-    if (m) {
-      const ref = m[1].trim();
-      const designation = m[2].trim();
-      const qte = parseNumber(m[3]);
-      const pu = parseNumber(m[4]);
-      const total = parseNumber(m[5]);
-      if (qte > 0 && pu > 0) {
-        lignes.push({ ref, designation, coloris: '', conditionnement: '', qte, prixUnitaireHT: pu, totalLigneHT: total || qte * pu });
+    if (isBlacklisted(line)) continue;
+
+    // Pattern 1: REF DESIGNATION QTE PU_HT TOTAL_HT
+    const m1 = line.match(/^([A-Z0-9][\w\-./]{2,25})\s+(.{8,80}?)\s+(\d+[.,]?\d*)\s+(\d+[.,]\d{2})\s+(\d+[.,]\d{2})\s*$/);
+    if (m1 && isValidRef(m1[1]) && !isBlacklisted(m1[2])) {
+      const qte = parseNumber(m1[3]);
+      const pu = parseNumber(m1[4]);
+      const total = parseNumber(m1[5]);
+      if (qte > 0 && pu > 0.01 && qte <= 99999) {
+        lignes.push({ ref: m1[1].trim(), designation: m1[2].trim(), coloris: '', conditionnement: '', qte, prixUnitaireHT: pu, totalLigneHT: total || qte * pu });
+        continue;
+      }
+    }
+
+    // Pattern 2: REF DESIGNATION QTE PU (no total)
+    const m2 = line.match(/^([A-Z0-9][\w\-./]{2,25})\s+(.{8,80}?)\s+(\d+[.,]?\d*)\s+(\d+[.,]\d{2})\s*$/);
+    if (m2 && isValidRef(m2[1]) && !isBlacklisted(m2[2])) {
+      const qte = parseNumber(m2[3]);
+      const pu = parseNumber(m2[4]);
+      if (qte > 0 && pu > 0.01 && qte <= 99999) {
+        lignes.push({ ref: m2[1].trim(), designation: m2[2].trim(), coloris: '', conditionnement: '', qte, prixUnitaireHT: pu, totalLigneHT: qte * pu });
+        continue;
+      }
+    }
+
+    // Pattern 3: spaced tokens — REF ... numbers at end
+    const m3 = line.match(/^([A-Z0-9][\w\-./]{2,25})\s+(.+?)\s+(\d+[.,]?\d*)\s+(\d+[.,]\d{2})(?:\s+(\d+[.,]\d{2}))?\s*$/);
+    if (m3 && isValidRef(m3[1]) && !isBlacklisted(m3[2])) {
+      const des = m3[2].trim();
+      const qte = parseNumber(m3[3]);
+      const pu = parseNumber(m3[4]);
+      const total = m3[5] ? parseNumber(m3[5]) : qte * pu;
+      if (qte > 0 && pu > 0.01 && qte <= 99999 && des.length >= 5) {
+        lignes.push({ ref: m3[1].trim(), designation: des, coloris: '', conditionnement: '', qte, prixUnitaireHT: pu, totalLigneHT: total });
       }
     }
   }
 
-  if (lignes.length === 0) {
-    const loosePattern = /([A-Z0-9][\w\-./]{2,20})\s+(.{5,}?)\s+(\d+)\s+(\d+[.,]\d{2})/;
-    for (const line of lines) {
-      const m = line.match(loosePattern);
-      if (m) {
-        const ref = m[1].trim();
-        const des = m[2].trim();
-        const qte = parseNumber(m[3]);
-        const pu = parseNumber(m[4]);
-        if (qte > 0 && pu > 0 && des.length > 3) {
-          lignes.push({ ref, designation: des, coloris: '', conditionnement: '', qte, prixUnitaireHT: pu, totalLigneHT: qte * pu });
-        }
-      }
-    }
-  }
-
-  return lignes;
+  // Deduplicate by ref+designation
+  const seen = new Set<string>();
+  return lignes.filter(l => {
+    const key = `${l.ref}|${l.designation}|${l.qte}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 interface PageText { pageNum: number; text: string; }
@@ -153,7 +203,7 @@ export async function parseFacturePDF(file: File): Promise<FactureParsed[]> {
     }
   }
 
-  // Merge groups with unknown supplier ('') into previous group if exists
+  // Merge unknown-supplier groups into previous known group
   const merged: typeof groups = [];
   for (const g of groups) {
     if (g.fournisseur === '' && merged.length > 0) {
@@ -164,7 +214,7 @@ export async function parseFacturePDF(file: File): Promise<FactureParsed[]> {
   }
   const finalGroups = merged.length > 0 ? merged : groups;
 
-  return finalGroups.map(g => {
+  const results = finalGroups.map(g => {
     const fullText = g.pages.map(p => p.text).join('\n');
     return {
       fournisseur: g.fournisseur || '',
@@ -175,4 +225,7 @@ export async function parseFacturePDF(file: File): Promise<FactureParsed[]> {
       pages: g.pages.map(p => p.pageNum),
     };
   });
+
+  // Remove groups with no lines and no detected supplier (pure noise)
+  return results.filter(r => r.lignes.length > 0 || r.fournisseur !== '');
 }
