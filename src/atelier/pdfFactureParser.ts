@@ -251,9 +251,7 @@ function parseKawneer(text: string): LigneFactureParsed[] {
   // Line 2: DESIGNATION  LENGTH  TOTAL TOTAL
 
   // Pattern for article line (ref + qte + prix): "NUM  REF COLORIS  REF COLORIS  QTE QTE  UNIT UNIT  PRIX PRIX  REM REM"
-  const refLine = /^\d+\s+\d+\s+(\d{4,10})\s+\w+\s+(?:\w+\s+)?(?:\d{4,10})\s+\w+\s+(?:\w+\s+)?([\d.,]+)\s+[\d.,]+\s+\w+\s+\w+\s+([\d.,]+)\s+[\d.,]+\s+([\d.,]+)\s+[\d.,]+/;
-  // Simpler pattern: just find REF QTE UNIT PRIX REM duplicated
-  const simpleRef = /(\d{4,10})\s+\d+\s+(?:\w{2,4}\s+)?(?:\d{4,10})\s+\d+\s+(?:\w{2,4}\s+)?([\d.,]+)\s+[\d.,]+\s+(?:BAR|UN)\s+(?:BAR|UN)\s+([\d.,]+)\s+[\d.,]+\s+([\d.,]+)\s+[\d.,]+/;
+  const simpleRef =/(\d{4,10})\s+\d+\s+(?:\w{2,4}\s+)?(?:\d{4,10})\s+\d+\s+(?:\w{2,4}\s+)?([\d.,]+)\s+[\d.,]+\s+(?:BAR|UN)\s+(?:BAR|UN)\s+([\d.,]+)\s+[\d.,]+\s+([\d.,]+)\s+[\d.,]+/;
 
   let pendingRef = '';
   let pendingQte = 0;
