@@ -47,6 +47,9 @@ const FOURNISSEURS_PATTERNS: { nom: string; patterns: RegExp[] }[] = [
   { nom: 'Synerglass', patterns: [/synerglass/i] },
   { nom: 'Manitou', patterns: [/\bmanitou\b/i] },
   { nom: 'Cortizo', patterns: [/cortizo/i] },
+  { nom: 'Emaver', patterns: [/emaver/i, /miroiterie\s*martin/i] },
+  { nom: 'Gaspari Nettoyage', patterns: [/gaspari/i] },
+  { nom: 'Marana Golo', patterns: [/marana\s*golo/i] },
 ];
 
 const BLACKLIST_LINES = [
@@ -86,6 +89,27 @@ const BLACKLIST_LINES = [
   /\bstandar?d\s*\d+%/i,
   /^[\s@;#]+$/,
   /\b(désignation|designation)\s+(ref|quantit|qte|prix)/i,
+  /\b(coordonn[ée]es|comptabilit[ée]|agence)\b/i,
+  /\baffaire\s*suivie/i,
+  /\breference\s*client/i,
+  /\bcommande\s+CCL/i,
+  /\bextrait\s*du\s*titre/i,
+  /\bvoies\s*de\s*recours/i,
+  /\bref\.\s*abonnement/i,
+  /\bbranchement\s+\d/i,
+  /\bconsom\.\s*date/i,
+  /\bprix\s*de\s*revient/i,
+  /\battribution\s*de\s*juridiction/i,
+  /\bnote\s*pour\s*le\s*verre/i,
+  /\btol[ée]rances?\s*de\s*fabrication/i,
+  /\bweb\s*emaver/i,
+  /\bce\s*devis\s*est/i,
+  /\bpassage\s*en\s*commande/i,
+  /\binformation\s*livr/i,
+  /\bdelai\s*standard/i,
+  /\bferme\s*ses\s*portes/i,
+  /\bnos\s*agences\b/i,
+  /\bconforme\s*au\s*devis/i,
 ];
 
 function isBlacklisted(text: string): boolean {
@@ -138,14 +162,24 @@ function parseNum(s: string): number {
 }
 
 function extractNumbers(line: string): { nums: number[]; textPart: string } {
-  // Find all number-like tokens at the end of the line
-  const tokens = line.split(/\s+/);
+  // Clean line: strip unit markers (TND, PI, P, S, U, M, ML, etc.)
+  const cleaned = line
+    .replace(/\bTND\b/g, '')
+    .replace(/\bPI\b/g, '')
+    .replace(/\b€\/m\s*²\b/gi, '')
+    .replace(/\b\d+\s*€\/m²\b/gi, '')
+    .replace(/€/g, '')
+    .replace(/[†│|]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const tokens = cleaned.split(/\s+/);
   const nums: number[] = [];
   let lastTextIdx = tokens.length;
 
   for (let i = tokens.length - 1; i >= 0; i--) {
-    const t = tokens[i].replace(/[€†%|│,]/g, '').replace(',', '.').trim();
-    if (!t || t === 'P' || t === 'S' || t === 'U' || t === 'M' || t === 'T' || t === 'ML' || t === '/T' || t === '/U' || t === '/M') {
+    const t = tokens[i].replace(/[%,]/g, '').replace(',', '.').trim();
+    if (!t || /^[PSUTM]$/.test(t) || t === 'ML' || t === '/T' || t === '/U' || t === '/M') {
       continue;
     }
     const n = parseNum(t);
@@ -165,59 +199,65 @@ function parseLignes(text: string): LigneFactureParsed[] {
   const lignes: LigneFactureParsed[] = [];
   const lines = text.split('\n').map(l => l.replace(/\s+/g, ' ').trim()).filter(l => l.length > 5);
 
-  for (const line of lines) {
-    if (isBlacklisted(line)) continue;
-    if (line.length > 300) continue;
+  for (const rawLine of lines) {
+    if (isBlacklisted(rawLine)) continue;
+    if (rawLine.length > 300) continue;
+
+    // Boschat Laveix: strip "TND PI" unit markers inline
+    const line = rawLine.replace(/\bTND\s*PI\b/g, '').replace(/\s+/g, ' ').trim();
 
     const { nums, textPart } = extractNumbers(line);
 
     // Need at least 2 numbers (qte + price) and some text
     if (nums.length < 2 || textPart.length < 3) continue;
 
-    // Try to identify: qte, prix unitaire, total
     let ref = '';
     let designation = textPart;
     let qte = 0;
     let pu = 0;
     let total = 0;
 
-    // Check if first word of textPart looks like a reference (has digits)
+    // Check if first word looks like a reference (has digits, not a date)
     const firstWord = textPart.split(/\s+/)[0];
-    if (/\d/.test(firstWord) && firstWord.length >= 3 && firstWord.length <= 25 && !/^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(firstWord)) {
+    if (/\d/.test(firstWord) && firstWord.length >= 3 && firstWord.length <= 25 && !/^\d{1,2}[/.\-]\d{1,2}[/.\-]\d{2,4}$/.test(firstWord)) {
       ref = firstWord;
       designation = textPart.slice(firstWord.length).trim();
     }
 
-    // Parse numbers: last number is usually total, second-to-last is PU, before that is QTE
-    if (nums.length >= 3) {
-      // Typically: ... QTE PU TOTAL or QTE PU_BRUT PU_NET TOTAL
-      total = nums[nums.length - 1];
-      pu = nums[nums.length - 2];
-      // Find qte: look for a reasonable integer
-      for (let i = 0; i < nums.length - 2; i++) {
-        if (nums[i] > 0 && nums[i] <= 99999) {
-          qte = nums[i];
-          break;
-        }
+    // Emaver pattern: "QTE TOTAL DESIGNATION" — numbers at start, text at end
+    if (nums.length >= 2 && designation.length < 3) {
+      const emMatch = line.match(/^(\d+)\s+(\d+[\d.,]*)\s+(.{5,})$/);
+      if (emMatch) {
+        qte = parseNum(emMatch[1]);
+        total = parseNum(emMatch[2]);
+        designation = emMatch[3].trim();
+        if (qte > 0 && total > 0) pu = total / qte;
       }
-    } else if (nums.length === 2) {
-      qte = nums[0];
-      total = nums[1];
-      if (qte > 0) pu = total / qte;
     }
 
-    // Sanity checks
+    // Standard: last number = total, second-to-last = PU, earlier = QTE
+    if (qte === 0) {
+      if (nums.length >= 3) {
+        total = nums[nums.length - 1];
+        pu = nums[nums.length - 2];
+        for (let i = 0; i < nums.length - 2; i++) {
+          if (nums[i] > 0 && nums[i] <= 99999) { qte = nums[i]; break; }
+        }
+      } else if (nums.length === 2) {
+        qte = nums[0];
+        total = nums[1];
+        if (qte > 0) pu = total / qte;
+      }
+    }
+
     if (qte <= 0 || qte > 99999) continue;
     if (total <= 0 && pu <= 0) continue;
     if (total === 0 && pu > 0) total = qte * pu;
     if (pu === 0 && total > 0 && qte > 0) pu = total / qte;
 
-    // Skip if designation is just numbers or too short
     if (designation.length < 3) continue;
     if (/^\d+$/.test(designation)) continue;
-
-    // Skip obvious non-articles
-    if (/^(sous|total|net|base|taux|dont|acompte|solde|frais)\b/i.test(designation)) continue;
+    if (/^(sous|total|net|base|taux|dont|acompte|solde|frais|montant|port)\b/i.test(designation)) continue;
     if (isBlacklisted(designation)) continue;
 
     lignes.push({ ref, designation, coloris: '', conditionnement: '', qte, prixUnitaireHT: Math.round(pu * 100) / 100, totalLigneHT: Math.round(total * 100) / 100 });
