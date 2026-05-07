@@ -195,7 +195,133 @@ function extractNumbers(line: string): { nums: number[]; textPart: string } {
   return { nums, textPart };
 }
 
-function parseLignes(text: string): LigneFactureParsed[] {
+function parseProEquip(text: string): LigneFactureParsed[] {
+  const lignes: LigneFactureParsed[] = [];
+  const lines = text.split('\n').map(l => l.replace(/\s+/g, ' ').trim()).filter(Boolean);
+
+  // PRO Equipe format: REF on one line, DESIGNATION on next, numbers on a following line
+  // Numbers line: QTE Url QTE Uni [PRIX_BASE] [%] PRIX_NET MONTANT
+  const refPattern = /^([A-Z]{2,6}[\s-]?[\w\-./]{3,25})$/;
+  const numbersPattern = /(\d+[.,]\d{3})\s+\w+\s+(\d+[.,]\d{3})\s+\w+\s+.*?(\d+[.,]\d{2,3})\s+(\d+[.,]\d{2})\s*/;
+
+  let currentRef = '';
+  let currentDesignation = '';
+  let state: 'seek_ref' | 'seek_desc' | 'seek_numbers' = 'seek_ref';
+
+  for (const line of lines) {
+    if (isBlacklisted(line)) continue;
+    if (/^LIVRAISON\s*N/i.test(line) || /^COMMANDE\s*N/i.test(line)) { state = 'seek_ref'; continue; }
+
+    if (state === 'seek_ref') {
+      const m = line.match(refPattern);
+      if (m && /\d/.test(m[1]) && !/^\d{1,2}[/.\-]\d{1,2}/.test(m[1])) {
+        currentRef = m[1].trim();
+        currentDesignation = '';
+        state = 'seek_desc';
+        continue;
+      }
+    }
+
+    if (state === 'seek_desc') {
+      const nm = line.match(numbersPattern);
+      if (nm) {
+        const qte = parseNum(nm[1]);
+        const pu = parseNum(nm[3]);
+        const total = parseNum(nm[4]);
+        if (qte > 0 && total > 0 && currentDesignation.length > 2) {
+          lignes.push({ ref: currentRef, designation: currentDesignation, coloris: '', conditionnement: '', qte, prixUnitaireHT: Math.round(pu * 100) / 100, totalLigneHT: Math.round(total * 100) / 100 });
+        }
+        state = 'seek_ref';
+      } else {
+        if (currentDesignation) currentDesignation += ' ';
+        currentDesignation += line;
+      }
+      continue;
+    }
+  }
+  return lignes;
+}
+
+function parseKawneer(text: string): LigneFactureParsed[] {
+  const lignes: LigneFactureParsed[] = [];
+  const lines = text.split('\n').map(l => l.replace(/\s+/g, ' ').trim()).filter(Boolean);
+
+  // Kawneer format: data is duplicated in 2 mirror columns
+  // Line 1: NUM NUM  REF COLORIS [SUFFIX]  REF COLORIS [SUFFIX]  QTE QTE  UNIT UNIT  PRIX PRIX  REM REM
+  // Line 2: DESIGNATION  LENGTH  TOTAL TOTAL
+
+  // Pattern for article line (ref + qte + prix): "NUM  REF COLORIS  REF COLORIS  QTE QTE  UNIT UNIT  PRIX PRIX  REM REM"
+  const refLine = /^\d+\s+\d+\s+(\d{4,10})\s+\w+\s+(?:\w+\s+)?(?:\d{4,10})\s+\w+\s+(?:\w+\s+)?([\d.,]+)\s+[\d.,]+\s+\w+\s+\w+\s+([\d.,]+)\s+[\d.,]+\s+([\d.,]+)\s+[\d.,]+/;
+  // Simpler pattern: just find REF QTE UNIT PRIX REM duplicated
+  const simpleRef = /(\d{4,10})\s+\d+\s+(?:\w{2,4}\s+)?(?:\d{4,10})\s+\d+\s+(?:\w{2,4}\s+)?([\d.,]+)\s+[\d.,]+\s+(?:BAR|UN)\s+(?:BAR|UN)\s+([\d.,]+)\s+[\d.,]+\s+([\d.,]+)\s+[\d.,]+/;
+
+  let pendingRef = '';
+  let pendingQte = 0;
+  let pendingPrix = 0;
+  let pendingRem = 0;
+
+  for (const line of lines) {
+    if (isBlacklisted(line)) continue;
+    if (/^_{5,}|^\|Lig|^\|Cde|^CORRESPONDANT|^DEVISE|^FACTURE\s+(N|FACTURE)|^ref\s+(non|en\s+cours)/i.test(line)) continue;
+
+    // Try to match article reference line
+    const m1 = line.match(simpleRef);
+    if (m1) {
+      pendingRef = m1[1];
+      pendingQte = parseNum(m1[2]);
+      pendingPrix = parseNum(m1[3]);
+      pendingRem = parseNum(m1[4]);
+      continue;
+    }
+
+    // If we have a pending ref, next meaningful line is designation + total
+    if (pendingRef && pendingQte > 0) {
+      // Extract last number(s) as total — format: "DESIGNATION  LENGTH  TOTAL TOTAL"
+      const totalMatch = line.match(/([\d.,]+)\s+([\d.,]+)\s*$/);
+      if (totalMatch) {
+        const total = parseNum(totalMatch[1]);
+        const designation = line.replace(/[\d.,]+\s+[\d.,]+\s*$/, '').trim();
+        if (total > 0 && designation.length > 3) {
+          const pu = pendingRem > 0 ? pendingPrix * (1 - pendingRem / 100) : pendingPrix;
+          lignes.push({
+            ref: pendingRef,
+            designation,
+            coloris: '',
+            conditionnement: '',
+            qte: pendingQte,
+            prixUnitaireHT: Math.round(pu * 100) / 100,
+            totalLigneHT: Math.round(total * 100) / 100,
+          });
+        }
+      }
+      pendingRef = '';
+      pendingQte = 0;
+      pendingPrix = 0;
+      pendingRem = 0;
+    }
+  }
+
+  // Deduplicate (mirror columns may produce dupes)
+  const seen = new Set<string>();
+  return lignes.filter(l => {
+    const key = `${l.ref}|${l.qte}|${l.totalLigneHT}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function parseLignes(text: string, fournisseur: string): LigneFactureParsed[] {
+  // Supplier-specific parsers
+  if (/kawneer/i.test(fournisseur) || /kawneer/i.test(text)) {
+    const specific = parseKawneer(text);
+    if (specific.length > 0) return specific;
+  }
+  if (/pro\s*[ée]quipe?/i.test(fournisseur) || /proequip/i.test(text)) {
+    const specific = parseProEquip(text);
+    if (specific.length > 0) return specific;
+  }
+
   const lignes: LigneFactureParsed[] = [];
   const lines = text.split('\n').map(l => l.replace(/\s+/g, ' ').trim()).filter(l => l.length > 5);
 
@@ -351,7 +477,7 @@ export async function parseFacturePDF(file: File): Promise<FactureParsed[]> {
       fournisseur: g.fournisseur || '',
       dateFacture: detectDate(fullText),
       numFacture: detectNumFacture(fullText),
-      lignes: parseLignes(fullText),
+      lignes: parseLignes(fullText, g.fournisseur),
       texteBrut: fullText,
       pages: g.pages.map(p => p.pageNum),
     };
