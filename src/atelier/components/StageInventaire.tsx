@@ -1,7 +1,8 @@
 import { useState, useCallback } from 'react';
 import { categoriserArticle, CATEGORIES } from '../categorisation';
+import { DotationPostes } from './DotationPostes';
 import { DEMO_VITRAGES, type VitrageFacture } from '../vitrageAnalyse';
-import { ArrowLeft, FileText, ClipboardList, CheckSquare, BarChart3, TrendingUp, Layers, AlertTriangle, ClipboardCheck, MessageCircle, Upload, Download, Plus, Search, Trash2, Sparkles, X, Send } from 'lucide-react';
+import { ArrowLeft, FileText, ClipboardList, CheckSquare, BarChart3, TrendingUp, Layers, AlertTriangle, ClipboardCheck, Briefcase, MessageCircle, Upload, Download, Plus, Search, Trash2, Sparkles, X, Send } from 'lucide-react';
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -63,7 +64,7 @@ interface ArticleTerrain {
 
 interface Props { onBack: () => void; }
 
-type Tab = 'factures' | 'recensement' | 'decisions' | 'statistiques' | 'vitrage' | 'averifier' | 'inventaire' | 'dashboard';
+type Tab = 'factures' | 'recensement' | 'decisions' | 'dotations' | 'statistiques' | 'vitrage' | 'averifier' | 'inventaire' | 'dashboard';
 
 const FAMILLES = ['VISSERIE', 'QUINCAILLERIE', 'JOINT', 'ACCESSOIRE', 'CONSOMMABLE', 'AUTRE'];
 const UNITES = ['piece', 'boite', 'kg', 'metre', 'rouleau'];
@@ -243,6 +244,7 @@ export function StageInventaire({ onBack }: Props) {
     { id: 'factures', label: 'Factures', icon: <FileText size={16} /> },
     { id: 'recensement', label: 'Recensement', icon: <ClipboardList size={16} /> },
     { id: 'decisions', label: 'Decisions', icon: <CheckSquare size={16} /> },
+    { id: 'dotations', label: 'Dotations postes', icon: <Briefcase size={16} /> },
     { id: 'averifier', label: 'A verifier', icon: <AlertTriangle size={16} /> },
     { id: 'vitrage', label: 'Vitrage', icon: <Layers size={16} /> },
     { id: 'statistiques', label: 'Statistiques', icon: <TrendingUp size={16} /> },
@@ -286,6 +288,7 @@ export function StageInventaire({ onBack }: Props) {
         {tab === 'factures' && <TabFactures factures={factures} consolidated={consolidated} onUpdate={updateFactures} />}
         {tab === 'recensement' && <TabRecensement articles={filteredArticles} consolidated={consolidated} search={searchFilter} onSearch={setSearchFilter} onAdd={addArticle} onUpdate={updateArticle} onDelete={deleteArticle} />}
         {tab === 'decisions' && <TabDecisions articles={filteredArticles} search={searchFilter} onSearch={setSearchFilter} onUpdate={updateArticle} onExport={exportCSV} />}
+        {tab === 'dotations' && <DotationPostes />}
         {tab === 'averifier' && <TabAVerifier factures={factures} onLearn={learnCategorie} corrections={corrections} />}
         {tab === 'vitrage' && <TabVitrage vitrages={vitrages} />}
         {tab === 'statistiques' && <TabStatistiques factures={factures} />}
