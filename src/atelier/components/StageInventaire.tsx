@@ -161,6 +161,7 @@ export function StageInventaire({ onBack }: Props) {
   const [articles, setArticles] = useApiState<ArticleTerrain[]>('stock', 'articles', STORAGE_ARTICLES, DEMO_ARTICLES);
   const [vitrages] = useApiState<VitrageFacture[]>('stock', 'vitrages', 'sial_vitrages', DEMO_VITRAGES);
   const [corrections, setCorrections] = useApiState<Record<string, string>>('stock', 'corrections', 'sial_corrections', {});
+  const [fournisseursExclus, setFournisseursExclus] = useApiState<string[]>('stock', 'fournisseurs_exclus', 'sial_fournisseurs_exclus', []);
   const [showChat, setShowChat] = useState(false);
   const [chatMessages, setChatMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
   const [chatInput, setChatInput] = useState('');
@@ -279,7 +280,7 @@ export function StageInventaire({ onBack }: Props) {
 
       {/* Contenu */}
       <main className="flex-1 overflow-y-auto">
-        {tab === 'factures' && <TabFactures factures={factures} consolidated={consolidated} onUpdate={updateFactures} />}
+        {tab === 'factures' && <TabFactures factures={factures} consolidated={consolidated} onUpdate={updateFactures} fournisseursExclus={fournisseursExclus} onExclus={setFournisseursExclus} />}
         {tab === 'recensement' && <TabRecensement articles={filteredArticles} consolidated={consolidated} search={searchFilter} onSearch={setSearchFilter} onAdd={addArticle} onUpdate={updateArticle} onDelete={deleteArticle} />}
         {tab === 'decisions' && <TabDecisions articles={filteredArticles} search={searchFilter} onSearch={setSearchFilter} onUpdate={updateArticle} onExport={exportCSV} />}
         {tab === 'dotations' && <DotationPostes />}
@@ -333,14 +334,24 @@ const FOURNISSEURS_CONNUS = [
   'Hoppe', 'Sika', 'Vitrage Insulaire', 'Autre',
 ];
 
-function TabFactures({ factures, consolidated, onUpdate }: { factures: Facture[]; consolidated: RefConsolidee[]; onUpdate: (f: Facture[]) => void }) {
+function TabFactures({ factures, consolidated, onUpdate, fournisseursExclus, onExclus }: {
+  factures: Facture[]; consolidated: RefConsolidee[]; onUpdate: (f: Facture[]) => void;
+  fournisseursExclus: string[]; onExclus: (v: string[]) => void;
+}) {
   const [viewMode, setViewMode] = useState<'factures' | 'consolidee'>('consolidee');
   const [importMode, setImportMode] = useState(false);
   const [parsing, setParsing] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
   const [preview, setPreview] = useState<FactureParsed | null>(null);
   const [showBrut, setShowBrut] = useState(false);
+  const [showExclus, setShowExclus] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  const allFournisseurs = [...new Set(factures.map(f => f.fournisseur))].sort();
+  const toggleExclu = (f: string) => {
+    onExclus(fournisseursExclus.includes(f) ? fournisseursExclus.filter(x => x !== f) : [...fournisseursExclus, f]);
+  };
+  const consolidatedFiltered = consolidated.filter(r => !fournisseursExclus.includes(r.fournisseur));
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -503,12 +514,18 @@ function TabFactures({ factures, consolidated, onUpdate }: { factures: Facture[]
         <div className="flex gap-2">
           <button onClick={() => setViewMode('consolidee')}
             className={`px-3 py-1.5 rounded-lg text-xs font-medium ${viewMode === 'consolidee' ? 'bg-blue-600/20 text-blue-400 border border-blue-500/40' : 'text-gray-500 border border-[#353840]'}`}>
-            Referentiel consolide ({consolidated.length})
+            Referentiel consolide ({consolidatedFiltered.length}{fournisseursExclus.length > 0 ? `/${consolidated.length}` : ''})
           </button>
           <button onClick={() => setViewMode('factures')}
             className={`px-3 py-1.5 rounded-lg text-xs font-medium ${viewMode === 'factures' ? 'bg-blue-600/20 text-blue-400 border border-blue-500/40' : 'text-gray-500 border border-[#353840]'}`}>
             Factures brutes ({factures.length})
           </button>
+          {allFournisseurs.length > 0 && (
+            <button onClick={() => setShowExclus(!showExclus)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium border ${showExclus ? 'bg-red-600/20 text-red-400 border-red-500/40' : fournisseursExclus.length > 0 ? 'bg-red-600/10 text-red-400/70 border-red-500/20' : 'text-gray-500 border-[#353840]'}`}>
+              Fournisseurs exclus{fournisseursExclus.length > 0 ? ` (${fournisseursExclus.length})` : ''}
+            </button>
+          )}
         </div>
         <div className="flex gap-2">
           <input ref={fileRef} type="file" accept=".pdf" onChange={handleFileSelect} className="hidden" />
@@ -525,6 +542,37 @@ function TabFactures({ factures, consolidated, onUpdate }: { factures: Facture[]
           </button>
         </div>
       </div>
+
+      {/* Panneau fournisseurs exclus */}
+      {showExclus && (
+        <div className="bg-[#181a20] border border-red-500/30 rounded-xl p-4">
+          <h3 className="text-xs font-bold text-red-400 mb-3">Fournisseurs a exclure du referentiel</h3>
+          <p className="text-[10px] text-gray-500 mb-3">Les articles de ces fournisseurs seront masques du referentiel consolide.</p>
+          <div className="flex flex-wrap gap-2">
+            {allFournisseurs.map(f => {
+              const isExclu = fournisseursExclus.includes(f);
+              const count = consolidated.filter(r => r.fournisseur === f).length;
+              return (
+                <button key={f} onClick={() => toggleExclu(f)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border transition-colors ${
+                    isExclu
+                      ? 'bg-red-600/20 text-red-400 border-red-500/40 line-through'
+                      : 'bg-[#0f1117] text-gray-300 border-[#2a2d35] hover:border-red-500/30'
+                  }`}>
+                  {f} <span className="text-[10px] text-gray-500">({count})</span>
+                  {isExclu && <X size={10} />}
+                </button>
+              );
+            })}
+          </div>
+          {fournisseursExclus.length > 0 && (
+            <div className="mt-3 flex items-center gap-3">
+              <span className="text-[10px] text-gray-500">{fournisseursExclus.length} fournisseur{fournisseursExclus.length > 1 ? 's' : ''} exclu{fournisseursExclus.length > 1 ? 's' : ''} — {consolidated.length - consolidatedFiltered.length} ref masquee{consolidated.length - consolidatedFiltered.length > 1 ? 's' : ''}</span>
+              <button onClick={() => onExclus([])} className="text-[10px] text-amber-400 hover:text-amber-300">Tout reinclure</button>
+            </div>
+          )}
+        </div>
+      )}
 
       {viewMode === 'consolidee' ? (
         <div className="bg-[#181a20] border border-[#2a2d35] rounded-xl overflow-hidden">
@@ -544,7 +592,7 @@ function TabFactures({ factures, consolidated, onUpdate }: { factures: Facture[]
                 </tr>
               </thead>
               <tbody>
-                {consolidated.map(r => (
+                {consolidatedFiltered.map(r => (
                   <tr key={r.ref} className="border-b border-[#2a2d35]/50 hover:bg-[#1c1e24]">
                     <td className="px-3 py-2 font-mono text-amber-400">{r.ref}</td>
                     <td className="px-3 py-2 text-gray-300">{r.fournisseur}</td>
