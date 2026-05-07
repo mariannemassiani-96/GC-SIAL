@@ -10,10 +10,12 @@ import { PosteCoupe } from './atelier/components/PosteCoupe';
 import { MaintenanceQualite } from './atelier/components/MaintenanceQualite';
 import { WorkshopApp } from './workshop/WorkshopApp';
 import { AuthProvider, LoginScreen, useAuth } from './AuthContext';
+import { AdminPanel } from './AdminPanel';
 import type { Affaire } from './types';
 
 type AppMode =
   | 'home'
+  | 'admin'
   | 'gc'
   | 'smart_assembly'
   | 'stock_accessoires'
@@ -135,6 +137,11 @@ function HubFabrication({ onSelect }: { onSelect: (mode: AppMode) => void }) {
             <div className="flex items-center gap-3">
               <span className="text-sm text-gray-400">{user.nom}</span>
               <span className="text-xs px-2 py-0.5 rounded bg-green-600/20 text-green-400 border border-green-500/30">{user.role}</span>
+              {user.role === 'admin' && (
+                <button onClick={() => onSelect('admin')} className="text-xs text-gray-500 hover:text-amber-400 transition-colors">
+                  Admin
+                </button>
+              )}
               <button onClick={logout} className="text-xs text-gray-500 hover:text-red-400 transition-colors">
                 Deconnexion
               </button>
@@ -144,7 +151,14 @@ function HubFabrication({ onSelect }: { onSelect: (mode: AppMode) => void }) {
       </header>
       <main className="max-w-5xl mx-auto px-6 py-8">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {apps.map((app) => (
+          {apps
+            .filter(app => {
+              if (!user) return false;
+              if (user.role === 'admin') return true;
+              if (!user.apps_autorisees || user.apps_autorisees.length === 0) return true;
+              return user.apps_autorisees.includes(app.id);
+            })
+            .map((app) => (
             <button
               key={app.label}
               onClick={() => onSelect(app.id)}
@@ -196,6 +210,10 @@ function AppContent() {
   if (!user) return <LoginScreen />;
 
   // ── Routage ────────────────────────────────────────
+
+  if (mode === 'admin' && user.role === 'admin') {
+    return <AdminPanel onBack={goHome} />;
+  }
 
   if (mode === 'home') {
     return <HubFabrication onSelect={setMode} />;

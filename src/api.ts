@@ -93,6 +93,25 @@ export async function bulkSave(app: string, collection: string, items: unknown[]
   return request('PUT', `/api/data/${app}/${collection}`, items);
 }
 
+// ── Users (admin) ────────────────────────────────────────────────────
+
+export interface UserFull extends User {
+  actif: boolean;
+  created_at: string;
+}
+
+export async function listUsers(): Promise<UserFull[]> {
+  return request<UserFull[]>('GET', '/api/users');
+}
+
+export async function createUser(data: { email: string; password: string; nom: string; role: string; apps_autorisees: string[] }): Promise<{ id: number }> {
+  return request('POST', '/api/users', data);
+}
+
+export async function updateUser(id: number, data: Partial<{ nom: string; role: string; apps_autorisees: string[]; actif: boolean; password: string }>): Promise<void> {
+  await request('PUT', `/api/users/${id}`, data);
+}
+
 // ── Health ───────────────────────────────────────────────────────────
 
 export async function healthCheck(): Promise<{ status: string; users: number; documents: number }> {
