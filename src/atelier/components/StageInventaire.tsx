@@ -261,8 +261,8 @@ export function StageInventaire({ onBack }: Props) {
           <div className="flex items-center gap-3">
             <button onClick={onBack} className="text-gray-400 hover:text-white transition-colors"><ArrowLeft size={18} /></button>
             <div>
-              <h1 className="text-sm font-bold text-white">SIAL Apertura — Stage Inventaire</h1>
-              <p className="text-[10px] text-gray-500">Gestion stock 5S + Odoo 18</p>
+              <h1 className="text-sm font-bold text-white">SIAL Apertura — Stock & Accessoires</h1>
+              <p className="text-[10px] text-gray-500">Gestion stock, accessoires, dotations postes</p>
             </div>
           </div>
           <div className="flex items-center gap-2">

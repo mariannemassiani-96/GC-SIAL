@@ -15,7 +15,7 @@ type AppMode =
   | 'home'
   | 'gc'
   | 'smart_assembly'
-  | 'stage_inventaire'
+  | 'stock_accessoires'
   | 'preparation_livraison'
   | 'workshop_layout'
   | 'reception_matiere'
@@ -74,9 +74,9 @@ function HubFabrication({ onSelect }: { onSelect: (mode: AppMode) => void }) {
       color: 'amber',
     },
     {
-      id: 'stage_inventaire' as AppMode,
-      label: 'Stage Inventaire',
-      description: 'Analyse factures fournisseurs, recensement terrain, decisions stock, assistant IA, export Odoo 18.',
+      id: 'stock_accessoires' as AppMode,
+      label: 'Stock & Accessoires',
+      description: 'Gestion stock, accessoires, factures fournisseurs, dotations postes, inventaire, export Odoo 18.',
       icon: (
         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-orange-400">
           <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2" />
@@ -189,7 +189,7 @@ export default function App() {
   if (mode === 'maintenance_qualite') return <MaintenanceQualite onBack={goHome} />;
   if (mode === 'reception_matiere') return <ReceptionMatiere onBack={goHome} />;
   if (mode === 'smart_assembly') return <SmartAssembly onBack={goHome} />;
-  if (mode === 'stage_inventaire') return <StageInventaire onBack={goHome} />;
+  if (mode === 'stock_accessoires') return <StageInventaire onBack={goHome} />;
   if (mode === 'preparation_livraison') return <PreparationLivraison onBack={goHome} />;
   if (mode === 'workshop_layout') return <WorkshopApp onHome={goHome} />;
 
