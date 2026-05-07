@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { FicheMontage, FercoPiece } from '../types';
 import { DEMO_FICHE } from '../types';
-import { ArrowLeft, ScanBarcode, CheckCircle2, RotateCcw, Keyboard } from 'lucide-react';
+import { ArrowLeft, ScanBarcode, CheckCircle2, RotateCcw, Keyboard, Upload, Database } from 'lucide-react';
 
 interface SmartAssemblyProps {
   onBack: () => void;
@@ -58,6 +58,30 @@ export function SmartAssembly({ onBack }: SmartAssemblyProps) {
     setFiche(demoData);
     setStatJour((s) => s + 1);
     setScreen('guide');
+  }, [getDB, saveDB]);
+
+  // ── Import JSON fiches (ex-Bridge Atelier) ──
+  const handleImportJSON = useCallback(() => {
+    const input = document.createElement('input');
+    input.type = 'file'; input.accept = '.json'; input.multiple = true;
+    input.onchange = () => {
+      const files = input.files; if (!files) return;
+      const db = getDB();
+      let imported = 0;
+      Array.from(files).forEach(file => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          try {
+            const data = JSON.parse(reader.result as string);
+            const items: FicheMontage[] = Array.isArray(data) ? data : [data];
+            items.forEach(item => { if (item.barcode && item.ferco) { db[item.barcode] = item; imported++; } });
+            saveDB(db);
+          } catch { /* ignore invalid files */ }
+        };
+        reader.readAsText(file);
+      });
+    };
+    input.click();
   }, [getDB, saveDB]);
 
   // ── Valider une étape ──
@@ -153,13 +177,21 @@ export function SmartAssembly({ onBack }: SmartAssemblyProps) {
             </div>
           </div>
 
-          <div className="flex gap-3">
+          <div className="flex flex-wrap gap-3 justify-center">
             <button onClick={() => setShowManual(true)} className="flex items-center gap-2 px-4 py-2.5 border border-[#263447] rounded-lg text-sm text-[#6b8099] hover:text-[#4b8fc8] hover:border-[#4b8fc8] transition-colors">
               <Keyboard size={14} /> Saisie manuelle
+            </button>
+            <button onClick={handleImportJSON} className="flex items-center gap-2 px-4 py-2.5 border border-[#263447] rounded-lg text-sm text-[#6b8099] hover:text-[#4bc87a] hover:border-[#4bc87a] transition-colors">
+              <Upload size={14} /> Importer fiches JSON
             </button>
             <button onClick={loadDemo} className="flex items-center gap-2 px-4 py-2.5 bg-[#c8a84b]/10 border border-[#c8a84b]/30 rounded-lg text-sm text-[#c8a84b] hover:bg-[#c8a84b]/20 transition-colors">
               Mode démo (F1)
             </button>
+          </div>
+
+          {/* Stats base de données */}
+          <div className="flex items-center gap-2 text-[10px] text-[#3a4f65]">
+            <Database size={12} /> {Object.keys(getDB()).length} fiche(s) en memoire
           </div>
         </div>
 

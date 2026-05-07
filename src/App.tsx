@@ -3,7 +3,6 @@ import { useAffaires, createEmptyAffaire } from './store/affaires';
 import { ListeAffaires } from './pages/ListeAffaires';
 import { Configurateur } from './pages/Configurateur';
 import { SmartAssembly } from './atelier/components/SmartAssembly';
-import { BridgeAtelier } from './atelier/components/BridgeAtelier';
 import { StageInventaire } from './atelier/components/StageInventaire';
 import { PreparationLivraison } from './atelier/components/PreparationLivraison';
 import { ReceptionMatiere } from './atelier/components/ReceptionMatiere';
@@ -16,7 +15,6 @@ type AppMode =
   | 'home'
   | 'gc'
   | 'smart_assembly'
-  | 'bridge'
   | 'stage_inventaire'
   | 'preparation_livraison'
   | 'workshop_layout'
@@ -74,17 +72,6 @@ function HubFabrication({ onSelect }: { onSelect: (mode: AppMode) => void }) {
         </svg>
       ),
       color: 'amber',
-    },
-    {
-      id: 'bridge' as AppMode,
-      label: 'Bridge Atelier',
-      description: 'Gestion des fiches PRO F2 en memoire. Import JSON, recherche, detail pieces Ferco par fiche.',
-      icon: (
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-cyan-400">
-          <rect x="2" y="3" width="20" height="14" rx="2" /><line x1="8" y1="21" x2="16" y2="21" /><line x1="12" y1="17" x2="12" y2="21" />
-        </svg>
-      ),
-      color: 'cyan',
     },
     {
       id: 'stage_inventaire' as AppMode,
@@ -202,7 +189,6 @@ export default function App() {
   if (mode === 'maintenance_qualite') return <MaintenanceQualite onBack={goHome} />;
   if (mode === 'reception_matiere') return <ReceptionMatiere onBack={goHome} />;
   if (mode === 'smart_assembly') return <SmartAssembly onBack={goHome} />;
-  if (mode === 'bridge') return <BridgeAtelier onBack={goHome} />;
   if (mode === 'stage_inventaire') return <StageInventaire onBack={goHome} />;
   if (mode === 'preparation_livraison') return <PreparationLivraison onBack={goHome} />;
   if (mode === 'workshop_layout') return <WorkshopApp onHome={goHome} />;
