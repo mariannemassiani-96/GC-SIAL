@@ -182,8 +182,11 @@ async function extractPagesFromPDF(file: File): Promise<PageText[]> {
 
     // Group text items by Y position to reconstruct lines
     const items = content.items
-      .filter((item): item is { str: string; transform: number[] } => 'str' in item && 'transform' in item)
-      .map(item => ({ str: item.str, x: item.transform[4], y: Math.round(item.transform[5]) }));
+      .filter(item => 'str' in item && 'transform' in item)
+      .map(item => {
+        const ti = item as unknown as { str: string; transform: number[] };
+        return { str: ti.str, x: ti.transform[4], y: Math.round(ti.transform[5]) };
+      });
 
     if (items.length === 0) { pages.push({ pageNum: i, text: '' }); continue; }
 
