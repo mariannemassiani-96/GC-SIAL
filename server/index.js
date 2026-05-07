@@ -7,7 +7,14 @@ const { hashPassword, checkPassword, generateToken, authMiddleware, adminOnly, e
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-app.use(cors());
+app.use(cors({
+  origin: [
+    'https://atelier-sial.vercel.app',
+    'http://localhost:5173',
+    'http://localhost:4173',
+  ],
+  credentials: true,
+}));
 app.use(express.json({ limit: '50mb' }));
 
 ensureAdmin();

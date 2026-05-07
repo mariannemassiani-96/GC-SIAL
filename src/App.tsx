@@ -9,6 +9,7 @@ import { ReceptionMatiere } from './atelier/components/ReceptionMatiere';
 import { PosteCoupe } from './atelier/components/PosteCoupe';
 import { MaintenanceQualite } from './atelier/components/MaintenanceQualite';
 import { WorkshopApp } from './workshop/WorkshopApp';
+import { AuthProvider, LoginScreen, useAuth } from './AuthContext';
 import type { Affaire } from './types';
 
 type AppMode =
@@ -25,6 +26,7 @@ type AppMode =
 // ── Hub Fabrication (page d'accueil) ─────────────────────────────────
 
 function HubFabrication({ onSelect }: { onSelect: (mode: AppMode) => void }) {
+  const { user, logout } = useAuth();
   const apps = [
     {
       id: 'reception_matiere' as AppMode,
@@ -124,9 +126,20 @@ function HubFabrication({ onSelect }: { onSelect: (mode: AppMode) => void }) {
   return (
     <div className="min-h-screen bg-[#0f1117]">
       <header className="bg-[#181a20] border-b border-[#2a2d35] px-6 py-4">
-        <div className="max-w-5xl mx-auto">
-          <h1 className="text-xl font-bold text-white">SIAL Fabrication</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Outils atelier et configurateurs techniques</p>
+        <div className="max-w-5xl mx-auto flex items-center justify-between">
+          <div>
+            <h1 className="text-xl font-bold text-white">SIAL Fabrication</h1>
+            <p className="text-sm text-gray-500 mt-0.5">Outils atelier et configurateurs techniques</p>
+          </div>
+          {user && (
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-gray-400">{user.nom}</span>
+              <span className="text-xs px-2 py-0.5 rounded bg-green-600/20 text-green-400 border border-green-500/30">{user.role}</span>
+              <button onClick={logout} className="text-xs text-gray-500 hover:text-red-400 transition-colors">
+                Deconnexion
+              </button>
+            </div>
+          )}
         </div>
       </header>
       <main className="max-w-5xl mx-auto px-6 py-8">
@@ -154,7 +167,8 @@ function HubFabrication({ onSelect }: { onSelect: (mode: AppMode) => void }) {
 
 // ── App principale ───────────────────────────────────────────────────
 
-export default function App() {
+function AppContent() {
+  const { user } = useAuth();
   const [mode, setMode] = useState<AppMode>('home');
 
   const { affaires, addAffaire, updateAffaire, deleteAffaire, duplicateAffaire } = useAffaires();
@@ -178,6 +192,8 @@ export default function App() {
     setMode('home');
     setSelectedId(null);
   }, []);
+
+  if (!user) return <LoginScreen />;
 
   // ── Routage ────────────────────────────────────────
 
@@ -223,5 +239,13 @@ export default function App() {
         onDelete={deleteAffaire}
       />
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 }
