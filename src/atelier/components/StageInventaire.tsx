@@ -4,8 +4,7 @@ import { DotationPostes } from './DotationPostes';
 import { ProgressionStage } from './ProgressionStage';
 import { DEMO_VITRAGES, type VitrageFacture } from '../vitrageAnalyse';
 import { useApiState } from '../../useApiState';
-import { parseFacturePDF, type FactureParsed } from '../pdfFactureParser';
-import { ArrowLeft, FileText, ClipboardList, CheckSquare, BarChart3, TrendingUp, Layers, AlertTriangle, ClipboardCheck, Briefcase, MessageCircle, Upload, Download, Plus, Search, Trash2, Sparkles, X, Send, FileUp, Eye } from 'lucide-react';
+import { ArrowLeft, FileText, ClipboardList, CheckSquare, BarChart3, TrendingUp, Layers, AlertTriangle, ClipboardCheck, Briefcase, MessageCircle, Upload, Download, Plus, Search, Trash2, Sparkles, X, Send, FileUp } from 'lucide-react';
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -334,18 +333,30 @@ const FOURNISSEURS_CONNUS = [
   'Hoppe', 'Sika', 'Vitrage Insulaire', 'Autre',
 ];
 
+function parseCSV(text: string, separator: string): string[][] {
+  return text.split('\n').filter(l => l.trim()).map(l => l.split(separator).map(c => c.trim()));
+}
+
+function parseNum(s: string): number {
+  const n = parseFloat(s.replace(/\s/g, '').replace(',', '.'));
+  return isNaN(n) ? 0 : n;
+}
+
 function TabFactures({ factures, consolidated, onUpdate, fournisseursExclus, onExclus }: {
   factures: Facture[]; consolidated: RefConsolidee[]; onUpdate: (f: Facture[]) => void;
   fournisseursExclus: string[]; onExclus: (v: string[]) => void;
 }) {
   const [viewMode, setViewMode] = useState<'factures' | 'consolidee'>('consolidee');
   const [importMode, setImportMode] = useState(false);
-  const [parsing, setParsing] = useState(false);
-  const [parseError, setParseError] = useState<string | null>(null);
-  const [previews, setPreviews] = useState<FactureParsed[]>([]);
-  const [excluded, setExcluded] = useState<Set<number>>(new Set());
-  const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
-  const [showBrut, setShowBrut] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [csvRows, setCsvRows] = useState<string[][]>([]);
+  const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
+  const [separator, setSeparator] = useState(';');
+  const [hasHeader, setHasHeader] = useState(true);
+  const [colMap, setColMap] = useState<Record<string, number>>({ ref: 0, designation: 1, qte: 2, prixUnitaireHT: 3, totalLigneHT: 4 });
+  const [importFournisseur, setImportFournisseur] = useState('');
+  const [importDate, setImportDate] = useState(new Date().toISOString().slice(0, 10));
+  const [importNumFacture, setImportNumFacture] = useState('');
   const [showExclus, setShowExclus] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -355,215 +366,189 @@ function TabFactures({ factures, consolidated, onUpdate, fournisseursExclus, onE
   };
   const consolidatedFiltered = consolidated.filter(r => !fournisseursExclus.includes(r.fournisseur));
 
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!file.name.toLowerCase().endsWith('.pdf')) { setParseError('Fichier PDF requis'); return; }
-    setParsing(true);
-    setParseError(null);
-    setPreviews([]);
-    setExcluded(new Set());
-    try {
-      const results = await parseFacturePDF(file);
-      setPreviews(results);
-      setExpandedIdx(0);
-      if (results.length === 0) setParseError('Aucune facture detectee dans ce PDF.');
-      else if (results.every(r => r.lignes.length === 0)) setParseError('Aucune ligne detectee automatiquement. Vous pouvez ajouter les lignes manuellement.');
-    } catch (err: unknown) {
-      setParseError(err instanceof Error ? err.message : 'Erreur de lecture du PDF');
-    } finally {
-      setParsing(false);
-      if (fileRef.current) fileRef.current.value = '';
-    }
+    setImportError(null);
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = ev.target?.result as string;
+      if (!text) { setImportError('Fichier vide'); return; }
+      const sep = text.includes('\t') ? '\t' : text.includes(';') ? ';' : ',';
+      setSeparator(sep);
+      const rows = parseCSV(text, sep);
+      if (rows.length < 2) { setImportError('Fichier trop court (moins de 2 lignes)'); return; }
+      setCsvHeaders(rows[0]);
+      setCsvRows(rows);
+      setImportMode(true);
+      // Auto-detect column mapping from headers
+      const h = rows[0].map(c => c.toLowerCase());
+      const map: Record<string, number> = { ref: -1, designation: -1, qte: -1, prixUnitaireHT: -1, totalLigneHT: -1 };
+      h.forEach((c, i) => {
+        if (/ref|article|code/i.test(c)) map.ref = i;
+        if (/design|libelle|description|intitule/i.test(c)) map.designation = i;
+        if (/qte|quantit/i.test(c)) map.qte = i;
+        if (/prix\s*(unit|net|u)|pu\b|p\.u/i.test(c)) map.prixUnitaireHT = i;
+        if (/total|montant/i.test(c)) map.totalLigneHT = i;
+        if (/coloris|couleur|teinte/i.test(c) && !map.coloris) (map as Record<string, number>).coloris = i;
+        if (/condit|emballage|unite/i.test(c) && !map.conditionnement) (map as Record<string, number>).conditionnement = i;
+      });
+      setColMap(map);
+    };
+    reader.readAsText(file, 'UTF-8');
+    if (fileRef.current) fileRef.current.value = '';
   };
 
-  const updatePreviewField = (idx: number, field: string, value: string) => {
-    setPreviews(prev => prev.map((p, i) => i === idx ? { ...p, [field]: value } : p));
-  };
-
-  const updatePreviewLigne = (idx: number, lineIdx: number, field: string, value: string | number) => {
-    setPreviews(prev => prev.map((p, i) => {
-      if (i !== idx) return p;
-      const lignes = [...p.lignes];
-      lignes[lineIdx] = { ...lignes[lineIdx], [field]: value };
-      return { ...p, lignes };
-    }));
-  };
-
-  const addPreviewLigne = (idx: number) => {
-    setPreviews(prev => prev.map((p, i) => i === idx ? { ...p, lignes: [...p.lignes, { ref: '', designation: '', coloris: '', conditionnement: '', qte: 1, prixUnitaireHT: 0, totalLigneHT: 0 }] } : p));
-  };
-
-  const removePreviewLigne = (idx: number, lineIdx: number) => {
-    setPreviews(prev => prev.map((p, i) => i === idx ? { ...p, lignes: p.lignes.filter((_, li) => li !== lineIdx) } : p));
-  };
-
-  const toggleExcluded = (idx: number) => {
-    setExcluded(prev => { const s = new Set(prev); if (s.has(idx)) s.delete(idx); else s.add(idx); return s; });
+  const dataRows = hasHeader ? csvRows.slice(1) : csvRows;
+  const previewLignes = dataRows.slice(0, 5);
+  const getCol = (row: string[], key: string) => {
+    const idx = colMap[key];
+    return idx >= 0 && idx < row.length ? row[idx] : '';
   };
 
   const confirmImport = () => {
-    const toImport = previews.filter((p, i) => !excluded.has(i) && p.lignes.length > 0);
-    if (toImport.length === 0) return;
-    const newFactures: Facture[] = toImport.map((p, i) => ({
-      id: `F-${Date.now()}-${i}`,
-      fournisseur: p.fournisseur || 'Inconnu',
-      dateFacture: p.dateFacture || new Date().toISOString().slice(0, 10),
-      numFacture: p.numFacture || `IMP-${Date.now().toString(36).toUpperCase()}-${i}`,
-      lignes: p.lignes.map(l => ({ ...l, totalLigneHT: l.totalLigneHT || l.qte * l.prixUnitaireHT })),
-    }));
-    onUpdate([...factures, ...newFactures]);
-    setPreviews([]);
-    setExcluded(new Set());
+    if (!importFournisseur) { setImportError('Fournisseur requis'); return; }
+    const lignes: LigneFacture[] = dataRows
+      .filter(row => row.length > 1)
+      .map(row => ({
+        ref: getCol(row, 'ref'),
+        designation: getCol(row, 'designation'),
+        coloris: getCol(row, 'coloris') || '',
+        conditionnement: getCol(row, 'conditionnement') || '',
+        qte: parseNum(getCol(row, 'qte')),
+        prixUnitaireHT: parseNum(getCol(row, 'prixUnitaireHT')),
+        totalLigneHT: parseNum(getCol(row, 'totalLigneHT')),
+      }))
+      .filter(l => l.designation && (l.qte > 0 || l.totalLigneHT > 0))
+      .map(l => ({ ...l, totalLigneHT: l.totalLigneHT || l.qte * l.prixUnitaireHT }));
+
+    if (lignes.length === 0) { setImportError('Aucune ligne valide trouvee'); return; }
+
+    const newFacture: Facture = {
+      id: `F-${Date.now()}`,
+      fournisseur: importFournisseur,
+      dateFacture: importDate,
+      numFacture: importNumFacture || `CSV-${Date.now().toString(36).toUpperCase()}`,
+      lignes,
+    };
+    onUpdate([...factures, newFacture]);
     setImportMode(false);
+    setCsvRows([]);
   };
 
   const handleManualCreate = () => {
-    setPreviews([{ fournisseur: '', dateFacture: new Date().toISOString().slice(0, 10), numFacture: '', lignes: [], texteBrut: '', pages: [] }]);
-    setExcluded(new Set());
-    setExpandedIdx(0);
-    setImportMode(true);
+    const newFacture: Facture = {
+      id: `F-${Date.now()}`,
+      fournisseur: 'Nouveau',
+      dateFacture: new Date().toISOString().slice(0, 10),
+      numFacture: '',
+      lignes: [{ ref: '', designation: '', coloris: '', conditionnement: '', qte: 1, prixUnitaireHT: 0, totalLigneHT: 0 }],
+    };
+    onUpdate([...factures, newFacture]);
   };
+
+  const COLS = [
+    { key: 'ref', label: 'Reference' },
+    { key: 'designation', label: 'Designation' },
+    { key: 'qte', label: 'Quantite' },
+    { key: 'prixUnitaireHT', label: 'Prix unit. HT' },
+    { key: 'totalLigneHT', label: 'Total HT' },
+    { key: 'coloris', label: 'Coloris' },
+    { key: 'conditionnement', label: 'Conditionnement' },
+  ];
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
-      {/* Import Preview Modal */}
-      {importMode && (
+      {/* Import CSV Modal */}
+      {importMode && csvRows.length > 0 && (
         <div className="bg-[#181a20] border-2 border-green-500/40 rounded-xl p-5 space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-green-400">
-              Import factures — {previews.length > 1 ? `${previews.length} fournisseurs detectes` : 'Verification'}
-            </h3>
-            <button onClick={() => { setImportMode(false); setPreviews([]); setParseError(null); }} className="text-gray-500 hover:text-white"><X size={16} /></button>
+            <h3 className="text-sm font-bold text-green-400">Import CSV — {dataRows.length} lignes detectees</h3>
+            <button onClick={() => { setImportMode(false); setCsvRows([]); setImportError(null); }} className="text-gray-500 hover:text-white"><X size={16} /></button>
           </div>
 
-          {parsing && <div className="text-center py-8 text-gray-400 text-sm">Lecture du PDF en cours...</div>}
-          {parseError && <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2 text-xs text-amber-400">{parseError}</div>}
+          {importError && <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2 text-xs text-red-400">{importError}</div>}
 
-          {!parsing && previews.length > 0 && (
-          <>
-            {/* Liste des factures detectees */}
-            {previews.length > 1 && (
-              <div className="flex flex-wrap gap-2">
-                {previews.map((p, idx) => (
-                  <div key={idx} className="flex items-center gap-1">
-                    <button onClick={() => toggleExcluded(idx)}
-                      className={`px-2 py-1 rounded text-[10px] border transition-colors ${excluded.has(idx)
-                        ? 'bg-red-600/20 text-red-400 border-red-500/30 line-through'
-                        : 'bg-green-600/10 text-green-400 border-green-500/30'}`}>
-                      {excluded.has(idx) ? 'Exclu' : 'Inclus'}
-                    </button>
-                    <button onClick={() => setExpandedIdx(expandedIdx === idx ? null : idx)}
-                      className={`px-3 py-1 rounded text-xs border transition-colors ${expandedIdx === idx
-                        ? 'bg-blue-600/20 text-blue-400 border-blue-500/40'
-                        : excluded.has(idx) ? 'text-gray-600 border-[#353840] line-through' : 'text-gray-300 border-[#353840] hover:border-blue-500/30'}`}>
-                      {p.fournisseur || `Fournisseur inconnu`} <span className="text-gray-500">p.{p.pages.join(',')}</span> ({p.lignes.length}L)
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
+          <div className="grid grid-cols-4 gap-3">
+            <div>
+              <label className="block text-[10px] text-gray-500 mb-1">Fournisseur</label>
+              <input list="fournisseurs-list" value={importFournisseur} onChange={e => setImportFournisseur(e.target.value)}
+                placeholder="Saisir ou choisir..." className="w-full px-2.5 py-1.5 bg-[#0f1117] border border-[#2a2d35] rounded-lg text-xs text-white outline-none focus:border-green-500/50" />
+              <datalist id="fournisseurs-list">
+                {FOURNISSEURS_CONNUS.map(f => <option key={f} value={f} />)}
+              </datalist>
+            </div>
+            <div>
+              <label className="block text-[10px] text-gray-500 mb-1">N. facture</label>
+              <input value={importNumFacture} onChange={e => setImportNumFacture(e.target.value)} className="w-full px-2.5 py-1.5 bg-[#0f1117] border border-[#2a2d35] rounded-lg text-xs text-white outline-none focus:border-green-500/50" />
+            </div>
+            <div>
+              <label className="block text-[10px] text-gray-500 mb-1">Date facture</label>
+              <input type="date" value={importDate} onChange={e => setImportDate(e.target.value)} className="w-full px-2.5 py-1.5 bg-[#0f1117] border border-[#2a2d35] rounded-lg text-xs text-white outline-none focus:border-green-500/50" />
+            </div>
+            <div className="flex items-end gap-2">
+              <label className="flex items-center gap-1.5 text-xs text-gray-400 cursor-pointer">
+                <input type="checkbox" checked={hasHeader} onChange={e => setHasHeader(e.target.checked)} className="rounded" />
+                1ere ligne = en-tete
+              </label>
+              <span className="text-[10px] text-gray-600">sep: {separator === '\t' ? 'TAB' : separator === ';' ? ';' : ','}</span>
+            </div>
+          </div>
 
-            {/* Detail de la facture selectionnee */}
-            {expandedIdx !== null && previews[expandedIdx] && (() => {
-              const pv = previews[expandedIdx];
-              const idx = expandedIdx;
-              const isExcl = excluded.has(idx);
-              return (
-                <div className={`space-y-3 ${isExcl ? 'opacity-40' : ''}`}>
-                  <div className="grid grid-cols-3 gap-3">
-                    <div>
-                      <label className="block text-[10px] text-gray-500 mb-1">Fournisseur {pv.pages.length > 0 && <span className="text-gray-600">(p.{pv.pages.join(',')})</span>}</label>
-                      <input list="fournisseurs-list" value={pv.fournisseur} onChange={e => updatePreviewField(idx, 'fournisseur', e.target.value)}
-                        placeholder="Saisir ou choisir..."
-                        className="w-full px-2.5 py-1.5 bg-[#0f1117] border border-[#2a2d35] rounded-lg text-xs text-white outline-none focus:border-green-500/50" />
-                      <datalist id="fournisseurs-list">
-                        {FOURNISSEURS_CONNUS.map(f => <option key={f} value={f} />)}
-                      </datalist>
-                    </div>
-                    <div>
-                      <label className="block text-[10px] text-gray-500 mb-1">N. facture</label>
-                      <input value={pv.numFacture} onChange={e => updatePreviewField(idx, 'numFacture', e.target.value)}
-                        className="w-full px-2.5 py-1.5 bg-[#0f1117] border border-[#2a2d35] rounded-lg text-xs text-white outline-none focus:border-green-500/50" />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] text-gray-500 mb-1">Date facture</label>
-                      <input type="date" value={pv.dateFacture} onChange={e => updatePreviewField(idx, 'dateFacture', e.target.value)}
-                        className="w-full px-2.5 py-1.5 bg-[#0f1117] border border-[#2a2d35] rounded-lg text-xs text-white outline-none focus:border-green-500/50" />
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs text-gray-400">{pv.lignes.length} ligne{pv.lignes.length > 1 ? 's' : ''}</span>
-                      <button onClick={() => addPreviewLigne(idx)} className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300"><Plus size={12} /> Ajouter ligne</button>
-                    </div>
-                    {pv.lignes.length > 0 && (
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-[11px]">
-                          <thead>
-                            <tr className="border-b border-[#2a2d35] text-gray-500">
-                              <th className="text-left px-2 py-1.5">Ref</th>
-                              <th className="text-left px-2 py-1.5">Designation</th>
-                              <th className="text-left px-2 py-1.5 w-20">Coloris</th>
-                              <th className="text-left px-2 py-1.5 w-24">Condit.</th>
-                              <th className="text-center px-2 py-1.5 w-14">Qte</th>
-                              <th className="text-right px-2 py-1.5 w-20">PU HT</th>
-                              <th className="text-right px-2 py-1.5 w-20">Total HT</th>
-                              <th className="w-8"></th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {pv.lignes.map((l, li) => (
-                              <tr key={li} className="border-b border-[#2a2d35]/30">
-                                <td className="px-2 py-1"><input value={l.ref} onChange={e => updatePreviewLigne(idx, li, 'ref', e.target.value)} className="bg-[#252830] border border-[#353840] rounded px-1.5 py-0.5 text-amber-400 w-full outline-none" /></td>
-                                <td className="px-2 py-1"><input value={l.designation} onChange={e => updatePreviewLigne(idx, li, 'designation', e.target.value)} className="bg-transparent text-white w-full outline-none" /></td>
-                                <td className="px-2 py-1"><input value={l.coloris} onChange={e => updatePreviewLigne(idx, li, 'coloris', e.target.value)} className="bg-transparent text-gray-400 w-full outline-none" /></td>
-                                <td className="px-2 py-1"><input value={l.conditionnement} onChange={e => updatePreviewLigne(idx, li, 'conditionnement', e.target.value)} className="bg-transparent text-gray-400 w-full outline-none" /></td>
-                                <td className="px-2 py-1"><input type="number" value={l.qte} onChange={e => updatePreviewLigne(idx, li, 'qte', Number(e.target.value))} className="bg-[#252830] border border-[#353840] rounded px-1 py-0.5 text-white text-center w-full outline-none" /></td>
-                                <td className="px-2 py-1"><input type="number" step="0.01" value={l.prixUnitaireHT} onChange={e => updatePreviewLigne(idx, li, 'prixUnitaireHT', Number(e.target.value))} className="bg-[#252830] border border-[#353840] rounded px-1 py-0.5 text-white text-right w-full outline-none" /></td>
-                                <td className="px-2 py-1 text-right text-gray-300">{(l.totalLigneHT || l.qte * l.prixUnitaireHT).toFixed(2)}</td>
-                                <td className="px-1 py-1"><button onClick={() => removePreviewLigne(idx, li)} className="text-gray-600 hover:text-red-400"><Trash2 size={12} /></button></td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </div>
-
-                  {pv.texteBrut && (
-                    <div>
-                      <button onClick={() => setShowBrut(!showBrut)} className="flex items-center gap-1 text-[10px] text-gray-500 hover:text-gray-300">
-                        <Eye size={10} /> {showBrut ? 'Masquer' : 'Voir'} texte brut extrait
-                      </button>
-                      {showBrut && (
-                        <pre className="mt-2 bg-[#0f1117] border border-[#2a2d35] rounded-lg p-3 text-[10px] text-gray-400 max-h-40 overflow-auto whitespace-pre-wrap">{pv.texteBrut}</pre>
-                      )}
-                    </div>
-                  )}
+          {/* Column mapping */}
+          <div>
+            <h4 className="text-xs text-gray-400 mb-2">Correspondance des colonnes</h4>
+            <div className="grid grid-cols-4 sm:grid-cols-7 gap-2">
+              {COLS.map(col => (
+                <div key={col.key}>
+                  <label className="block text-[10px] text-gray-500 mb-1">{col.label}</label>
+                  <select value={colMap[col.key] ?? -1} onChange={e => setColMap(prev => ({ ...prev, [col.key]: Number(e.target.value) }))}
+                    className="w-full px-1.5 py-1 bg-[#0f1117] border border-[#2a2d35] rounded text-[10px] text-white outline-none">
+                    <option value={-1}>— ignorer —</option>
+                    {csvHeaders.map((h, i) => <option key={i} value={i}>{h || `Col ${i + 1}`}</option>)}
+                  </select>
                 </div>
-              );
-            })()}
-
-            <div className="flex gap-2 pt-2">
-              <button onClick={confirmImport} disabled={previews.filter((p, i) => !excluded.has(i) && p.lignes.length > 0).length === 0}
-                className="flex items-center gap-1.5 px-4 py-2 bg-green-600 hover:bg-green-500 disabled:bg-green-600/30 disabled:text-green-400/50 text-white text-xs font-semibold rounded-lg transition-colors">
-                <Download size={14} /> Importer {previews.filter((_, i) => !excluded.has(i)).length} facture{previews.filter((_, i) => !excluded.has(i)).length > 1 ? 's' : ''}
-              </button>
-              <button onClick={() => { setImportMode(false); setPreviews([]); setParseError(null); }} className="px-4 py-2 text-xs text-gray-400 hover:text-white">Annuler</button>
+              ))}
             </div>
-          </>
-          )}
+          </div>
 
-          {!parsing && previews.length === 0 && !parseError && (
-            <div className="text-center py-6">
-              <p className="text-sm text-gray-400 mb-3">Selectionnez un fichier PDF</p>
-              <button onClick={() => fileRef.current?.click()} className="px-4 py-2 bg-green-600 hover:bg-green-500 text-white text-xs font-semibold rounded-lg">
-                <FileUp size={14} className="inline mr-1.5" /> Choisir un PDF
-              </button>
+          {/* Preview */}
+          <div>
+            <h4 className="text-xs text-gray-400 mb-2">Apercu (5 premieres lignes)</h4>
+            <div className="overflow-x-auto">
+              <table className="w-full text-[10px]">
+                <thead>
+                  <tr className="border-b border-[#2a2d35] text-gray-500">
+                    <th className="text-left px-2 py-1">Ref</th>
+                    <th className="text-left px-2 py-1">Designation</th>
+                    <th className="text-center px-2 py-1">Qte</th>
+                    <th className="text-right px-2 py-1">PU HT</th>
+                    <th className="text-right px-2 py-1">Total HT</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {previewLignes.map((row, i) => (
+                    <tr key={i} className="border-b border-[#2a2d35]/30">
+                      <td className="px-2 py-1 text-amber-400 font-mono">{getCol(row, 'ref')}</td>
+                      <td className="px-2 py-1 text-white">{getCol(row, 'designation')}</td>
+                      <td className="px-2 py-1 text-center text-gray-300">{getCol(row, 'qte')}</td>
+                      <td className="px-2 py-1 text-right text-gray-300">{getCol(row, 'prixUnitaireHT')}</td>
+                      <td className="px-2 py-1 text-right text-gray-300">{getCol(row, 'totalLigneHT')}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          )}
+            {dataRows.length > 5 && <p className="text-[10px] text-gray-600 mt-1">... et {dataRows.length - 5} autres lignes</p>}
+          </div>
+
+          <div className="flex gap-2 pt-2">
+            <button onClick={confirmImport}
+              className="flex items-center gap-1.5 px-4 py-2 bg-green-600 hover:bg-green-500 text-white text-xs font-semibold rounded-lg transition-colors">
+              <Download size={14} /> Importer {dataRows.length} lignes
+            </button>
+            <button onClick={() => { setImportMode(false); setCsvRows([]); setImportError(null); }} className="px-4 py-2 text-xs text-gray-400 hover:text-white">Annuler</button>
+          </div>
         </div>
       )}
 
@@ -586,10 +571,10 @@ function TabFactures({ factures, consolidated, onUpdate, fournisseursExclus, onE
           )}
         </div>
         <div className="flex gap-2">
-          <input ref={fileRef} type="file" accept=".pdf" onChange={handleFileSelect} className="hidden" />
-          <button onClick={() => { setImportMode(true); fileRef.current?.click(); }} disabled={parsing}
+          <input ref={fileRef} type="file" accept=".csv,.tsv,.txt" onChange={handleFileSelect} className="hidden" />
+          <button onClick={() => fileRef.current?.click()}
             className="flex items-center gap-1 px-3 py-1.5 text-xs bg-green-600/10 border border-green-500/30 text-green-400 rounded-lg hover:bg-green-600/20">
-            <FileUp size={12} /> {parsing ? 'Lecture PDF...' : 'Importer PDF'}
+            <FileUp size={12} /> Importer CSV
           </button>
           <button onClick={handleManualCreate}
             className="flex items-center gap-1 px-3 py-1.5 text-xs bg-blue-600/10 border border-blue-500/30 text-blue-400 rounded-lg hover:bg-blue-600/20">
