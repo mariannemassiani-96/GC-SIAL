@@ -235,7 +235,7 @@ export function StageInventaire({ onBack }: Props) {
   });
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
-    { id: 'factures', label: 'Factures', icon: <FileText size={16} /> },
+    { id: 'factures', label: 'Stock', icon: <FileText size={16} /> },
     { id: 'recensement', label: 'Recensement', icon: <ClipboardList size={16} /> },
     { id: 'decisions', label: 'Decisions', icon: <CheckSquare size={16} /> },
     { id: 'dotations', label: 'Dotations postes', icon: <Briefcase size={16} /> },
