@@ -162,7 +162,7 @@ export function TraveePaint({ travee: t, onUpdate }: Props) {
         <div className="flex-1" />
         <button onClick={() => setFlipped(f => !f)}
           className="flex items-center gap-1 px-2.5 py-1 rounded border border-[#353840] text-gray-400 hover:text-white hover:border-blue-500/40 transition-colors">
-          ↕ Retours vers {flipped ? 'INT' : 'EXT'}
+          ↕ Retours cote {flipped ? 'INT (batiment)' : 'EXT (vide)'}
         </button>
       </div>
 
@@ -178,9 +178,9 @@ export function TraveePaint({ travee: t, onUpdate }: Props) {
           </defs>
           <rect width={svgW} height={svgH} fill="url(#paint-grid)" />
 
-          {/* EXT / INT — retours go toward EXT by default, toward INT when flipped */}
-          <text x={15} y={20} fill="#4b5563" fontSize={10} fontFamily="monospace">{flipped ? 'INT' : 'EXT'}</text>
-          <text x={15} y={svgH - 10} fill="#6b7280" fontSize={10} fontFamily="monospace">{flipped ? 'EXT' : 'INT'}</text>
+          {/* EXT always top, INT always bottom */}
+          <text x={15} y={20} fill="#4b5563" fontSize={10} fontFamily="monospace">EXT</text>
+          <text x={15} y={svgH - 10} fill="#6b7280" fontSize={10} fontFamily="monospace">INT</text>
 
           {/* Segments */}
           {segments.map((seg, si) => (
