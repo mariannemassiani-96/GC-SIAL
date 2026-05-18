@@ -42,6 +42,10 @@ export interface Travee extends TraveeConfig {
   nbRaidForce?: number;
   /** Positions manuelles des raidisseurs en mm depuis le bord gauche */
   posRaidForce?: number[];
+  /** Fixation bout du retour gauche (U/G) : mur ou bouchon */
+  fixRetourG?: 'mur' | 'libre';
+  /** Fixation bout du retour droit (U/C/D) : mur ou bouchon */
+  fixRetourD?: 'mur' | 'libre';
 }
 
 /** Affaire = enveloppe projet + valeurs par défaut pour nouvelles travées */
