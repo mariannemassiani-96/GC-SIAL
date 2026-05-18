@@ -35,8 +35,8 @@ function buildSegments(t: Travee, flipped: boolean): Segment[] {
   const hasAngleD = t.coupeD === '45';
 
   const originX = 80;
-  const originY = flipped ? 100 : 300;
-  const dir = flipped ? 1 : -1; // up or down for retours
+  const originY = 200; // centre bar always in the middle
+  const dir = flipped ? 1 : -1; // -1 = retours go up (toward EXT top), 1 = retours go down (toward INT bottom)
 
   if (hasAngleG) {
     const len = isU ? (t.largeur3 || 1000) : (t.largeur2 || 1000);
@@ -162,7 +162,7 @@ export function TraveePaint({ travee: t, onUpdate }: Props) {
         <div className="flex-1" />
         <button onClick={() => setFlipped(f => !f)}
           className="flex items-center gap-1 px-2.5 py-1 rounded border border-[#353840] text-gray-400 hover:text-white hover:border-blue-500/40 transition-colors">
-          ↕ {flipped ? 'EXT en haut' : 'EXT en bas'}
+          ↕ Retours vers {flipped ? 'INT' : 'EXT'}
         </button>
       </div>
 
@@ -178,9 +178,9 @@ export function TraveePaint({ travee: t, onUpdate }: Props) {
           </defs>
           <rect width={svgW} height={svgH} fill="url(#paint-grid)" />
 
-          {/* EXT / INT */}
-          <text x={15} y={flipped ? svgH - 10 : 20} fill="#4b5563" fontSize={10} fontFamily="monospace">EXT</text>
-          <text x={15} y={flipped ? 20 : svgH - 10} fill="#6b7280" fontSize={10} fontFamily="monospace">INT</text>
+          {/* EXT / INT — retours go toward EXT by default, toward INT when flipped */}
+          <text x={15} y={20} fill="#4b5563" fontSize={10} fontFamily="monospace">{flipped ? 'INT' : 'EXT'}</text>
+          <text x={15} y={svgH - 10} fill="#6b7280" fontSize={10} fontFamily="monospace">{flipped ? 'EXT' : 'INT'}</text>
 
           {/* Segments */}
           {segments.map((seg, si) => (
