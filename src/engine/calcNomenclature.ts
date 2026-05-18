@@ -100,8 +100,32 @@ export function calcNomenclature(
   if (travee.fixG === 'mur_g') addAccess('127150', 1);
   if (travee.fixD === 'mur_d') addAccess('127149', 1);
   if (travee.fixD === 'mur_g') addAccess('127150', 1);
-  if (travee.fixG === 'raccord90' || travee.fixD === 'raccord90') addAccess('110962', 1);
+
+  // Raccords 90° — 1 par angle
+  let nbRaccord90 = 0;
+  if (travee.fixG === 'raccord90') nbRaccord90++;
+  if (travee.fixD === 'raccord90') nbRaccord90++;
+  if (nbRaccord90 > 0) addAccess('110962', nbRaccord90);
+
   if (travee.fixG === 'raccord_droit' || travee.fixD === 'raccord_droit') addAccess('110966', 1);
+
+  // Bouts des retours (L/U)
+  if (travee.coupeG === '45') {
+    if ((travee.fixRetourG ?? 'libre') === 'libre') {
+      addAccess(mc.bouchon, 1);
+      addAccess('127144', 1);
+    } else {
+      addAccess('127150', 1);
+    }
+  }
+  if (travee.coupeD === '45') {
+    if ((travee.fixRetourD ?? 'libre') === 'libre') {
+      addAccess(mc.bouchon, 1);
+      addAccess('127144', 1);
+    } else {
+      addAccess('127149', 1);
+    }
+  }
 
   return items;
 }
