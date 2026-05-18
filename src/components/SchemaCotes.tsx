@@ -79,6 +79,22 @@ export function SchemaCotes({ affaire }: SchemaCotesProps) {
                       <line x1={x} y1={planY + 10} x2={x} y2={planY + 10 - (t.largeur3 ?? 0) * scale} stroke="#3b82f6" strokeWidth={3} />
                     )}
 
+                    {/* Wall marks at end of retours */}
+                    {angle && t.coupeD === '45' && (t.fixRetourD ?? 'libre') === 'mur' && (
+                      <rect x={x + w - 2} y={planY + 10 - w2 - 2} width={4} height={4} fill="#9ca3af" rx={0.5} />
+                    )}
+                    {angle && t.coupeD === '45' && (t.fixRetourD ?? 'libre') === 'libre' && (
+                      <circle cx={x + w} cy={planY + 10 - w2} r={2.5} fill="#ef4444" />
+                    )}
+                    {t.coupeG === '45' && (() => {
+                      const branchLen = t.coupeD === '45' ? (t.largeur3 ?? 0) * scale : w2;
+                      if (branchLen <= 0) return null;
+                      const isMur = (t.fixRetourG ?? 'libre') === 'mur';
+                      return isMur
+                        ? <rect x={x - 2} y={planY + 10 - branchLen - 2} width={4} height={4} fill="#9ca3af" rx={0.5} />
+                        : <circle cx={x} cy={planY + 10 - branchLen} r={2.5} fill="#ef4444" />;
+                    })()}
+
                     {/* Dimension: width */}
                     <line x1={x} y1={planY + 30} x2={x + w} y2={planY + 30} stroke="#f59e0b" strokeWidth={0.5} />
                     <line x1={x} y1={planY + 25} x2={x} y2={planY + 35} stroke="#f59e0b" strokeWidth={0.5} />
