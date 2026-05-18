@@ -28,29 +28,28 @@ function snap(v: number, grid: number): number {
   return Math.round(v / grid) * grid;
 }
 
-function buildSegments(t: Travee): Segment[] {
+function buildSegments(t: Travee, flipped: boolean): Segment[] {
   const segs: Segment[] = [];
   const isU = t.coupeG === '45' && t.coupeD === '45';
   const hasAngleG = t.coupeG === '45';
   const hasAngleD = t.coupeD === '45';
 
   const originX = 80;
-  const originY = 300;
+  const originY = flipped ? 100 : 300;
+  const dir = flipped ? 1 : -1; // up or down for retours
 
-  // Left branch (vertical, going up)
   if (hasAngleG) {
     const len = isU ? (t.largeur3 || 1000) : (t.largeur2 || 1000);
     segs.push({
       label: isU ? 'Gauche' : 'Retour G',
       color: '#f59e0b',
       start: { x: originX, y: originY },
-      end: { x: originX, y: originY - len * PX_PER_MM },
+      end: { x: originX, y: originY + dir * len * PX_PER_MM },
       longueur: len,
       direction: 'v',
     });
   }
 
-  // Centre (horizontal)
   segs.push({
     label: hasAngleG || hasAngleD ? 'Centre' : 'Travée',
     color: '#3b82f6',
@@ -60,14 +59,13 @@ function buildSegments(t: Travee): Segment[] {
     direction: 'h',
   });
 
-  // Right branch (vertical, going up)
   if (hasAngleD) {
     const endX = originX + t.largeur * PX_PER_MM;
     segs.push({
       label: isU ? 'Droite' : 'Retour D',
       color: '#10b981',
       start: { x: endX, y: originY },
-      end: { x: endX, y: originY - t.largeur2 * PX_PER_MM },
+      end: { x: endX, y: originY + dir * t.largeur2 * PX_PER_MM },
       longueur: t.largeur2,
       direction: 'v',
     });
@@ -91,8 +89,9 @@ export function TraveePaint({ travee: t, onUpdate }: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [dragging, setDragging] = useState<{ seg: number; end: 'start' | 'end' } | null>(null);
   const [selectedEnd, setSelectedEnd] = useState<SelectedEnd>(null);
+  const [flipped, setFlipped] = useState(false);
 
-  const segments = buildSegments(t);
+  const segments = buildSegments(t, flipped);
   const isU = t.coupeG === '45' && t.coupeD === '45';
   const hasAngleG = t.coupeG === '45';
   const hasAngleD = t.coupeD === '45';
@@ -160,6 +159,11 @@ export function TraveePaint({ travee: t, onUpdate }: Props) {
       <div className="flex items-center gap-4 text-xs text-gray-400">
         <span className="font-medium text-white">Editeur de travee</span>
         <span>Cliquez les extremites pour changer la fixation — Tirez les bords pour ajuster les cotes</span>
+        <div className="flex-1" />
+        <button onClick={() => setFlipped(f => !f)}
+          className="flex items-center gap-1 px-2.5 py-1 rounded border border-[#353840] text-gray-400 hover:text-white hover:border-blue-500/40 transition-colors">
+          ↕ {flipped ? 'EXT en haut' : 'EXT en bas'}
+        </button>
       </div>
 
       <div className="bg-[#14161d] border border-[#252830] rounded-xl p-4 relative">
@@ -175,8 +179,8 @@ export function TraveePaint({ travee: t, onUpdate }: Props) {
           <rect width={svgW} height={svgH} fill="url(#paint-grid)" />
 
           {/* EXT / INT */}
-          <text x={15} y={20} fill="#4b5563" fontSize={10} fontFamily="monospace">EXT</text>
-          <text x={15} y={svgH - 10} fill="#6b7280" fontSize={10} fontFamily="monospace">INT</text>
+          <text x={15} y={flipped ? svgH - 10 : 20} fill="#4b5563" fontSize={10} fontFamily="monospace">EXT</text>
+          <text x={15} y={flipped ? 20 : svgH - 10} fill="#6b7280" fontSize={10} fontFamily="monospace">INT</text>
 
           {/* Segments */}
           {segments.map((seg, si) => (
@@ -265,8 +269,8 @@ export function TraveePaint({ travee: t, onUpdate }: Props) {
           })()}
 
           {/* Angle markers at junctions */}
-          {hasAngleG && <text x={80 - 15} y={300 + 5} fill="#f59e0b" fontSize={8} fontFamily="monospace" textAnchor="end">90°</text>}
-          {hasAngleD && <text x={80 + t.largeur * PX_PER_MM + 15} y={300 + 5} fill="#10b981" fontSize={8} fontFamily="monospace">90°</text>}
+          {hasAngleG && <text x={80 - 15} y={segments[0].start.y + 5} fill="#f59e0b" fontSize={8} fontFamily="monospace" textAnchor="end">90°</text>}
+          {hasAngleD && <text x={80 + t.largeur * PX_PER_MM + 15} y={segments[0].start.y + 5} fill="#10b981" fontSize={8} fontFamily="monospace">90°</text>}
         </svg>
 
         {/* Fixation popup */}
