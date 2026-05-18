@@ -54,8 +54,8 @@ function schemaIsU(t: Travee): boolean {
 
 /** Petit SVG schématique du schéma de pose (vue intérieure) */
 function SchemaPoseMini({ schema }: { schema: SchemaPose }) {
-  const w = 80, h = 28, pad = 6;
-  const barY = h / 2;
+  const w = 80, h = 36, pad = 6;
+  const barY = 20;
 
   const fG: FixationId = schema.fixG;
   const fD: FixationId = schema.fixD;
@@ -66,14 +66,19 @@ function SchemaPoseMini({ schema }: { schema: SchemaPose }) {
 
   return (
     <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-full">
-      {/* Main bar */}
-      <line x1={pad} y1={barY} x2={w - pad} y2={barY} stroke="#60a5fa" strokeWidth={2} />
+      {/* EXT en haut, INT en bas */}
+      <text x={2} y={7} fill="#4b5563" fontSize={4.5} fontFamily="sans-serif">EXT</text>
+      <text x={2} y={h - 2} fill="#6b7280" fontSize={4.5} fontFamily="sans-serif">INT</text>
+      {/* Ligne séparatrice ext/int */}
+      <line x1={pad} y1={barY + 5} x2={w - pad} y2={barY + 5} stroke="#2a2d35" strokeWidth={0.5} strokeDasharray="2,2" />
+      {/* Main bar (sur la façade, côté extérieur) */}
+      <line x1={pad} y1={barY} x2={w - pad} y2={barY} stroke="#60a5fa" strokeWidth={2.5} />
       {/* Left end */}
       {leftWall && (<>
         <rect x={1} y={barY - 8} width={3} height={16} fill="#9ca3af" rx={0.5} />
         <line x1={pad} y1={barY} x2={4} y2={barY} stroke="#f59e0b" strokeWidth={1.5} />
       </>)}
-      {leftAngle && (<line x1={pad} y1={barY} x2={pad} y2={barY + 10} stroke="#f59e0b" strokeWidth={2} />)}
+      {leftAngle && (<line x1={pad} y1={barY} x2={pad} y2={barY - 12} stroke="#f59e0b" strokeWidth={2} />)}
       {schema.fixG === 'libre' && (<circle cx={pad} cy={barY} r={2} fill="#ef4444" />)}
       {schema.fixG === 'raccord_droit' && (<line x1={pad - 3} y1={barY} x2={pad} y2={barY} stroke="#60a5fa" strokeWidth={2} strokeDasharray="2,1" />)}
       {/* Right end */}
@@ -81,11 +86,9 @@ function SchemaPoseMini({ schema }: { schema: SchemaPose }) {
         <rect x={w - 4} y={barY - 8} width={3} height={16} fill="#9ca3af" rx={0.5} />
         <line x1={w - pad} y1={barY} x2={w - 4} y2={barY} stroke="#f59e0b" strokeWidth={1.5} />
       </>)}
-      {rightAngle && (<line x1={w - pad} y1={barY} x2={w - pad} y2={barY + 10} stroke="#f59e0b" strokeWidth={2} />)}
+      {rightAngle && (<line x1={w - pad} y1={barY} x2={w - pad} y2={barY - 12} stroke="#f59e0b" strokeWidth={2} />)}
       {schema.fixD === 'libre' && (<circle cx={w - pad} cy={barY} r={2} fill="#ef4444" />)}
       {schema.fixD === 'raccord_droit' && (<line x1={w - pad} y1={barY} x2={w - pad + 3} y2={barY} stroke="#60a5fa" strokeWidth={2} strokeDasharray="2,1" />)}
-      {/* Interior label */}
-      <text x={w / 2} y={8} textAnchor="middle" fill="#6b7280" fontSize={5} fontFamily="sans-serif">INT.</text>
     </svg>
   );
 }
@@ -310,7 +313,7 @@ export function SectionTravees({ affaire, onChange, alertesByTravee }: SectionTr
                               }`}
                               title={schema.desc}
                             >
-                              <div className="h-8">
+                              <div className="h-10">
                                 <SchemaPoseMini schema={schema} />
                               </div>
                               <span className={`block text-center text-[10px] font-mono mt-0.5 ${isActive ? 'text-blue-400 font-bold' : 'text-gray-500'}`}>
