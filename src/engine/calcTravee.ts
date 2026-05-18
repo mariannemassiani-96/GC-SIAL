@@ -28,7 +28,7 @@ function barreauxDansIntervalle(start: number, end: number, nbBar: number): numb
 }
 
 export function calcPositionsUsinages(
-  longueurLisse: number,
+  _longueurLisse: number,
   nbRaid: number,
   entraxeEff: number
 ): UsinageLisse {
