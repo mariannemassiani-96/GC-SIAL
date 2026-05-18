@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Plus, Trash2, Copy, ChevronDown, ChevronRight } from 'lucide-react';
-import type { Affaire, Travee, TraveeConfig, Alerte, FixationId } from '../types';
+import type { Affaire, Travee, TraveeConfig, Alerte, FixationId, RaidBranche } from '../types';
 import { createEmptyTravee, duplicateTravee } from '../store/affaires';
 import { TYPES_GC, TYPES_MC, POSE_DATA } from '../constants/typesGC';
 import { Button } from './ui/Button';
@@ -357,61 +357,8 @@ export function SectionTravees({ affaire, onChange, alertesByTravee }: SectionTr
                       </div>
                     )}
 
-                    {/* Row 5: Raidisseurs override */}
-                    <div className="bg-[#14161d] border border-[#252830] rounded-lg p-3">
-                      <div className="flex items-center gap-3 mb-2">
-                        <label className="flex items-center gap-1.5 text-xs text-gray-400 cursor-pointer">
-                          <input type="checkbox" checked={!!t.nbRaidForce} onChange={(e) => {
-                            if (e.target.checked) {
-                              const entraxeMax = t.lieu === 'public' ? 1100 : 1400;
-                              const autoNb = Math.ceil(t.largeur / entraxeMax) + 1;
-                              updateTravee(t.id, { nbRaidForce: autoNb });
-                            } else {
-                              updateTravee(t.id, { nbRaidForce: undefined, posRaidForce: undefined });
-                            }
-                          }} className="accent-amber-500" />
-                          Forcer les raidisseurs
-                        </label>
-                        {t.nbRaidForce && (
-                          <div className="flex items-center gap-2">
-                            <label className="text-[10px] text-amber-400">Nombre :</label>
-                            <input type="number" min={2} max={20} value={t.nbRaidForce} onChange={(e) => {
-                              const nb = Math.max(2, parseInt(e.target.value) || 2);
-                              updateTravee(t.id, { nbRaidForce: nb, posRaidForce: undefined });
-                            }} className="w-14 bg-[#1e2028] border border-amber-500/30 rounded px-2 py-1 text-xs text-amber-300 font-mono text-center outline-none focus:border-amber-500" />
-                          </div>
-                        )}
-                      </div>
-                      {t.nbRaidForce && (
-                        <div>
-                          <div className="flex items-center gap-2 mb-1.5">
-                            <label className="flex items-center gap-1.5 text-[10px] text-gray-500 cursor-pointer">
-                              <input type="checkbox" checked={!!t.posRaidForce} onChange={(e) => {
-                                if (e.target.checked) {
-                                  const nb = t.nbRaidForce || 3;
-                                  const step = t.largeur / (nb - 1);
-                                  updateTravee(t.id, { posRaidForce: Array.from({ length: nb }, (_, i) => Math.round(i * step)) });
-                                } else {
-                                  updateTravee(t.id, { posRaidForce: undefined });
-                                }
-                              }} className="accent-amber-500" />
-                              Positions manuelles (mm depuis bord gauche)
-                            </label>
-                          </div>
-                          {t.posRaidForce && (
-                            <div className="flex flex-wrap gap-1.5">
-                              {t.posRaidForce.map((pos, pi) => (
-                                <input key={pi} type="number" value={pos} onChange={(e) => {
-                                  const newPos = [...(t.posRaidForce || [])];
-                                  newPos[pi] = parseInt(e.target.value) || 0;
-                                  updateTravee(t.id, { posRaidForce: newPos });
-                                }} className="w-16 bg-[#1e2028] border border-amber-500/20 rounded px-1.5 py-0.5 text-[10px] text-amber-300 font-mono text-center outline-none focus:border-amber-500" />
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
+                    {/* Row 5: Raidisseurs par branche */}
+                    <RaidisseursEditor travee={t} onUpdate={(patch) => updateTravee(t.id, patch)} />
                   </div>
                 )}
               </div>
@@ -419,6 +366,101 @@ export function SectionTravees({ affaire, onChange, alertesByTravee }: SectionTr
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+function BrancheRaidEditor({ label, color, longueur, branche, onChange }: {
+  label: string; color: string; longueur: number; branche: RaidBranche | undefined; onChange: (b: RaidBranche | undefined) => void;
+}) {
+  const isActive = branche && branche.nb !== undefined && branche.nb >= 2;
+  const hasPos = branche?.positions && branche.positions.length >= 2;
+  const autoNb = Math.ceil(longueur / 1400) + 1;
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className={`text-[10px] font-bold ${color} w-16`}>{label}</span>
+        <span className="text-[10px] text-gray-600">{longueur} mm</span>
+        <label className="flex items-center gap-1 text-[10px] text-gray-400 cursor-pointer ml-2">
+          <input type="checkbox" checked={!!isActive} onChange={(e) => {
+            onChange(e.target.checked ? { nb: autoNb } : undefined);
+          }} className="accent-amber-500" />
+          Forcer
+        </label>
+        {isActive && (
+          <>
+            <input type="number" min={2} max={20} value={branche!.nb} onChange={(e) => {
+              onChange({ ...branche, nb: Math.max(2, parseInt(e.target.value) || 2), positions: undefined });
+            }} className="w-12 bg-[#1e2028] border border-amber-500/30 rounded px-1 py-0.5 text-[10px] text-amber-300 font-mono text-center outline-none" />
+            <span className="text-[10px] text-gray-600">raid.</span>
+            <label className="flex items-center gap-1 text-[10px] text-gray-500 cursor-pointer ml-2">
+              <input type="checkbox" checked={!!hasPos} onChange={(e) => {
+                if (e.target.checked) {
+                  const nb = branche!.nb || 3;
+                  const step = longueur / (nb - 1);
+                  onChange({ ...branche, positions: Array.from({ length: nb }, (_, i) => Math.round(i * step)) });
+                } else {
+                  onChange({ ...branche, positions: undefined });
+                }
+              }} className="accent-amber-500" />
+              Positions
+            </label>
+          </>
+        )}
+      </div>
+      {hasPos && (
+        <div className="flex flex-wrap gap-1 ml-16">
+          {branche!.positions!.map((pos, pi) => (
+            <input key={pi} type="number" value={pos} onChange={(e) => {
+              const newPos = [...(branche!.positions || [])];
+              newPos[pi] = parseInt(e.target.value) || 0;
+              onChange({ ...branche, positions: newPos });
+            }} className="w-14 bg-[#1e2028] border border-amber-500/20 rounded px-1 py-0.5 text-[10px] text-amber-300 font-mono text-center outline-none focus:border-amber-500" />
+          ))}
+          <span className="text-[10px] text-gray-600 self-center">mm</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RaidisseursEditor({ travee: t, onUpdate }: { travee: Travee; onUpdate: (patch: Partial<Travee>) => void }) {
+  const isU = t.coupeG === '45' && t.coupeD === '45';
+  const hasAngleD = t.coupeD === '45' && !isU;
+  const hasAngleG = t.coupeG === '45' && !isU;
+
+  const branches: { key: 'raidGauche' | 'raidCentre' | 'raidDroite'; label: string; color: string; longueur: number }[] = [];
+
+  if (isU && t.largeur3 > 0) branches.push({ key: 'raidGauche', label: 'Gauche', color: 'text-amber-400', longueur: t.largeur3 });
+  if (hasAngleG && t.largeur2 > 0) branches.push({ key: 'raidGauche', label: 'Retour', color: 'text-amber-400', longueur: t.largeur2 });
+  branches.push({ key: 'raidCentre', label: isU || hasAngleG || hasAngleD ? 'Centre' : 'Travee', color: 'text-blue-400', longueur: t.largeur });
+  if ((hasAngleD || isU) && t.largeur2 > 0) branches.push({ key: 'raidDroite', label: isU ? 'Droite' : 'Retour', color: 'text-emerald-400', longueur: t.largeur2 });
+
+  const hasAnyForce = t.raidGauche?.nb || t.raidCentre?.nb || t.raidDroite?.nb || t.nbRaidForce;
+
+  return (
+    <div className="bg-[#14161d] border border-[#252830] rounded-lg p-3 space-y-2">
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-gray-400 font-medium">Raidisseurs</span>
+        {hasAnyForce ? <span className="text-[10px] text-amber-400">Mode manuel</span> : <span className="text-[10px] text-gray-600">Calcul automatique</span>}
+      </div>
+      {branches.map(b => (
+        <BrancheRaidEditor
+          key={b.key}
+          label={b.label}
+          color={b.color}
+          longueur={b.longueur}
+          branche={b.key === 'raidCentre' ? (t.raidCentre ?? (t.nbRaidForce ? { nb: t.nbRaidForce, positions: t.posRaidForce } : undefined)) : t[b.key]}
+          onChange={(v) => {
+            if (b.key === 'raidCentre') {
+              onUpdate({ raidCentre: v, nbRaidForce: v?.nb, posRaidForce: v?.positions });
+            } else {
+              onUpdate({ [b.key]: v });
+            }
+          }}
+        />
+      ))}
     </div>
   );
 }
