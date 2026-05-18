@@ -34,6 +34,7 @@ const SCHEMAS_POSE: SchemaPose[] = [
   { id: 'F', fixG: 'mur_g',         fixD: 'libre',        coupeG: '90', coupeD: '90', desc: 'Patte murale gauche, libre à droite' },
   { id: 'G', fixG: 'raccord90',     fixD: 'libre',        coupeG: '45', coupeD: '90', desc: 'Angle 90° à gauche, libre à droite' },
   { id: 'H', fixG: 'raccord_droit', fixD: 'raccord_droit', coupeG: '90', coupeD: '90', desc: 'Éclisse droite des deux côtés' },
+  { id: 'U', fixG: 'raccord90',     fixD: 'raccord90',    coupeG: '45', coupeD: '45', desc: 'Schéma en U — angle 90° des deux côtés' },
 ];
 
 function getSchemaId(t: Travee): string {
@@ -43,9 +44,12 @@ function getSchemaId(t: Travee): string {
   return '?';
 }
 
-/** Schéma avec angle = a une coupe 45° sur un côté */
 function schemaHasAngle(t: Travee): boolean {
   return t.coupeG === '45' || t.coupeD === '45';
+}
+
+function schemaIsU(t: Travee): boolean {
+  return t.coupeG === '45' && t.coupeD === '45';
 }
 
 /** Petit SVG schématique du schéma de pose (vue intérieure) */
@@ -69,7 +73,7 @@ function SchemaPoseMini({ schema }: { schema: SchemaPose }) {
         <rect x={1} y={barY - 8} width={3} height={16} fill="#9ca3af" rx={0.5} />
         <line x1={pad} y1={barY} x2={4} y2={barY} stroke="#f59e0b" strokeWidth={1.5} />
       </>)}
-      {leftAngle && (<line x1={pad} y1={barY} x2={pad} y2={barY + 10} stroke="#60a5fa" strokeWidth={2} />)}
+      {leftAngle && (<line x1={pad} y1={barY} x2={pad} y2={barY + 10} stroke="#f59e0b" strokeWidth={2} />)}
       {schema.fixG === 'libre' && (<circle cx={pad} cy={barY} r={2} fill="#ef4444" />)}
       {schema.fixG === 'raccord_droit' && (<line x1={pad - 3} y1={barY} x2={pad} y2={barY} stroke="#60a5fa" strokeWidth={2} strokeDasharray="2,1" />)}
       {/* Right end */}
@@ -77,7 +81,7 @@ function SchemaPoseMini({ schema }: { schema: SchemaPose }) {
         <rect x={w - 4} y={barY - 8} width={3} height={16} fill="#9ca3af" rx={0.5} />
         <line x1={w - pad} y1={barY} x2={w - 4} y2={barY} stroke="#f59e0b" strokeWidth={1.5} />
       </>)}
-      {rightAngle && (<line x1={w - pad} y1={barY} x2={w - pad} y2={barY + 10} stroke="#60a5fa" strokeWidth={2} />)}
+      {rightAngle && (<line x1={w - pad} y1={barY} x2={w - pad} y2={barY + 10} stroke="#f59e0b" strokeWidth={2} />)}
       {schema.fixD === 'libre' && (<circle cx={w - pad} cy={barY} r={2} fill="#ef4444" />)}
       {schema.fixD === 'raccord_droit' && (<line x1={w - pad} y1={barY} x2={w - pad + 3} y2={barY} stroke="#60a5fa" strokeWidth={2} strokeDasharray="2,1" />)}
       {/* Interior label */}
@@ -132,15 +136,17 @@ export function SectionTravees({ affaire, onChange, alertesByTravee }: SectionTr
   };
 
   const applySchema = (id: string, schema: SchemaPose) => {
-    const hasAngle = schema.coupeG === '45' || schema.coupeD === '45';
+    const hasAngleR = schema.coupeD === '45';
+    const hasAngleL = schema.coupeG === '45';
+    const isU = hasAngleL && hasAngleR;
     const travee = affaire.travees.find((t) => t.id === id);
     updateTravee(id, {
       fixG: schema.fixG,
       fixD: schema.fixD,
       coupeG: schema.coupeG,
       coupeD: schema.coupeD,
-      // Pré-remplir largeur2 si angle et pas encore définie
-      largeur2: hasAngle ? (travee?.largeur2 || travee?.largeur || 2000) : 0,
+      largeur2: hasAngleR ? (travee?.largeur2 || travee?.largeur || 2000) : (hasAngleL ? (travee?.largeur2 || travee?.largeur || 2000) : 0),
+      largeur3: isU ? (travee?.largeur3 || travee?.largeur || 2000) : 0,
     });
   };
 
@@ -175,7 +181,7 @@ export function SectionTravees({ affaire, onChange, alertesByTravee }: SectionTr
                   <span className="text-xs font-mono font-semibold text-blue-400 w-10">{t.repere}</span>
                   <span className="text-xs text-gray-500 w-10">{t.etage}</span>
                   <span className="text-xs font-mono text-gray-200 text-right">
-                    {t.largeur}{schemaHasAngle(t) && t.largeur2 > 0 ? <span className="text-amber-400"> + {t.largeur2}</span> : ''}
+                    {schemaIsU(t) && t.largeur3 > 0 ? <span className="text-amber-400">{t.largeur3} + </span> : ''}{t.largeur}{schemaHasAngle(t) && t.largeur2 > 0 ? <span className="text-amber-400"> + {t.largeur2}</span> : ''}
                   </span>
                   <span className="text-[10px] text-gray-600">×</span>
                   <span className="text-xs font-mono text-gray-200 w-12 text-right">{t.hauteur}</span>
@@ -209,7 +215,7 @@ export function SectionTravees({ affaire, onChange, alertesByTravee }: SectionTr
                 {isExpanded && (
                   <div className="px-4 pb-4 pt-2 border-t border-[#252830] space-y-3" onClick={(e) => e.stopPropagation()}>
                     {/* Row 1: basic fields */}
-                    <div className={`grid gap-2 ${schemaHasAngle(t) ? 'grid-cols-7' : 'grid-cols-6'}`}>
+                    <div className={`grid gap-2 ${schemaIsU(t) ? 'grid-cols-8' : schemaHasAngle(t) ? 'grid-cols-7' : 'grid-cols-6'}`}>
                       <div>
                         <label className="block text-[10px] text-gray-500 mb-0.5">Repère</label>
                         <input value={t.repere} onChange={(e) => updateTravee(t.id, { repere: e.target.value })}
@@ -220,16 +226,23 @@ export function SectionTravees({ affaire, onChange, alertesByTravee }: SectionTr
                         <input value={t.etage} onChange={(e) => updateTravee(t.id, { etage: e.target.value })}
                           className="w-full bg-[#1e2028] border border-[#353840] rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:border-blue-500" />
                       </div>
+                      {schemaIsU(t) && (
+                        <div>
+                          <label className="block text-[10px] text-amber-400 mb-0.5">Gauche (mm)</label>
+                          <input type="number" value={t.largeur3} onChange={(e) => updateTravee(t.id, { largeur3: parseInt(e.target.value) || 0 })}
+                            className="w-full bg-[#1e2028] border border-amber-500/30 rounded px-2 py-1 text-xs text-amber-300 font-mono focus:outline-none focus:border-amber-500" />
+                        </div>
+                      )}
                       <div>
                         <label className="block text-[10px] text-gray-500 mb-0.5">
-                          {schemaHasAngle(t) ? 'Côté 1 (mm)' : 'Largeur (mm)'}
+                          {schemaIsU(t) ? 'Centre (mm)' : schemaHasAngle(t) ? 'Côté 1 (mm)' : 'Largeur (mm)'}
                         </label>
                         <input type="number" value={t.largeur} onChange={(e) => updateTravee(t.id, { largeur: parseInt(e.target.value) || 0 })}
                           className="w-full bg-[#1e2028] border border-[#353840] rounded px-2 py-1 text-xs text-gray-200 font-mono focus:outline-none focus:border-blue-500" />
                       </div>
                       {schemaHasAngle(t) && (
                         <div>
-                          <label className="block text-[10px] text-amber-400 mb-0.5">Côté 2 (mm)</label>
+                          <label className="block text-[10px] text-amber-400 mb-0.5">{schemaIsU(t) ? 'Droite (mm)' : 'Côté 2 (mm)'}</label>
                           <input type="number" value={t.largeur2} onChange={(e) => updateTravee(t.id, { largeur2: parseInt(e.target.value) || 0 })}
                             className="w-full bg-[#1e2028] border border-amber-500/30 rounded px-2 py-1 text-xs text-amber-300 font-mono focus:outline-none focus:border-amber-500" />
                         </div>
