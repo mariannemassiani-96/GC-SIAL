@@ -13,6 +13,7 @@ import { TabDevis } from '../components/tabs/TabDevis';
 import { AlertBanner } from '../components/ui/Alert';
 import { Button } from '../components/ui/Button';
 import { PreviewGC } from '../components/PreviewGC';
+import { PreviewGCInteractif } from '../components/PreviewGCInteractif';
 import { OptimBarresVisu } from '../components/OptimBarresVisu';
 import { SchemaCotes } from '../components/SchemaCotes';
 
@@ -172,7 +173,20 @@ export function Configurateur({ affaire, onUpdate, onBack }: ConfigurateurProps)
                   ))}
                 </div>
               )}
-              {selectedRT && <PreviewGC rt={selectedRT} />}
+              {selectedRT && (
+                <>
+                  <PreviewGCInteractif
+                    rt={selectedRT}
+                    onUpdateTravee={(patch) => {
+                      const travees = affaire.travees.map(tr =>
+                        tr.id === selectedRT.travee.id ? { ...tr, ...patch } : tr
+                      );
+                      onUpdate({ travees });
+                    }}
+                  />
+                  <PreviewGC rt={selectedRT} />
+                </>
+              )}
             </div>
           )}
 
