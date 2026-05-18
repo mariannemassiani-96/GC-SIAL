@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
-import type { ResultatTravee, Travee } from '../types';
-import { TYPES_GC, TYPES_MC } from '../constants/typesGC';
+import type { ResultatTravee, Travee, RaidBranche } from '../types';
+import { TYPES_GC } from '../constants/typesGC';
 import { ESPACEMENT_BARREAU } from '../constants/parametres';
 
 interface Props {
@@ -8,288 +8,345 @@ interface Props {
   onUpdateTravee: (patch: Partial<Travee>) => void;
 }
 
+interface BrancheDef {
+  key: 'raidGauche' | 'raidCentre' | 'raidDroite';
+  label: string;
+  color: string;
+  longueur: number;
+}
+
+function getBranches(t: Travee): BrancheDef[] {
+  const isU = t.coupeG === '45' && t.coupeD === '45';
+  const hasAngleD = t.coupeD === '45' && !isU;
+  const hasAngleG = t.coupeG === '45' && !isU;
+  const branches: BrancheDef[] = [];
+  if (isU && t.largeur3 > 0) branches.push({ key: 'raidGauche', label: 'Gauche', color: '#f59e0b', longueur: t.largeur3 });
+  if (hasAngleG && t.largeur2 > 0) branches.push({ key: 'raidGauche', label: 'Retour G', color: '#f59e0b', longueur: t.largeur2 });
+  branches.push({ key: 'raidCentre', label: isU || hasAngleG || hasAngleD ? 'Centre' : 'Travee', color: '#3b82f6', longueur: t.largeur });
+  if ((hasAngleD || isU) && t.largeur2 > 0) branches.push({ key: 'raidDroite', label: isU ? 'Droite' : 'Retour D', color: '#10b981', longueur: t.largeur2 });
+  return branches;
+}
+
+function getRaidPositions(t: Travee, branche: BrancheDef, rt: ResultatTravee): number[] {
+  const rb: RaidBranche | undefined = branche.key === 'raidCentre'
+    ? (t.raidCentre ?? (t.nbRaidForce ? { nb: t.nbRaidForce, positions: t.posRaidForce } : undefined))
+    : t[branche.key];
+  if (rb?.positions && rb.positions.length >= 2) return rb.positions;
+  if (rb?.nb && rb.nb >= 2) {
+    const step = branche.longueur / (rb.nb - 1);
+    return Array.from({ length: rb.nb }, (_, i) => Math.round(i * step));
+  }
+  if (branche.key === 'raidCentre') {
+    return Array.from({ length: rt.nbRaid }, (_, i) => Math.round(i * rt.entraxeEff));
+  }
+  const autoNb = Math.ceil(branche.longueur / 1400) + 1;
+  const step = branche.longueur / (autoNb - 1);
+  return Array.from({ length: autoNb }, (_, i) => Math.round(i * step));
+}
+
+function generateSlots(longueur: number): number[] {
+  const nbSlots = Math.max(2, Math.ceil(longueur / ESPACEMENT_BARREAU) + 1);
+  const step = longueur / (nbSlots - 1);
+  return Array.from({ length: nbSlots }, (_, i) => Math.round(i * step));
+}
+
+function isAtPosition(pos: number, targets: number[], tolerance: number): boolean {
+  return targets.some(t => Math.abs(t - pos) < tolerance);
+}
+
 export function PreviewGCInteractif({ rt, onUpdateTravee }: Props) {
   const t = rt.travee;
   const gc = TYPES_GC[t.typeGC];
-  const mc = TYPES_MC[t.mc];
-  const [hoverSlot, setHoverSlot] = useState<number | null>(null);
-
-  const totalWidth = t.largeur;
-  const totalHeight = t.hauteur;
+  const branches = useMemo(() => getBranches(t), [t]);
+  const isMultiBranch = branches.length > 1;
+  const [hoverKey, setHoverKey] = useState<string | null>(null);
 
   const svgW = 800;
-  const svgH = 420;
-  const margin = { top: 50, right: 100, bottom: 80, left: 100 };
-  const drawW = svgW - margin.left - margin.right;
-  const drawH = svgH - margin.top - margin.bottom;
+  const svgH = isMultiBranch ? 400 : 420;
+  const pad = 60;
 
-  const scaleX = drawW / totalWidth;
-  const scaleY = drawH / totalHeight;
-  const scale = Math.min(scaleX, scaleY);
+  if (isMultiBranch) {
+    return <PlanView t={t} rt={rt} gc={gc} branches={branches} svgW={svgW} svgH={svgH} pad={pad} hoverKey={hoverKey} setHoverKey={setHoverKey} onUpdateTravee={onUpdateTravee} />;
+  }
+  return <FaceView t={t} rt={rt} gc={gc} branches={branches} svgW={svgW} svgH={svgH} pad={pad} hoverKey={hoverKey} setHoverKey={setHoverKey} onUpdateTravee={onUpdateTravee} />;
+}
 
-  const gcW = totalWidth * scale;
-  const gcH = totalHeight * scale;
-  const offsetX = margin.left + (drawW - gcW) / 2;
-  const offsetY = margin.top + (drawH - gcH) / 2;
+// ── Face View (straight travée) ──────────────────────────────────────
 
-  const toX = (mm: number) => offsetX + mm * scale;
-  const toY = (mm: number) => offsetY + gcH - mm * scale;
+function FaceView({ t, rt, gc, branches, svgW, svgH, pad, hoverKey, setHoverKey, onUpdateTravee }: {
+  t: Travee; rt: ResultatTravee; gc: ReturnType<typeof TYPES_GC[keyof typeof TYPES_GC]>; branches: BrancheDef[];
+  svgW: number; svgH: number; pad: number; hoverKey: string | null; setHoverKey: (k: string | null) => void; onUpdateTravee: (p: Partial<Travee>) => void;
+}) {
+  const b = branches[0];
+  const raidPos = useMemo(() => getRaidPositions(t, b, rt), [t, b, rt]);
+  const slots = useMemo(() => generateSlots(b.longueur), [b.longueur]);
+  const tolerance = b.longueur / (slots.length - 1) * 0.4;
+  const barW = Math.max(1, 4 * (svgW - 2 * pad) / b.longueur);
 
-  const raidW = 30 * scale;
-  const barreauW = Math.max(1, 4 * scale);
-  const lisseH = 25 * scale;
-  const mcH = mc.hauteur * scale;
-  const sabotW = 50 * scale;
-  const sabotH = 20 * scale;
-  const dalleH = 8;
+  const scale = (svgW - 2 * pad) / b.longueur;
+  const gcH = Math.min(svgH - 160, t.hauteur * scale);
+  const topY = 50;
+  const toX = (mm: number) => pad + mm * scale;
 
-  // Generate all possible slot positions (evenly spaced at ~ESPACEMENT_BARREAU)
-  const slotSpacing = ESPACEMENT_BARREAU; // 130mm
-  const nbSlots = Math.max(2, Math.ceil(totalWidth / slotSpacing) + 1);
-  const slotStep = totalWidth / (nbSlots - 1);
-
-  const slots = useMemo(() => {
-    const s: number[] = [];
-    for (let i = 0; i < nbSlots; i++) {
-      s.push(Math.round(i * slotStep));
-    }
-    return s;
-  }, [nbSlots, slotStep]);
-
-  // Current raidisseur positions (from manual or auto)
-  const currentRaidPositions = useMemo(() => {
-    if (t.posRaidForce && t.posRaidForce.length >= 2) return t.posRaidForce;
-    const positions: number[] = [];
-    for (let i = 0; i < rt.nbRaid; i++) {
-      positions.push(Math.round(i * rt.entraxeEff));
-    }
-    return positions;
-  }, [t.posRaidForce, rt.nbRaid, rt.entraxeEff]);
-
-  const raidSet = useMemo(() => new Set(currentRaidPositions.map(p => Math.round(p))), [currentRaidPositions]);
-
-  const isRaid = (slotPos: number) => {
-    for (const rp of raidSet) {
-      if (Math.abs(rp - slotPos) < slotStep * 0.4) return true;
-    }
-    return false;
-  };
-
-  const toggleSlot = (slotPos: number) => {
-    const wasRaid = isRaid(slotPos);
-    let newPositions: number[];
-
-    if (wasRaid) {
-      // Remove closest raidisseur
-      newPositions = currentRaidPositions.filter(p => Math.abs(p - slotPos) >= slotStep * 0.4);
-      if (newPositions.length < 2) return; // minimum 2 raidisseurs
-    } else {
-      // Add raidisseur at this slot
-      newPositions = [...currentRaidPositions, slotPos].sort((a, b) => a - b);
-    }
-
-    onUpdateTravee({
-      nbRaidForce: newPositions.length,
-      posRaidForce: newPositions,
-      raidCentre: { nb: newPositions.length, positions: newPositions },
-    });
-  };
-
-  // Compute barreaux between raidisseurs
-  const barreauPositions = useMemo(() => {
+  const barreauPos = useMemo(() => {
+    if (!gc.hasBarreaux) return [];
+    const sorted = [...raidPos].sort((a, b) => a - b);
     const bars: number[] = [];
-    if (!gc.hasBarreaux) return bars;
-    const sorted = [...currentRaidPositions].sort((a, b) => a - b);
     for (let i = 0; i < sorted.length - 1; i++) {
-      const left = sorted[i];
-      const right = sorted[i + 1];
-      const interval = right - left;
-      const nbBar = Math.ceil(interval / ESPACEMENT_BARREAU) - 1;
-      if (nbBar > 0) {
-        const esp = interval / (nbBar + 1);
-        for (let j = 1; j <= nbBar; j++) {
-          bars.push(left + j * esp);
-        }
-      }
+      const interval = sorted[i + 1] - sorted[i];
+      const nb = Math.ceil(interval / ESPACEMENT_BARREAU) - 1;
+      if (nb > 0) { const esp = interval / (nb + 1); for (let j = 1; j <= nb; j++) bars.push(sorted[i] + j * esp); }
     }
     return bars;
-  }, [currentRaidPositions, gc.hasBarreaux]);
+  }, [raidPos, gc.hasBarreaux]);
 
-  const col = {
-    bg: '#14161d',
-    dalle: '#4b5563',
-    sabot: '#6b7280',
-    raid: '#ef4444',
-    raidHover: '#22c55e',
-    slotEmpty: '#2a2d35',
-    slotHover: '#22c55e',
-    barreau: '#60a5fa',
-    lisse: '#94a3b8',
-    mc: '#e2e8f0',
-    remplissage: '#3b82f6',
-    dim: '#f59e0b',
-    label: '#9ca3af',
-    text: '#d1d5db',
+  const toggle = (slotPos: number) => {
+    const isR = isAtPosition(slotPos, raidPos, tolerance);
+    let newPos: number[];
+    if (isR) {
+      newPos = raidPos.filter(p => Math.abs(p - slotPos) >= tolerance);
+      if (newPos.length < 2) return;
+    } else {
+      newPos = [...raidPos, slotPos].sort((a, b) => a - b);
+    }
+    onUpdateTravee({ nbRaidForce: newPos.length, posRaidForce: newPos, raidCentre: { nb: newPos.length, positions: newPos } });
   };
 
-  const arrowId = `gc-int-${t.id}`;
+  const raidW = 20 * scale;
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center gap-3 text-xs">
-        <span className="text-gray-400">Cliquez sur les emplacements pour placer/retirer des raidisseurs</span>
-        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-500/60" /> Raidisseur</span>
-        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded border border-[#2a2d35] bg-[#1e2028]" /> Emplacement libre</span>
-        <span className="text-gray-600">|</span>
-        <span className="text-gray-500">{currentRaidPositions.length} raidisseurs</span>
+      <div className="flex items-center gap-3 text-xs text-gray-400">
+        Cliquez pour placer/retirer des raidisseurs — <span className="text-white font-mono">{raidPos.length}</span> raidisseurs
       </div>
-
       <div className="overflow-x-auto">
-        <svg
-          viewBox={`0 0 ${svgW} ${svgH}`}
-          className="w-full cursor-crosshair"
-          style={{ maxHeight: 340 }}
-        >
-          <defs>
-            <marker id={`${arrowId}-s`} markerWidth={6} markerHeight={4} refX={0} refY={2} orient="auto">
-              <path d="M6,0 L0,2 L6,4" fill="none" stroke={col.dim} strokeWidth={0.7} />
-            </marker>
-            <marker id={`${arrowId}-e`} markerWidth={6} markerHeight={4} refX={6} refY={2} orient="auto">
-              <path d="M0,0 L6,2 L0,4" fill="none" stroke={col.dim} strokeWidth={0.7} />
-            </marker>
-          </defs>
-
-          <rect width={svgW} height={svgH} fill={col.bg} rx={4} />
-
-          <text x={svgW / 2} y={18} textAnchor="middle" fill={col.text} fontSize={11} fontFamily="monospace" fontWeight="bold">
-            Vue de face interactive — {gc.label} — {totalWidth} x {totalHeight} mm
-          </text>
+        <svg viewBox={`0 0 ${svgW} ${svgH}`} className="w-full cursor-crosshair" style={{ maxHeight: 340 }}>
+          <rect width={svgW} height={svgH} fill="#14161d" rx={4} />
+          <text x={svgW / 2} y={18} textAnchor="middle" fill="#d1d5db" fontSize={11} fontFamily="monospace" fontWeight="bold">Vue de face — {t.largeur} x {t.hauteur} mm</text>
 
           {/* Dalle */}
-          <rect x={toX(-40)} y={toY(0)} width={gcW + 80} height={dalleH} fill={col.dalle} />
+          <rect x={toX(-20)} y={topY + gcH} width={(b.longueur + 40) * scale} height={8} fill="#4b5563" />
 
           {/* Lisse basse */}
-          <rect x={toX(0)} y={toY(lisseH / scale) - 0.5} width={gcW} height={lisseH} fill={col.lisse} stroke="#64748b" strokeWidth={0.5} opacity={0.8} rx={1} />
+          <rect x={toX(0)} y={topY + gcH - 15} width={b.longueur * scale} height={15} fill="#94a3b8" opacity={0.7} rx={1} />
 
-          {/* Main courante */}
-          <rect x={toX(0) - 4} y={toY(totalHeight)} width={gcW + 8} height={mcH + 2} fill={col.mc} stroke="#94a3b8" strokeWidth={0.7} rx={2} />
-          <text x={toX(totalWidth / 2)} y={toY(totalHeight) + mcH / 2 + 3} textAnchor="middle" fill={col.bg} fontSize={7} fontFamily="monospace" fontWeight="bold">{mc.label}</text>
+          {/* MC */}
+          <rect x={toX(0) - 3} y={topY} width={b.longueur * scale + 6} height={18} fill="#e2e8f0" stroke="#94a3b8" strokeWidth={0.5} rx={2} />
 
           {/* Barreaux */}
-          {gc.hasBarreaux && barreauPositions.map((pos, i) => (
-            <line key={`bar-${i}`} x1={toX(pos)} y1={toY(lisseH / scale)} x2={toX(pos)} y2={toY(totalHeight - mcH / scale)} stroke={col.barreau} strokeWidth={barreauW} opacity={0.5} />
-          ))}
+          {barreauPos.map((pos, i) => <line key={i} x1={toX(pos)} y1={topY + 18} x2={toX(pos)} y2={topY + gcH - 15} stroke="#60a5fa" strokeWidth={barW} opacity={0.4} />)}
 
-          {/* Remplissage panels */}
-          {gc.hasRemplissage && (() => {
-            const sorted = [...currentRaidPositions].sort((a, b) => a - b);
-            return sorted.slice(0, -1).map((pos, i) => {
-              const next = sorted[i + 1];
-              const px = toX(pos) + raidW / 2 + 2;
-              const pw = toX(next) - toX(pos) - raidW - 4;
-              const pBottom = lisseH / scale + 10;
-              const pTop = totalHeight - mcH / scale - 10;
-              return <rect key={`panel-${i}`} x={px} y={toY(pTop)} width={pw} height={(pTop - pBottom) * scale} fill={col.remplissage} opacity={0.12} stroke={col.remplissage} strokeWidth={0.5} strokeDasharray="4,2" rx={1} />;
-            });
-          })()}
-
-          {/* Clickable slots */}
+          {/* Slots */}
           {slots.map((slotPos, si) => {
-            const isR = isRaid(slotPos);
-            const isHover = hoverSlot === si;
-            const fillColor = isR ? col.raid : isHover ? col.slotHover : col.slotEmpty;
-            const opacity = isR ? 0.5 : isHover ? 0.3 : 0.15;
-
+            const isR = isAtPosition(slotPos, raidPos, tolerance);
+            const key = `c-${si}`;
+            const isH = hoverKey === key;
             return (
-              <g key={`slot-${si}`}
-                onMouseEnter={() => setHoverSlot(si)}
-                onMouseLeave={() => setHoverSlot(null)}
-                onClick={() => toggleSlot(slotPos)}
-                className="cursor-pointer"
-              >
-                {/* Clickable area */}
-                <rect
-                  x={toX(slotPos) - raidW / 2 - 2}
-                  y={toY(totalHeight) - 2}
-                  width={raidW + 4}
-                  height={gcH + 4}
-                  fill="transparent"
-                />
-                {/* Raidisseur or slot marker */}
-                <rect
-                  x={toX(slotPos) - raidW / 2}
-                  y={toY(totalHeight)}
-                  width={raidW}
-                  height={gcH}
-                  fill={fillColor}
-                  opacity={opacity}
-                  stroke={isR ? col.raid : isHover ? col.slotHover : '#353840'}
-                  strokeWidth={isR ? 1.5 : isHover ? 1 : 0.5}
-                  strokeDasharray={isR ? '' : '3,3'}
-                  rx={1}
-                />
-                {/* Sabot */}
-                {isR && (
-                  <rect x={toX(slotPos) - sabotW / 2} y={toY(0) - sabotH} width={sabotW} height={sabotH} fill={col.sabot} stroke="#9ca3af" strokeWidth={0.5} rx={1} />
-                )}
-                {/* Position label */}
-                {(isR || isHover) && (
-                  <text x={toX(slotPos)} y={toY(0) + dalleH + 16} textAnchor="middle" fill={isR ? col.raid : col.slotHover} fontSize={7} fontFamily="monospace" fontWeight={isR ? 'bold' : 'normal'}>
-                    {slotPos}
-                  </text>
-                )}
-                {/* Hover indicator */}
-                {isHover && !isR && (
-                  <text x={toX(slotPos)} y={toY(totalHeight) - 6} textAnchor="middle" fill={col.slotHover} fontSize={8} fontFamily="monospace">+</text>
-                )}
-                {isHover && isR && (
-                  <text x={toX(slotPos)} y={toY(totalHeight) - 6} textAnchor="middle" fill={col.raid} fontSize={8} fontFamily="monospace">×</text>
-                )}
+              <g key={key} onMouseEnter={() => setHoverKey(key)} onMouseLeave={() => setHoverKey(null)} onClick={() => toggle(slotPos)} className="cursor-pointer">
+                <rect x={toX(slotPos) - raidW / 2 - 2} y={topY - 2} width={raidW + 4} height={gcH + 12} fill="transparent" />
+                <rect x={toX(slotPos) - raidW / 2} y={topY} width={raidW} height={gcH + 8} fill={isR ? '#ef4444' : isH ? '#22c55e' : '#2a2d35'} opacity={isR ? 0.4 : isH ? 0.25 : 0.1} stroke={isR ? '#ef4444' : isH ? '#22c55e' : '#353840'} strokeWidth={isR ? 1.5 : 0.5} strokeDasharray={isR ? '' : '3,3'} rx={1} />
+                {(isR || isH) && <text x={toX(slotPos)} y={topY + gcH + 24} textAnchor="middle" fill={isR ? '#ef4444' : '#22c55e'} fontSize={7} fontFamily="monospace">{slotPos}</text>}
+                {isH && !isR && <text x={toX(slotPos)} y={topY - 6} textAnchor="middle" fill="#22c55e" fontSize={10}>+</text>}
+                {isH && isR && <text x={toX(slotPos)} y={topY - 6} textAnchor="middle" fill="#ef4444" fontSize={10}>×</text>}
               </g>
             );
           })}
 
-          {/* Dimensions: width */}
+          {/* Dimensions */}
+          <line x1={toX(0)} y1={topY + gcH + 35} x2={toX(b.longueur)} y2={topY + gcH + 35} stroke="#f59e0b" strokeWidth={0.6} />
+          <text x={toX(b.longueur / 2)} y={topY + gcH + 48} textAnchor="middle" fill="#f59e0b" fontSize={9} fontFamily="monospace">{b.longueur} mm</text>
+        </svg>
+      </div>
+    </div>
+  );
+}
+
+// ── Plan View (L/U shapes) ───────────────────────────────────────────
+
+function PlanView({ t, rt, branches, svgW, svgH, pad, hoverKey, setHoverKey, onUpdateTravee }: {
+  t: Travee; rt: ResultatTravee; gc: ReturnType<typeof TYPES_GC[keyof typeof TYPES_GC]>; branches: BrancheDef[];
+  svgW: number; svgH: number; pad: number; hoverKey: string | null; setHoverKey: (k: string | null) => void; onUpdateTravee: (p: Partial<Travee>) => void;
+}) {
+  const isU = t.coupeG === '45' && t.coupeD === '45';
+  const hasAngleG = t.coupeG === '45';
+  const hasAngleD = t.coupeD === '45';
+
+  const centreLen = t.largeur;
+  const leftLen = hasAngleG ? (isU ? t.largeur3 : t.largeur2) : 0;
+  const rightLen = hasAngleD ? t.largeur2 : 0;
+
+  const totalSpan = centreLen + Math.max(leftLen, rightLen) * 0.6;
+  const scale = Math.min((svgW - 2 * pad) / totalSpan, (svgH - 2 * pad - 60) / Math.max(leftLen, rightLen, 400));
+
+  const barThick = 12;
+  const slotR = 6;
+
+  // Centre bar position
+  const centreY = pad + Math.max(leftLen, rightLen) * scale + 20;
+  const centreX0 = pad + (leftLen > 0 ? 30 : 0);
+
+  const allBranchData = useMemo(() => {
+    return branches.map(b => ({
+      ...b,
+      raidPos: getRaidPositions(t, b, rt),
+      slots: generateSlots(b.longueur),
+    }));
+  }, [branches, t, rt]);
+
+  const toggle = (branche: BrancheDef, slotPos: number, currentPos: number[]) => {
+    const tolerance = branche.longueur / Math.max(generateSlots(branche.longueur).length - 1, 1) * 0.4;
+    const isR = isAtPosition(slotPos, currentPos, tolerance);
+    let newPos: number[];
+    if (isR) {
+      newPos = currentPos.filter(p => Math.abs(p - slotPos) >= tolerance);
+      if (newPos.length < 2) return;
+    } else {
+      newPos = [...currentPos, slotPos].sort((a, b) => a - b);
+    }
+    const rb: RaidBranche = { nb: newPos.length, positions: newPos };
+    if (branche.key === 'raidCentre') {
+      onUpdateTravee({ raidCentre: rb, nbRaidForce: newPos.length, posRaidForce: newPos });
+    } else {
+      onUpdateTravee({ [branche.key]: rb });
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-4 text-xs text-gray-400">
+        Vue en plan — cliquez pour placer/retirer des raidisseurs
+        {allBranchData.map(b => (
+          <span key={b.key} className="flex items-center gap-1">
+            <span className="w-3 h-1.5 rounded" style={{ backgroundColor: b.color }} />
+            {b.label}: <span className="text-white font-mono">{b.raidPos.length}</span>
+          </span>
+        ))}
+      </div>
+      <div className="overflow-x-auto">
+        <svg viewBox={`0 0 ${svgW} ${svgH}`} className="w-full cursor-crosshair" style={{ maxHeight: 380 }}>
+          <rect width={svgW} height={svgH} fill="#14161d" rx={4} />
+
+          {/* EXT / INT labels */}
+          <text x={pad - 10} y={centreY - 20} fill="#4b5563" fontSize={9} fontFamily="monospace" textAnchor="end">EXT</text>
+          <text x={pad - 10} y={centreY + 30} fill="#6b7280" fontSize={9} fontFamily="monospace" textAnchor="end">INT</text>
+
+          {/* Centre branch (horizontal) */}
           {(() => {
-            const dimY = toY(0) + dalleH + 28;
+            const bd = allBranchData.find(b => b.key === 'raidCentre')!;
+            const tolerance = bd.longueur / Math.max(bd.slots.length - 1, 1) * 0.4;
             return (
               <g>
-                <line x1={toX(0)} y1={toY(0) + dalleH + 4} x2={toX(0)} y2={dimY + 4} stroke={col.dim} strokeWidth={0.4} />
-                <line x1={toX(totalWidth)} y1={toY(0) + dalleH + 4} x2={toX(totalWidth)} y2={dimY + 4} stroke={col.dim} strokeWidth={0.4} />
-                <line x1={toX(0)} y1={dimY} x2={toX(totalWidth)} y2={dimY} stroke={col.dim} strokeWidth={0.6} markerStart={`url(#${arrowId}-s)`} markerEnd={`url(#${arrowId}-e)`} />
-                <text x={toX(totalWidth / 2)} y={dimY + 14} textAnchor="middle" fill={col.dim} fontSize={9} fontFamily="monospace">{totalWidth} mm</text>
+                <rect x={centreX0} y={centreY - barThick / 2} width={centreLen * scale} height={barThick} fill={bd.color} opacity={0.3} rx={2} />
+                <text x={centreX0 + centreLen * scale / 2} y={centreY + barThick / 2 + 16} textAnchor="middle" fill="#f59e0b" fontSize={8} fontFamily="monospace">{centreLen} mm</text>
+                <text x={centreX0 + centreLen * scale / 2} y={centreY - barThick / 2 - 8} textAnchor="middle" fill={bd.color} fontSize={8} fontFamily="monospace" fontWeight="bold">{bd.label}</text>
+                {bd.slots.map((slotPos, si) => {
+                  const isR = isAtPosition(slotPos, bd.raidPos, tolerance);
+                  const key = `c-${si}`;
+                  const isH = hoverKey === key;
+                  const cx = centreX0 + slotPos * scale;
+                  return (
+                    <g key={key} onMouseEnter={() => setHoverKey(key)} onMouseLeave={() => setHoverKey(null)} onClick={() => toggle(bd, slotPos, bd.raidPos)} className="cursor-pointer">
+                      <rect x={cx - slotR - 2} y={centreY - barThick} width={slotR * 2 + 4} height={barThick * 2} fill="transparent" />
+                      <circle cx={cx} cy={centreY} r={slotR} fill={isR ? '#ef4444' : isH ? '#22c55e' : '#1e2028'} stroke={isR ? '#ef4444' : isH ? '#22c55e' : '#353840'} strokeWidth={isR ? 2 : 1} strokeDasharray={isR ? '' : '2,2'} opacity={isR ? 0.8 : isH ? 0.6 : 0.3} />
+                      {isR && <circle cx={cx} cy={centreY} r={2.5} fill="#ef4444" />}
+                      {(isR || isH) && <text x={cx} y={centreY + barThick + 10} textAnchor="middle" fill={isR ? '#ef4444' : '#22c55e'} fontSize={6} fontFamily="monospace">{slotPos}</text>}
+                      {isH && !isR && <text x={cx} y={centreY - barThick - 2} textAnchor="middle" fill="#22c55e" fontSize={9}>+</text>}
+                      {isH && isR && <text x={cx} y={centreY - barThick - 2} textAnchor="middle" fill="#ef4444" fontSize={9}>×</text>}
+                    </g>
+                  );
+                })}
               </g>
             );
           })()}
 
-          {/* Dimensions: height */}
-          {(() => {
-            const dimX = toX(totalWidth) + 30;
+          {/* Left branch (vertical, going up from left end) */}
+          {hasAngleG && (() => {
+            const bd = allBranchData.find(b => b.key === 'raidGauche');
+            if (!bd) return null;
+            const tolerance = bd.longueur / Math.max(bd.slots.length - 1, 1) * 0.4;
+            const bx = centreX0;
             return (
               <g>
-                <line x1={toX(totalWidth) + 6} y1={toY(0)} x2={dimX + 4} y2={toY(0)} stroke={col.dim} strokeWidth={0.4} />
-                <line x1={toX(totalWidth) + 6} y1={toY(totalHeight)} x2={dimX + 4} y2={toY(totalHeight)} stroke={col.dim} strokeWidth={0.4} />
-                <line x1={dimX} y1={toY(0)} x2={dimX} y2={toY(totalHeight)} stroke={col.dim} strokeWidth={0.6} markerStart={`url(#${arrowId}-s)`} markerEnd={`url(#${arrowId}-e)`} />
-                <text x={dimX + 14} y={(toY(0) + toY(totalHeight)) / 2} textAnchor="middle" fill={col.dim} fontSize={9} fontFamily="monospace" transform={`rotate(-90, ${dimX + 14}, ${(toY(0) + toY(totalHeight)) / 2})`}>H = {totalHeight} mm</text>
+                <rect x={bx - barThick / 2} y={centreY - bd.longueur * scale} width={barThick} height={bd.longueur * scale} fill={bd.color} opacity={0.3} rx={2} />
+                <text x={bx - barThick / 2 - 10} y={centreY - bd.longueur * scale / 2} fill="#f59e0b" fontSize={8} fontFamily="monospace" textAnchor="end" dominantBaseline="middle">{bd.longueur}</text>
+                <text x={bx + barThick / 2 + 8} y={centreY - bd.longueur * scale + 10} fill={bd.color} fontSize={8} fontFamily="monospace" fontWeight="bold">{bd.label}</text>
+                {/* Angle marker */}
+                <rect x={bx - barThick / 2 - 1} y={centreY - barThick / 2 - 1} width={barThick + 2} height={barThick + 2} fill={bd.color} opacity={0.15} rx={2} />
+                {bd.slots.map((slotPos, si) => {
+                  const isR = isAtPosition(slotPos, bd.raidPos, tolerance);
+                  const key = `g-${si}`;
+                  const isH = hoverKey === key;
+                  const cy = centreY - slotPos * scale;
+                  return (
+                    <g key={key} onMouseEnter={() => setHoverKey(key)} onMouseLeave={() => setHoverKey(null)} onClick={() => toggle(bd, slotPos, bd.raidPos)} className="cursor-pointer">
+                      <rect x={bx - barThick} y={cy - slotR - 2} width={barThick * 2} height={slotR * 2 + 4} fill="transparent" />
+                      <circle cx={bx} cy={cy} r={slotR} fill={isR ? '#ef4444' : isH ? '#22c55e' : '#1e2028'} stroke={isR ? '#ef4444' : isH ? '#22c55e' : '#353840'} strokeWidth={isR ? 2 : 1} strokeDasharray={isR ? '' : '2,2'} opacity={isR ? 0.8 : isH ? 0.6 : 0.3} />
+                      {isR && <circle cx={bx} cy={cy} r={2.5} fill="#ef4444" />}
+                      {(isR || isH) && <text x={bx + barThick + 6} y={cy + 3} fill={isR ? '#ef4444' : '#22c55e'} fontSize={6} fontFamily="monospace">{slotPos}</text>}
+                    </g>
+                  );
+                })}
+                {/* Fixation retour */}
+                {(t.fixRetourG ?? 'libre') === 'mur' ? (
+                  <rect x={bx - barThick / 2 - 3} y={centreY - bd.longueur * scale - 3} width={barThick + 6} height={4} fill="#9ca3af" rx={1} />
+                ) : (
+                  <circle cx={bx} cy={centreY - bd.longueur * scale} r={4} fill="none" stroke="#ef4444" strokeWidth={1.5} />
+                )}
               </g>
             );
           })()}
 
-          {/* Entraxe dimension */}
-          {currentRaidPositions.length >= 2 && (() => {
-            const sorted = [...currentRaidPositions].sort((a, b) => a - b);
-            const dimY = toY(totalHeight) - 18;
+          {/* Right branch (vertical, going up from right end) */}
+          {hasAngleD && (() => {
+            const bd = allBranchData.find(b => b.key === 'raidDroite');
+            if (!bd) return null;
+            const tolerance = bd.longueur / Math.max(bd.slots.length - 1, 1) * 0.4;
+            const bx = centreX0 + centreLen * scale;
             return (
               <g>
-                <line x1={toX(sorted[0])} y1={toY(totalHeight) - 2} x2={toX(sorted[0])} y2={dimY - 4} stroke={col.dim} strokeWidth={0.4} />
-                <line x1={toX(sorted[1])} y1={toY(totalHeight) - 2} x2={toX(sorted[1])} y2={dimY - 4} stroke={col.dim} strokeWidth={0.4} />
-                <line x1={toX(sorted[0])} y1={dimY} x2={toX(sorted[1])} y2={dimY} stroke={col.dim} strokeWidth={0.6} markerStart={`url(#${arrowId}-s)`} markerEnd={`url(#${arrowId}-e)`} />
-                <text x={(toX(sorted[0]) + toX(sorted[1])) / 2} y={dimY - 5} textAnchor="middle" fill={col.dim} fontSize={8} fontFamily="monospace">
-                  {Math.round(sorted[1] - sorted[0])} mm
-                </text>
+                <rect x={bx - barThick / 2} y={centreY - bd.longueur * scale} width={barThick} height={bd.longueur * scale} fill={bd.color} opacity={0.3} rx={2} />
+                <text x={bx + barThick / 2 + 10} y={centreY - bd.longueur * scale / 2} fill="#f59e0b" fontSize={8} fontFamily="monospace" dominantBaseline="middle">{bd.longueur}</text>
+                <text x={bx - barThick / 2 - 8} y={centreY - bd.longueur * scale + 10} fill={bd.color} fontSize={8} fontFamily="monospace" textAnchor="end" fontWeight="bold">{bd.label}</text>
+                <rect x={bx - barThick / 2 - 1} y={centreY - barThick / 2 - 1} width={barThick + 2} height={barThick + 2} fill={bd.color} opacity={0.15} rx={2} />
+                {bd.slots.map((slotPos, si) => {
+                  const isR = isAtPosition(slotPos, bd.raidPos, tolerance);
+                  const key = `d-${si}`;
+                  const isH = hoverKey === key;
+                  const cy = centreY - slotPos * scale;
+                  return (
+                    <g key={key} onMouseEnter={() => setHoverKey(key)} onMouseLeave={() => setHoverKey(null)} onClick={() => toggle(bd, slotPos, bd.raidPos)} className="cursor-pointer">
+                      <rect x={bx - barThick} y={cy - slotR - 2} width={barThick * 2} height={slotR * 2 + 4} fill="transparent" />
+                      <circle cx={bx} cy={cy} r={slotR} fill={isR ? '#ef4444' : isH ? '#22c55e' : '#1e2028'} stroke={isR ? '#ef4444' : isH ? '#22c55e' : '#353840'} strokeWidth={isR ? 2 : 1} strokeDasharray={isR ? '' : '2,2'} opacity={isR ? 0.8 : isH ? 0.6 : 0.3} />
+                      {isR && <circle cx={bx} cy={cy} r={2.5} fill="#ef4444" />}
+                      {(isR || isH) && <text x={bx - barThick - 6} y={cy + 3} fill={isR ? '#ef4444' : '#22c55e'} fontSize={6} fontFamily="monospace" textAnchor="end">{slotPos}</text>}
+                    </g>
+                  );
+                })}
+                {(t.fixRetourD ?? 'libre') === 'mur' ? (
+                  <rect x={bx - barThick / 2 - 3} y={centreY - bd.longueur * scale - 3} width={barThick + 6} height={4} fill="#9ca3af" rx={1} />
+                ) : (
+                  <circle cx={bx} cy={centreY - bd.longueur * scale} r={4} fill="none" stroke="#ef4444" strokeWidth={1.5} />
+                )}
               </g>
             );
           })()}
+
+          {/* Left fixation */}
+          {!hasAngleG && (
+            t.fixG === 'mur_g' || t.fixG === 'mur_d'
+              ? <rect x={centreX0 - 4} y={centreY - 12} width={4} height={24} fill="#9ca3af" rx={1} />
+              : t.fixG === 'libre'
+                ? <circle cx={centreX0} cy={centreY} r={4} fill="none" stroke="#ef4444" strokeWidth={1.5} />
+                : null
+          )}
+          {/* Right fixation */}
+          {!hasAngleD && (
+            t.fixD === 'mur_d' || t.fixD === 'mur_g'
+              ? <rect x={centreX0 + centreLen * scale} y={centreY - 12} width={4} height={24} fill="#9ca3af" rx={1} />
+              : t.fixD === 'libre'
+                ? <circle cx={centreX0 + centreLen * scale} cy={centreY} r={4} fill="none" stroke="#ef4444" strokeWidth={1.5} />
+                : null
+          )}
         </svg>
       </div>
     </div>
