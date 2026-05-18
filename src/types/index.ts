@@ -26,26 +26,30 @@ export interface TraveeConfig {
   hauteur: number;
 }
 
+export interface RaidBranche {
+  nb?: number;
+  positions?: number[];
+}
+
 export interface Travee extends TraveeConfig {
   id: string;
   etage: string;
   repere: string;
   largeur: number;
-  /** Largeur branche 2 (pour schéma en angle C/D/G/U). 0 = pas d'angle. */
   largeur2: number;
-  /** Largeur branche 3 (pour schéma en U — angle des 2 cotes). 0 = pas de U. */
   largeur3: number;
   qte: number;
   coupeG: '90' | '45';
   coupeD: '90' | '45';
-  /** Forcer le nombre de raidisseurs (desactive le calcul auto) */
+  /** Forcer le nombre de raidisseurs globalement (legacy, branche centre) */
   nbRaidForce?: number;
-  /** Positions manuelles des raidisseurs en mm depuis le bord gauche */
   posRaidForce?: number[];
-  /** Fixation bout du retour gauche (U/G) : mur ou bouchon */
   fixRetourG?: 'mur' | 'libre';
-  /** Fixation bout du retour droit (U/C/D) : mur ou bouchon */
   fixRetourD?: 'mur' | 'libre';
+  /** Raidisseurs par branche (U/L) : gauche, centre, droite */
+  raidGauche?: RaidBranche;
+  raidCentre?: RaidBranche;
+  raidDroite?: RaidBranche;
 }
 
 /** Affaire = enveloppe projet + valeurs par défaut pour nouvelles travées */
