@@ -20,8 +20,6 @@ export function SchemaLisse({ rt, lisseIndex, lisseLabel }: SchemaLisseProps) {
 
   // Identify which percageLisse positions are raidisseur positions
   const raidSet = new Set(rt.posRaidisseurs.map((p) => Math.round(p * 10) / 10));
-  const goupilleG = 68.3;
-  const goupilleD = Math.round((L - 68.3) * 10) / 10;
 
   return (
     <div className="overflow-x-auto">
@@ -58,39 +56,9 @@ export function SchemaLisse({ rt, lisseIndex, lisseLabel }: SchemaLisseProps) {
           {L.toFixed(1)} mm
         </text>
 
-        {/* Goupilles d'extrémité — triangles */}
-        {[goupilleG, goupilleD].map((pos, i) => (
-          <g key={`goup-${i}`}>
-            <line
-              x1={toX(pos)}
-              y1={barY - 2}
-              x2={toX(pos)}
-              y2={barY + barH + 2}
-              stroke="#22c55e"
-              strokeWidth={1.5}
-              strokeDasharray="3,2"
-            />
-            <text
-              x={toX(pos)}
-              y={barY - 6}
-              textAnchor="middle"
-              fill="#22c55e"
-              fontSize={7}
-              fontFamily="monospace"
-            >
-              {pos.toFixed(1)}
-            </text>
-          </g>
-        ))}
-
-        {/* Barreau positions (not raidisseurs, not goupilles) */}
+        {/* Barreau positions (not raidisseurs) */}
         {u.percageLisse
-          .filter(
-            (p) =>
-              !raidSet.has(Math.round(p * 10) / 10) &&
-              Math.abs(p - goupilleG) > 0.05 &&
-              Math.abs(p - goupilleD) > 0.05
-          )
+          .filter((p) => !raidSet.has(Math.round(p * 10) / 10))
           .map((pos, i) => (
             <line
               key={`bar-${i}`}

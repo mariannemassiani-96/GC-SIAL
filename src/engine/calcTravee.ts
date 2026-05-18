@@ -48,13 +48,8 @@ export function calcPositionsUsinages(
     posBarreaux.push(...barreauxDansIntervalle(posRaidisseurs[i], posRaidisseurs[i + 1], barParInterval));
   }
 
-  // Goupilles d'extrémité
-  const posGoupilleG = 68.3;
-  const posGoupilleD = Math.round((longueurLisse - 68.3) * 10) / 10;
-
-  // percageLisse = barreaux + goupilles extrémité + positions raidisseurs
-  // (les raidisseurs ont un "Perçage Lisse" goupille 110306 EN PLUS du "Perçage Lisse_Raidisseur")
-  const allPercage = [...posBarreaux, posGoupilleG, posGoupilleD, ...posRaidisseurs];
+  // percageLisse = barreaux + positions raidisseurs (sans goupilles ext)
+  const allPercage = [...posBarreaux, ...posRaidisseurs];
   const uniquePercage = [...new Set(allPercage.map(v => Math.round(v * 10) / 10))].sort((a, b) => a - b);
 
   return {
@@ -145,13 +140,7 @@ export function calcTravee(travee: Travee, _affaire: Affaire): ResultatTravee {
 
   // 9. Contrôle NF P01-012 : vérifier que tous les espacements ≤ 130mm
   if (gc.hasBarreaux && usinages.length > 0) {
-    // Prendre toutes les positions d'éléments verticaux (raidisseurs + barreaux)
-    // = percageLisse SANS les goupilles d'extrémité (qui ne sont pas des éléments verticaux)
-    const posGoupG = 68.3;
-    const posGoupD = Math.round((longueurLisse - 68.3) * 10) / 10;
-    const posVerticaux = usinages[0].percageLisse.filter(
-      (p) => Math.abs(p - posGoupG) > 0.05 && Math.abs(p - posGoupD) > 0.05
-    );
+    const posVerticaux = [...usinages[0].percageLisse].sort((a, b) => a - b);
 
     // Vérifier bord gauche → premier élément
     if (posVerticaux.length > 0 && posVerticaux[0] > ESPACEMENT_BARREAU + 0.5) {
