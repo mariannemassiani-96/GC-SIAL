@@ -74,7 +74,7 @@ export function PreviewGCInteractif({ rt, onUpdateTravee }: Props) {
 // ── Face View (straight travée) ──────────────────────────────────────
 
 function FaceView({ t, rt, gc, branches, svgW, svgH, pad, hoverKey, setHoverKey, onUpdateTravee }: {
-  t: Travee; rt: ResultatTravee; gc: ReturnType<typeof TYPES_GC[keyof typeof TYPES_GC]>; branches: BrancheDef[];
+  t: Travee; rt: ResultatTravee; gc: (typeof TYPES_GC)[keyof typeof TYPES_GC]; branches: BrancheDef[];
   svgW: number; svgH: number; pad: number; hoverKey: string | null; setHoverKey: (k: string | null) => void; onUpdateTravee: (p: Partial<Travee>) => void;
 }) {
   const b = branches[0];
@@ -164,7 +164,7 @@ function FaceView({ t, rt, gc, branches, svgW, svgH, pad, hoverKey, setHoverKey,
 // ── Plan View (L/U shapes) ───────────────────────────────────────────
 
 function PlanView({ t, rt, branches, svgW, svgH, pad, hoverKey, setHoverKey, onUpdateTravee }: {
-  t: Travee; rt: ResultatTravee; gc: ReturnType<typeof TYPES_GC[keyof typeof TYPES_GC]>; branches: BrancheDef[];
+  t: Travee; rt: ResultatTravee; gc: (typeof TYPES_GC)[keyof typeof TYPES_GC]; branches: BrancheDef[];
   svgW: number; svgH: number; pad: number; hoverKey: string | null; setHoverKey: (k: string | null) => void; onUpdateTravee: (p: Partial<Travee>) => void;
 }) {
   const isU = t.coupeG === '45' && t.coupeD === '45';
