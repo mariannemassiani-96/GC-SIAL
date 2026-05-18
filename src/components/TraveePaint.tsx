@@ -22,7 +22,7 @@ interface Segment {
 type EndType = 'libre' | 'mur' | 'raccord90';
 type SelectedEnd = 'startG' | 'endD' | 'retourG' | 'retourD' | null;
 
-const GRID = 10; // mm per grid unit
+const _GRID = 10; // mm per grid unit
 const PX_PER_MM = 0.12;
 
 function snap(v: number, grid: number): number {
