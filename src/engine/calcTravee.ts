@@ -92,11 +92,13 @@ export function calcTravee(travee: Travee, _affaire: Affaire): ResultatTravee {
   }
 
   // 5. Débits profilés filants
-  const dedG = travee.fixG === 'libre' ? 5 : 0;
-  const dedD = travee.fixD === 'libre' ? 5 : 0;
+  // Déduction 5mm pour bouchon (127143) et patte murale (127150/127152)
+  // Pas de déduction pour raccord90 (angle) et raccord_droit (éclisse) car le profilé continue
+  const dedG = (travee.fixG === 'raccord90' || travee.fixG === 'raccord_droit') ? 0 : 5;
+  const dedD = (travee.fixD === 'raccord90' || travee.fixD === 'raccord_droit') ? 0 : 5;
   const debMC = travee.largeur - dedG - dedD;
-  const debLisse = travee.largeur;
-  const debClosoir = travee.largeur;
+  const debLisse = travee.largeur - dedG - dedD;
+  const debClosoir = travee.largeur - dedG - dedD;
   const longueurLisse = travee.largeur + 2 * DEPASSEMENT_LISSE;
 
   // 6. Remplissage

@@ -110,6 +110,7 @@ export function calcNomenclature(
   if (travee.fixG === 'raccord_droit' || travee.fixD === 'raccord_droit') addAccess('110966', 1);
 
   // Bouts des retours (L/U) — bouchon ou fixation murale
+  // Bouts des retours (L/U)
   if (travee.coupeG === '45') {
     if ((travee.fixRetourG ?? 'libre') === 'libre') {
       addAccess(mc.bouchon, 1);
