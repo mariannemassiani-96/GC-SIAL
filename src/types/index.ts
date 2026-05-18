@@ -31,8 +31,10 @@ export interface Travee extends TraveeConfig {
   etage: string;
   repere: string;
   largeur: number;
-  /** Largeur branche 2 (pour schéma en angle C/D/G). 0 = pas d'angle. */
+  /** Largeur branche 2 (pour schéma en angle C/D/G/U). 0 = pas d'angle. */
   largeur2: number;
+  /** Largeur branche 3 (pour schéma en U — angle des 2 cotes). 0 = pas de U. */
+  largeur3: number;
   qte: number;
   coupeG: '90' | '45';
   coupeD: '90' | '45';
