@@ -3,6 +3,7 @@ import { Plus, Trash2, Copy, ChevronDown, ChevronRight } from 'lucide-react';
 import type { Affaire, Travee, TraveeConfig, Alerte, FixationId, RaidBranche } from '../types';
 import { createEmptyTravee, duplicateTravee } from '../store/affaires';
 import { TYPES_GC, TYPES_MC, POSE_DATA } from '../constants/typesGC';
+import { TraveePaint } from './TraveePaint';
 import { Button } from './ui/Button';
 import { Badge } from './ui/Badge';
 
@@ -296,10 +297,13 @@ export function SectionTravees({ affaire, onChange, alertesByTravee }: SectionTr
                       </div>
                     </div>
 
-                    {/* Row 3: Schéma de pose (vue intérieure) */}
+                    {/* Editeur visuel Paint */}
+                    <TraveePaint travee={t} onUpdate={(patch) => updateTravee(t.id, patch)} />
+
+                    {/* Row 3: Schéma de pose rapide */}
                     <div>
-                      <label className="block text-[10px] text-gray-500 mb-1.5">Schéma de pose (vue intérieure — extérieur en haut)</label>
-                      <div className="grid grid-cols-4 sm:grid-cols-8 gap-1.5">
+                      <label className="block text-[10px] text-gray-500 mb-1.5">Schemas rapides</label>
+                      <div className="grid grid-cols-4 sm:grid-cols-9 gap-1.5">
                         {SCHEMAS_POSE.map((schema) => {
                           const isActive = currentSchema === schema.id;
                           return (
