@@ -19,8 +19,8 @@ const PIECE_COLORS = [
   '#115e59', // teal-800
 ];
 
-const BAR_HEIGHT = 30;
-const BAR_GAP = 4;
+const BAR_HEIGHT = 36;
+const BAR_GAP = 6;
 
 /**
  * Assigns a stable color index per unique traveeRef across all bars in a profile.
@@ -48,120 +48,57 @@ function BarreSvg({
   barIndex: number;
   colorMap: Map<string, number>;
 }) {
-  // Compute x positions for each piece as a fraction of the total bar
   let cursor = 0;
   const pieces = barre.pieces.map((p) => {
     const x = cursor;
     cursor += p.longueur;
-    return { ...p, x };
+    return { ...p, x, pct: (p.longueur / LG_BARRE_MM) * 100 };
   });
-  const chuteX = cursor;
+  const chutePct = (barre.chute / LG_BARRE_MM) * 100;
+  const chuteXPct = (cursor / LG_BARRE_MM) * 100;
 
   return (
-    <svg
-      width="100%"
-      viewBox={`0 0 ${LG_BARRE_MM} ${BAR_HEIGHT}`}
-      preserveAspectRatio="none"
-      className="block"
-      style={{ height: BAR_HEIGHT }}
-    >
-      {/* Hatching pattern for waste */}
-      <defs>
-        <pattern
-          id={`hatch-${barIndex}`}
-          patternUnits="userSpaceOnUse"
-          width="8"
-          height="8"
-          patternTransform="rotate(45)"
-        >
-          <line x1="0" y1="0" x2="0" y2="8" stroke="#dc2626" strokeWidth="2" strokeOpacity="0.4" />
-        </pattern>
-      </defs>
-
-      {/* Full bar outline */}
-      <rect
-        x={0}
-        y={0}
-        width={LG_BARRE_MM}
-        height={BAR_HEIGHT}
-        fill="none"
-        stroke="#353840"
-        strokeWidth={2}
-      />
-
-      {/* Pieces */}
+    <div className="relative w-full border border-[#353840] rounded-sm" style={{ height: BAR_HEIGHT }}>
+      <svg className="absolute inset-0 w-full h-full" preserveAspectRatio="none">
+        <defs>
+          <pattern id={`hatch-${barIndex}`} patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)">
+            <line x1="0" y1="0" x2="0" y2="8" stroke="#dc2626" strokeWidth="2" strokeOpacity="0.4" />
+          </pattern>
+        </defs>
+        {pieces.map((p, i) => {
+          const colorIdx = colorMap.get(p.traveeRef) ?? (i % PIECE_COLORS.length);
+          return (
+            <rect key={i} x={`${(p.x / LG_BARRE_MM) * 100}%`} y="0" width={`${p.pct}%`} height="100%"
+              fill={PIECE_COLORS[colorIdx]} fillOpacity={i % 2 === 0 ? 1 : 0.8} stroke="#14161d" strokeWidth={1} />
+          );
+        })}
+        {barre.chute > 0 && (
+          <>
+            <rect x={`${chuteXPct}%`} y="0" width={`${chutePct}%`} height="100%" fill="#dc2626" fillOpacity={0.3} />
+            <rect x={`${chuteXPct}%`} y="0" width={`${chutePct}%`} height="100%" fill={`url(#hatch-${barIndex})`} />
+          </>
+        )}
+      </svg>
+      {/* Text labels as HTML — not affected by SVG stretching */}
       {pieces.map((p, i) => {
-        const colorIdx = colorMap.get(p.traveeRef) ?? (i % PIECE_COLORS.length);
-        const color = PIECE_COLORS[colorIdx];
-        // Alternate brightness slightly within same travee for adjacent pieces
-        const opacity = i % 2 === 0 ? 1 : 0.8;
-        const textFits = p.longueur > 260;
-
+        const widthPct = p.pct;
+        if (widthPct < 4) return null;
         return (
-          <g key={i}>
-            <rect
-              x={p.x}
-              y={0}
-              width={p.longueur}
-              height={BAR_HEIGHT}
-              fill={color}
-              fillOpacity={opacity}
-              stroke="#14161d"
-              strokeWidth={1}
-            />
-            {textFits && (
-              <text
-                x={p.x + p.longueur / 2}
-                y={BAR_HEIGHT / 2}
-                textAnchor="middle"
-                dominantBaseline="central"
-                fill="#fff"
-                fontSize={Math.min(140, p.longueur * 0.35)}
-                fontFamily="monospace"
-                fontWeight="600"
-              >
-                {Math.round(p.longueur)}
-              </text>
-            )}
-          </g>
+          <div key={i} className="absolute top-0 flex items-center justify-center" style={{ left: `${(p.x / LG_BARRE_MM) * 100}%`, width: `${widthPct}%`, height: BAR_HEIGHT }}>
+            <span className="text-white font-mono font-semibold drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]" style={{ fontSize: widthPct < 8 ? 8 : widthPct < 12 ? 9 : 11 }}>
+              {Math.round(p.longueur)}
+            </span>
+          </div>
         );
       })}
-
-      {/* Waste / chute */}
-      {barre.chute > 0 && (
-        <g>
-          <rect
-            x={chuteX}
-            y={0}
-            width={barre.chute}
-            height={BAR_HEIGHT}
-            fill="#dc2626"
-            fillOpacity={0.3}
-          />
-          <rect
-            x={chuteX}
-            y={0}
-            width={barre.chute}
-            height={BAR_HEIGHT}
-            fill={`url(#hatch-${barIndex})`}
-          />
-          {barre.chute > 320 && (
-            <text
-              x={chuteX + barre.chute / 2}
-              y={BAR_HEIGHT / 2}
-              textAnchor="middle"
-              dominantBaseline="central"
-              fill="#f87171"
-              fontSize={Math.min(140, barre.chute * 0.35)}
-              fontFamily="monospace"
-              fontWeight="600"
-            >
-              {Math.round(barre.chute)}
-            </text>
-          )}
-        </g>
+      {barre.chute > 0 && chutePct >= 4 && (
+        <div className="absolute top-0 flex items-center justify-center" style={{ left: `${chuteXPct}%`, width: `${chutePct}%`, height: BAR_HEIGHT }}>
+          <span className="text-red-400 font-mono font-semibold drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]" style={{ fontSize: chutePct < 8 ? 8 : 11 }}>
+            {Math.round(barre.chute)}
+          </span>
+        </div>
       )}
-    </svg>
+    </div>
   );
 }
 
