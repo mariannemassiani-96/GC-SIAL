@@ -72,8 +72,16 @@ export function calcTravee(travee: Travee, _affaire: Affaire): ResultatTravee {
 
   // 1. Nombre de raidisseurs
   const entraxeMax = ENTRAXE[travee.lieu][travee.angle];
-  const nbRaid = Math.ceil(travee.largeur / entraxeMax) + 1;
-  const entraxeEff = travee.largeur / (nbRaid - 1);
+  let nbRaid: number;
+  let entraxeEff: number;
+  const hasForceNb = travee.nbRaidForce !== undefined && travee.nbRaidForce >= 2;
+  if (hasForceNb) {
+    nbRaid = travee.nbRaidForce!;
+    entraxeEff = travee.largeur / (nbRaid - 1);
+  } else {
+    nbRaid = Math.ceil(travee.largeur / entraxeMax) + 1;
+    entraxeEff = travee.largeur / (nbRaid - 1);
+  }
 
   // 2. Débit raidisseur
   const debRaid = travee.hauteur + pose.offsets[mc.raidKey];
@@ -108,11 +116,17 @@ export function calcTravee(travee: Travee, _affaire: Affaire): ResultatTravee {
   }
 
   // 7. Positions raidisseurs
-  const posRaidisseurs: number[] = [];
-  for (let i = 0; i < nbRaid; i++) {
-    posRaidisseurs.push(
-      Math.round((DEPASSEMENT_LISSE + i * entraxeEff) * 10) / 10
-    );
+  let posRaidisseurs: number[];
+  const hasForcePos = travee.posRaidForce && travee.posRaidForce.length >= 2;
+  if (hasForcePos) {
+    posRaidisseurs = travee.posRaidForce!.map(p => Math.round((DEPASSEMENT_LISSE + p) * 10) / 10);
+  } else {
+    posRaidisseurs = [];
+    for (let i = 0; i < nbRaid; i++) {
+      posRaidisseurs.push(
+        Math.round((DEPASSEMENT_LISSE + i * entraxeEff) * 10) / 10
+      );
+    }
   }
 
   // 8. Usinages — calculer pour chaque lisse

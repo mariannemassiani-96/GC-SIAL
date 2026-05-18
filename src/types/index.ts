@@ -38,6 +38,10 @@ export interface Travee extends TraveeConfig {
   qte: number;
   coupeG: '90' | '45';
   coupeD: '90' | '45';
+  /** Forcer le nombre de raidisseurs (desactive le calcul auto) */
+  nbRaidForce?: number;
+  /** Positions manuelles des raidisseurs en mm depuis le bord gauche */
+  posRaidForce?: number[];
 }
 
 /** Affaire = enveloppe projet + valeurs par défaut pour nouvelles travées */
