@@ -268,6 +268,15 @@ function PlanView({ t, rt, branches, svgW, svgH, pad, hoverKey, setHoverKey, onU
     }
   };
 
+  const hasAnyForce = !!(t.raidCentre?.positions || t.raidDroite?.positions || t.raidGauche?.positions || t.posRaidForce);
+
+  const resetAuto = () => {
+    onUpdateTravee({
+      raidCentre: null, raidDroite: null, raidGauche: null,
+      nbRaidForce: null, posRaidForce: null,
+    } as Partial<Travee>);
+  };
+
   const slotR = 6;
 
   return (
@@ -280,6 +289,12 @@ function PlanView({ t, rt, branches, svgW, svgH, pad, hoverKey, setHoverKey, onU
             {b.branch.label}: <span className="text-white font-mono">{b.raidPos.length}</span>
           </span>
         ))}
+        <span className="flex-1" />
+        {hasAnyForce && (
+          <button onClick={resetAuto} className="px-2 py-0.5 text-[10px] text-amber-400 border border-amber-500/30 rounded hover:bg-amber-600/10">
+            Calcul auto
+          </button>
+        )}
       </div>
       <div className="overflow-x-auto">
         <svg viewBox={`0 0 ${svgW} ${svgH}`} className="w-full cursor-crosshair" style={{ maxHeight: 380 }}>
