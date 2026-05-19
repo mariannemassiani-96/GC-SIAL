@@ -99,7 +99,7 @@ export function TraveePaint({ travee: t, onUpdate }: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [dragging, setDragging] = useState<{ seg: number; end: 'start' | 'end' } | null>(null);
   const [selectedEnd, setSelectedEnd] = useState<SelectedEnd>(null);
-  const [rotation, setRotation] = useState(0);
+  const rotation = t.rotationSchema ?? 0;
 
   const segments = buildSegments(t);
   const isU = t.coupeG === '45' && t.coupeD === '45';
@@ -170,7 +170,7 @@ export function TraveePaint({ travee: t, onUpdate }: Props) {
         <span className="font-medium text-white">Editeur de travee</span>
         <span>Cliquez les extremites pour changer la fixation — Tirez les bords pour ajuster les cotes</span>
         <div className="flex-1" />
-        <button onClick={() => setRotation(r => (r + 45) % 360)}
+        <button onClick={() => onUpdate({ rotationSchema: (rotation + 45) % 360 })}
           className="flex items-center gap-1 px-2.5 py-1 rounded border border-[#353840] text-gray-400 hover:text-white hover:border-blue-500/40 transition-colors">
           ↻ Rotation {rotation}°
         </button>

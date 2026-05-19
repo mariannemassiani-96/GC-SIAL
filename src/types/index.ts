@@ -46,6 +46,8 @@ export interface Travee extends TraveeConfig {
   posRaidForce?: number[];
   fixRetourG?: 'mur' | 'libre';
   fixRetourD?: 'mur' | 'libre';
+  /** Rotation du schema Paint (0-315, pas de 45°) */
+  rotationSchema?: number;
   /** Raidisseurs par branche (U/L) : gauche, centre, droite */
   raidGauche?: RaidBranche;
   raidCentre?: RaidBranche;
