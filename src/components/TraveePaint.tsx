@@ -28,15 +28,21 @@ function snap(v: number, grid: number): number {
   return Math.round(v / grid) * grid;
 }
 
-function buildSegments(t: Travee, flipped: boolean): Segment[] {
+function buildSegments(t: Travee): Segment[] {
   const segs: Segment[] = [];
   const isU = t.coupeG === '45' && t.coupeD === '45';
   const hasAngleG = t.coupeG === '45';
   const hasAngleD = t.coupeD === '45';
 
-  const originX = 80;
-  const originY = 200; // centre bar always in the middle
-  const dir = flipped ? 1 : -1; // -1 = retours go up (toward EXT top), 1 = retours go down (toward INT bottom)
+  // Calculate total bounding box to center the drawing
+  const centreW = t.largeur * PX_PER_MM;
+  const leftH = hasAngleG ? (isU ? (t.largeur3 || 1000) : (t.largeur2 || 1000)) * PX_PER_MM : 0;
+  const rightH = hasAngleD ? t.largeur2 * PX_PER_MM : 0;
+  const maxRetour = Math.max(leftH, rightH);
+
+  // Center in 700x400 SVG
+  const originX = 350 - centreW / 2;
+  const originY = 200 + maxRetour / 2;
 
   if (hasAngleG) {
     const len = isU ? (t.largeur3 || 1000) : (t.largeur2 || 1000);
@@ -44,7 +50,7 @@ function buildSegments(t: Travee, flipped: boolean): Segment[] {
       label: isU ? 'Gauche' : 'Retour G',
       color: '#f59e0b',
       start: { x: originX, y: originY },
-      end: { x: originX, y: originY + dir * len * PX_PER_MM },
+      end: { x: originX, y: originY - len * PX_PER_MM },
       longueur: len,
       direction: 'v',
     });
@@ -65,7 +71,7 @@ function buildSegments(t: Travee, flipped: boolean): Segment[] {
       label: isU ? 'Droite' : 'Retour D',
       color: '#10b981',
       start: { x: endX, y: originY },
-      end: { x: endX, y: originY + dir * t.largeur2 * PX_PER_MM },
+      end: { x: endX, y: originY - t.largeur2 * PX_PER_MM },
       longueur: t.largeur2,
       direction: 'v',
     });
@@ -80,6 +86,10 @@ const FIX_OPTIONS: { id: EndType; label: string; icon: string }[] = [
   { id: 'raccord90', label: 'Angle 90°', icon: '┘' },
 ];
 
+function RotText({ x, y, rotation, children, ...props }: { x: number; y: number; rotation: number; children: React.ReactNode } & React.SVGTextElementAttributes<SVGTextElement>) {
+  return <text x={x} y={y} transform={`rotate(${-rotation}, ${x}, ${y})`} {...props}>{children}</text>;
+}
+
 const FIX_RETOUR_OPTIONS: { id: FixRetour; label: string }[] = [
   { id: 'libre', label: 'Bouchon' },
   { id: 'mur', label: 'Fixation murale' },
@@ -91,7 +101,7 @@ export function TraveePaint({ travee: t, onUpdate }: Props) {
   const [selectedEnd, setSelectedEnd] = useState<SelectedEnd>(null);
   const [rotation, setRotation] = useState(0);
 
-  const segments = buildSegments(t, false);
+  const segments = buildSegments(t);
   const isU = t.coupeG === '45' && t.coupeD === '45';
   const hasAngleG = t.coupeG === '45';
   const hasAngleD = t.coupeD === '45';
@@ -185,7 +195,7 @@ export function TraveePaint({ travee: t, onUpdate }: Props) {
           {/* Rotatable group */}
           <g transform={`rotate(${rotation}, ${svgW / 2}, ${svgH / 2})`}>
 
-          {/* Segments */}
+          {/* Segments — texts get counter-rotation to stay readable */}
           {segments.map((seg, si) => (
             <g key={si}>
               {/* Bar */}
@@ -195,18 +205,18 @@ export function TraveePaint({ travee: t, onUpdate }: Props) {
                 stroke={seg.color} strokeWidth={2} />
 
               {/* Label */}
-              <text x={(seg.start.x + seg.end.x) / 2 + (seg.direction === 'v' ? 18 : 0)}
+              <RotText rotation={rotation} x={(seg.start.x + seg.end.x) / 2 + (seg.direction === 'v' ? 18 : 0)}
                 y={(seg.start.y + seg.end.y) / 2 + (seg.direction === 'h' ? -14 : 0)}
                 textAnchor="middle" fill={seg.color} fontSize={10} fontFamily="monospace" fontWeight="bold">
                 {seg.label}
-              </text>
+              </RotText>
 
               {/* Dimension */}
-              <text x={(seg.start.x + seg.end.x) / 2 + (seg.direction === 'v' ? 18 : 0)}
+              <RotText rotation={rotation} x={(seg.start.x + seg.end.x) / 2 + (seg.direction === 'v' ? 18 : 0)}
                 y={(seg.start.y + seg.end.y) / 2 + (seg.direction === 'h' ? -4 : 12)}
                 textAnchor="middle" fill="#f59e0b" fontSize={9} fontFamily="monospace">
                 {seg.longueur} mm
-              </text>
+              </RotText>
 
               {/* Drag handle at end */}
               <circle cx={seg.end.x} cy={seg.end.y} r={8} fill={seg.color} opacity={0.3}
@@ -223,11 +233,7 @@ export function TraveePaint({ travee: t, onUpdate }: Props) {
               <circle cx={segments.find(s => s.label.includes('Centre') || s.label.includes('Trav'))!.start.x}
                 cy={segments.find(s => s.label.includes('Centre') || s.label.includes('Trav'))!.start.y}
                 r={12} fill={selectedEnd === 'startG' ? '#22c55e' : '#1e2028'} stroke={getFixG() === 'mur' ? '#9ca3af' : '#ef4444'} strokeWidth={2} />
-              <text x={segments.find(s => s.label.includes('Centre') || s.label.includes('Trav'))!.start.x}
-                y={segments.find(s => s.label.includes('Centre') || s.label.includes('Trav'))!.start.y + 4}
-                textAnchor="middle" fill={getFixG() === 'mur' ? '#9ca3af' : '#ef4444'} fontSize={12} fontFamily="monospace">
-                {getFixG() === 'mur' ? '█' : getFixG() === 'raccord90' ? '┘' : '○'}
-              </text>
+              {(() => { const cx = segments.find(s => s.label.includes('Centre') || s.label.includes('Trav'))!.start.x; const cy = segments.find(s => s.label.includes('Centre') || s.label.includes('Trav'))!.start.y + 4; return <RotText rotation={rotation} x={cx} y={cy} textAnchor="middle" fill={getFixG() === 'mur' ? '#9ca3af' : '#ef4444'} fontSize={12} fontFamily="monospace">{getFixG() === 'mur' ? '█' : getFixG() === 'raccord90' ? '┘' : '○'}</RotText>; })()}
             </g>
           )}
 
@@ -237,11 +243,7 @@ export function TraveePaint({ travee: t, onUpdate }: Props) {
               <circle cx={segments.find(s => s.label.includes('Centre') || s.label.includes('Trav'))!.end.x}
                 cy={segments.find(s => s.label.includes('Centre') || s.label.includes('Trav'))!.end.y}
                 r={12} fill={selectedEnd === 'endD' ? '#22c55e' : '#1e2028'} stroke={getFixD() === 'mur' ? '#9ca3af' : '#ef4444'} strokeWidth={2} />
-              <text x={segments.find(s => s.label.includes('Centre') || s.label.includes('Trav'))!.end.x}
-                y={segments.find(s => s.label.includes('Centre') || s.label.includes('Trav'))!.end.y + 4}
-                textAnchor="middle" fill={getFixD() === 'mur' ? '#9ca3af' : '#ef4444'} fontSize={12} fontFamily="monospace">
-                {getFixD() === 'mur' ? '█' : getFixD() === 'raccord90' ? '┘' : '○'}
-              </text>
+              {(() => { const cx = segments.find(s => s.label.includes('Centre') || s.label.includes('Trav'))!.end.x; const cy = segments.find(s => s.label.includes('Centre') || s.label.includes('Trav'))!.end.y + 4; return <RotText rotation={rotation} x={cx} y={cy} textAnchor="middle" fill={getFixD() === 'mur' ? '#9ca3af' : '#ef4444'} fontSize={12} fontFamily="monospace">{getFixD() === 'mur' ? '█' : getFixD() === 'raccord90' ? '┘' : '○'}</RotText>; })()}
             </g>
           )}
 
@@ -253,7 +255,7 @@ export function TraveePaint({ travee: t, onUpdate }: Props) {
             return (
               <g className="cursor-pointer" onClick={() => setSelectedEnd(selectedEnd === 'retourG' ? null : 'retourG')}>
                 <circle cx={seg.end.x} cy={seg.end.y} r={10} fill={selectedEnd === 'retourG' ? '#22c55e' : '#1e2028'} stroke={isMur ? '#9ca3af' : '#ef4444'} strokeWidth={2} />
-                <text x={seg.end.x} y={seg.end.y + 4} textAnchor="middle" fill={isMur ? '#9ca3af' : '#ef4444'} fontSize={10}>{isMur ? '█' : '○'}</text>
+                <RotText rotation={rotation} x={seg.end.x} y={seg.end.y + 4} textAnchor="middle" fill={isMur ? '#9ca3af' : '#ef4444'} fontSize={10}>{isMur ? '█' : '○'}</RotText>
               </g>
             );
           })()}
@@ -266,14 +268,14 @@ export function TraveePaint({ travee: t, onUpdate }: Props) {
             return (
               <g className="cursor-pointer" onClick={() => setSelectedEnd(selectedEnd === 'retourD' ? null : 'retourD')}>
                 <circle cx={seg.end.x} cy={seg.end.y} r={10} fill={selectedEnd === 'retourD' ? '#22c55e' : '#1e2028'} stroke={isMur ? '#9ca3af' : '#ef4444'} strokeWidth={2} />
-                <text x={seg.end.x} y={seg.end.y + 4} textAnchor="middle" fill={isMur ? '#9ca3af' : '#ef4444'} fontSize={10}>{isMur ? '█' : '○'}</text>
+                <RotText rotation={rotation} x={seg.end.x} y={seg.end.y + 4} textAnchor="middle" fill={isMur ? '#9ca3af' : '#ef4444'} fontSize={10}>{isMur ? '█' : '○'}</RotText>
               </g>
             );
           })()}
 
           {/* Angle markers at junctions */}
-          {hasAngleG && <text x={80 - 15} y={segments[0].start.y + 5} fill="#f59e0b" fontSize={8} fontFamily="monospace" textAnchor="end">90°</text>}
-          {hasAngleD && <text x={80 + t.largeur * PX_PER_MM + 15} y={segments[0].start.y + 5} fill="#10b981" fontSize={8} fontFamily="monospace">90°</text>}
+          {hasAngleG && (() => { const cs = segments.find(s => s.label.includes('Centre') || s.label.includes('Trav')); return cs ? <RotText rotation={rotation} x={cs.start.x - 15} y={cs.start.y + 5} fill="#f59e0b" fontSize={8} fontFamily="monospace" textAnchor="end">90°</RotText> : null; })()}
+          {hasAngleD && (() => { const cs = segments.find(s => s.label.includes('Centre') || s.label.includes('Trav')); return cs ? <RotText rotation={rotation} x={cs.end.x + 15} y={cs.end.y + 5} fill="#10b981" fontSize={8} fontFamily="monospace">90°</RotText> : null; })()}
 
           </g>{/* end rotation group */}
         </svg>
