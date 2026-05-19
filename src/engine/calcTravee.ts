@@ -1,5 +1,5 @@
 import type { Affaire, Travee, ResultatTravee, UsinageLisse, Alerte } from '../types';
-import { ENTRAXE, ESPACEMENT_BARREAU, DEPASSEMENT_LISSE } from '../constants/parametres';
+import { ENTRAXE, ESPACEMENT_BARREAU } from '../constants/parametres';
 import { TYPES_GC, TYPES_MC, POSE_DATA } from '../constants/typesGC';
 import { calcNomenclature } from './calcNomenclature';
 
@@ -32,12 +32,10 @@ export function calcPositionsUsinages(
   nbRaid: number,
   entraxeEff: number
 ): UsinageLisse {
-  const depassement = DEPASSEMENT_LISSE;
-
-  // Positions des raidisseurs
+  // Positions des raidisseurs (mm depuis bord gauche)
   const posRaidisseurs: number[] = [];
   for (let i = 0; i < nbRaid; i++) {
-    posRaidisseurs.push(Math.round((depassement + i * entraxeEff) * 10) / 10);
+    posRaidisseurs.push(Math.round(i * entraxeEff * 10) / 10);
   }
 
   // Barreaux : même nombre dans chaque intervalle, répartis symétriquement
@@ -99,7 +97,7 @@ export function calcTravee(travee: Travee, _affaire: Affaire): ResultatTravee {
   const debMC = travee.largeur - dedG - dedD;
   const debLisse = travee.largeur - dedG - dedD;
   const debClosoir = travee.largeur - dedG - dedD;
-  const longueurLisse = travee.largeur + 2 * DEPASSEMENT_LISSE;
+  const longueurLisse = debLisse;
 
   // 6. Remplissage
   let hautVitre = 0;
@@ -112,17 +110,15 @@ export function calcTravee(travee: Travee, _affaire: Affaire): ResultatTravee {
     largVitre = Math.max(0, entraxeEff - 10);
   }
 
-  // 7. Positions raidisseurs
+  // 7. Positions raidisseurs (mm depuis bord gauche de la lisse)
   let posRaidisseurs: number[];
   const hasForcePos = travee.posRaidForce && travee.posRaidForce.length >= 2;
   if (hasForcePos) {
-    posRaidisseurs = travee.posRaidForce!.map(p => Math.round((DEPASSEMENT_LISSE + p) * 10) / 10);
+    posRaidisseurs = travee.posRaidForce!.map(p => Math.round(p * 10) / 10);
   } else {
     posRaidisseurs = [];
     for (let i = 0; i < nbRaid; i++) {
-      posRaidisseurs.push(
-        Math.round((DEPASSEMENT_LISSE + i * entraxeEff) * 10) / 10
-      );
+      posRaidisseurs.push(Math.round(i * entraxeEff * 10) / 10);
     }
   }
 
