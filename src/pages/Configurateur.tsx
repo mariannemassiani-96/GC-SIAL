@@ -200,7 +200,10 @@ export function Configurateur({ affaire, onUpdate, onBack }: ConfigurateurProps)
           {/* TAB: Débits */}
           {activeTab === 'debits' && resultat && (
             <div className="bg-[#181c25] rounded-lg border border-[#252830] p-4">
-              <TabDebits resultat={resultat} />
+              <TabDebits resultat={resultat} onUpdateTravee={(traveeId, patch) => {
+                const travees = affaire.travees.map(tr => tr.id === traveeId ? { ...tr, ...patch } : tr);
+                onUpdate({ travees });
+              }} />
             </div>
           )}
 

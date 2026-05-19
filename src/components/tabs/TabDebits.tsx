@@ -1,12 +1,13 @@
-import type { ResultatAffaire } from '../../types';
+import type { ResultatAffaire, Travee } from '../../types';
 import { LG_BARRE_MM, ACCESSOIRES } from '../../constants/profils';
 import { Badge } from '../ui/Badge';
 
 interface TabDebitsProps {
   resultat: ResultatAffaire;
+  onUpdateTravee?: (traveeId: string, patch: Partial<Travee>) => void;
 }
 
-export function TabDebits({ resultat }: TabDebitsProps) {
+export function TabDebits({ resultat, onUpdateTravee }: TabDebitsProps) {
   // Consolidate accessories across all travees
   const accessGlobal = new Map<string, { ref: string; label: string; totalQte: number }>();
   for (const rt of resultat.travees) {
@@ -55,7 +56,17 @@ export function TabDebits({ resultat }: TabDebitsProps) {
                     <tr key={i} className="border-b border-[#1e2028] hover:bg-[#1e2028]/50">
                       <td className="py-1 px-2 text-blue-400">{n.ref}</td>
                       <td className="py-1 px-2 text-gray-300">{n.label}</td>
-                      <td className="py-1 px-2 text-right text-gray-200">{n.longueur.toFixed(1)}</td>
+                      <td className="py-1 px-2 text-right">
+                        {(n.ref === '180000' || n.ref === '180005') && onUpdateTravee ? (
+                          <input type="number" value={n.longueur} onChange={e => {
+                            const v = parseFloat(e.target.value);
+                            if (isNaN(v) || v <= 0) return;
+                            onUpdateTravee(rt.travee.id, n.ref === '180000' ? { debRaidForce: v } : { debBarreauForce: v });
+                          }} className="w-20 bg-[#252830] border border-amber-500/30 rounded px-1.5 py-0.5 text-xs text-amber-300 font-mono text-right outline-none focus:border-amber-500" />
+                        ) : (
+                          <span className="text-gray-200">{n.longueur.toFixed(1)}</span>
+                        )}
+                      </td>
                       <td className="py-1 px-2 text-center text-gray-400">{n.coupeG}°</td>
                       <td className="py-1 px-2 text-center text-gray-400">{n.coupeD}°</td>
                       <td className="py-1 px-2 text-right text-gray-200">{n.qte}</td>

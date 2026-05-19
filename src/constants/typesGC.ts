@@ -72,9 +72,11 @@ export interface MCDef {
   label: string;
   ref: string;
   bouchon: string;
-  barreauDelta: number;
-  raidKey: 'std' | 'ronde';
   hauteur: number;
+  debits: {
+    dalle: { raidisseur: number; barreau: number };
+    anglaise: { raidisseur: number; barreau: number };
+  };
 }
 
 export const TYPES_MC: Record<MCId, MCDef> = {
@@ -82,54 +84,56 @@ export const TYPES_MC: Record<MCId, MCDef> = {
     label: 'MC 25mm plate — 180030',
     ref: '180030',
     bouchon: '127143',
-    barreauDelta: -80,
-    raidKey: 'std',
     hauteur: 25,
+    debits: {
+      dalle:    { raidisseur: -30, barreau: -53 },
+      anglaise: { raidisseur: 102, barreau: -53 },
+    },
   },
   mc80: {
     label: 'MC 80mm — 180031',
     ref: '180031',
     bouchon: '127143',
-    barreauDelta: -135,
-    raidKey: 'std',
     hauteur: 80,
+    debits: {
+      dalle:    { raidisseur: -85, barreau: -78 },
+      anglaise: { raidisseur: 47,  barreau: -78 },
+    },
   },
   design: {
     label: 'MC Design ogive 90×25 — 180032',
     ref: '180032',
     bouchon: '127143',
-    barreauDelta: -80,
-    raidKey: 'std',
     hauteur: 25,
+    debits: {
+      dalle:    { raidisseur: -30, barreau: -43 },
+      anglaise: { raidisseur: 102, barreau: -43 },
+    },
   },
   ronde: {
     label: 'MC Ronde Ø60 — 180033',
     ref: '180033',
     bouchon: '127158',
-    barreauDelta: -57,
-    raidKey: 'ronde',
     hauteur: 48,
+    debits: {
+      dalle:    { raidisseur: -53, barreau: -46 },
+      anglaise: { raidisseur: 79,  barreau: -46 },
+    },
   },
 };
 
 export interface PoseDef {
   label: string;
   sabot: string;
-  offsets: {
-    std: number;
-    ronde: number;
-  };
 }
 
 export const POSE_DATA: Record<'dalle' | 'anglaise', PoseDef> = {
   dalle: {
     label: 'Sur dalle — à la française',
     sabot: '6003992',
-    offsets: { std: -70, ronde: -93 },
   },
   anglaise: {
     label: 'Sur nez de dalle — à l\'anglaise',
     sabot: '6004105',
-    offsets: { std: 62, ronde: 39 },
   },
 };

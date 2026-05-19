@@ -52,6 +52,10 @@ export interface Travee extends TraveeConfig {
   raidGauche?: RaidBranche;
   raidCentre?: RaidBranche;
   raidDroite?: RaidBranche;
+  /** Forcer le débit raidisseur (mm) — désactive le calcul auto */
+  debRaidForce?: number;
+  /** Forcer le débit barreau (mm) — désactive le calcul auto */
+  debBarreauForce?: number;
 }
 
 /** Affaire = enveloppe projet + valeurs par défaut pour nouvelles travées */
