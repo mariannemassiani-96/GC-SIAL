@@ -98,7 +98,7 @@ export const TYPES_MC: Record<MCId, MCDef> = {
     label: 'Ronde Ø60',
     ref: '180033',
     bouchon: '127158',
-    barreauDelta: -46,
+    barreauDelta: -57,
     raidKey: 'ronde',
     hauteur: 48,
   },
