@@ -11,21 +11,38 @@ export function calculerAffaire(affaire: Affaire): ResultatAffaire {
   // Pour les travées en angle (largeur2 > 0), on calcule les deux branches
   const travees = affaire.travees.flatMap((t) => {
     const results = [calcTravee(t, affaire)];
-    if (t.largeur2 > 0 && (t.coupeG === '45' || t.coupeD === '45')) {
-      // Branche 2 : inverser les fixations et coupes, utiliser largeur2
+    // Branche retour droite (L droite ou U)
+    if (t.largeur2 > 0 && t.coupeD === '45') {
       const t2: Travee = {
         ...t,
-        id: t.id + '_b2',
-        repere: t.repere + 'b',
+        id: t.id + '_retD',
+        repere: t.repere + ' (retour D)',
         largeur: t.largeur2,
-        largeur2: 0,
-        // Inverser G/D pour la branche 2 (elle part de l'angle)
-        fixG: t.coupeD === '45' ? 'raccord90' : t.fixG,
-        fixD: t.coupeD === '45' ? t.fixD : 'raccord90',
-        coupeG: t.coupeD === '45' ? '45' : '90',
-        coupeD: t.coupeD === '45' ? '90' : '45',
+        largeur2: 0, largeur3: 0,
+        fixG: 'raccord90',
+        fixD: (t.fixRetourD ?? 'libre') === 'mur' ? 'mur_d' : 'libre',
+        coupeG: '45',
+        coupeD: '90',
       };
       results.push(calcTravee(t2, affaire));
+    }
+    // Branche retour gauche (L gauche ou U)
+    if (t.coupeG === '45') {
+      const lenG = t.coupeD === '45' ? (t.largeur3 || 0) : (t.largeur2 || 0);
+      if (lenG > 0) {
+        const t3: Travee = {
+          ...t,
+          id: t.id + '_retG',
+          repere: t.repere + ' (retour G)',
+          largeur: lenG,
+          largeur2: 0, largeur3: 0,
+          fixG: (t.fixRetourG ?? 'libre') === 'mur' ? 'mur_g' : 'libre',
+          fixD: 'raccord90',
+          coupeG: '90',
+          coupeD: '45',
+        };
+        results.push(calcTravee(t3, affaire));
+      }
     }
     return results;
   });
