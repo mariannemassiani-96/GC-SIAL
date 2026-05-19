@@ -89,9 +89,9 @@ export function TraveePaint({ travee: t, onUpdate }: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [dragging, setDragging] = useState<{ seg: number; end: 'start' | 'end' } | null>(null);
   const [selectedEnd, setSelectedEnd] = useState<SelectedEnd>(null);
-  const [flipped, setFlipped] = useState(false);
+  const [rotation, setRotation] = useState(0);
 
-  const segments = buildSegments(t, flipped);
+  const segments = buildSegments(t, false);
   const isU = t.coupeG === '45' && t.coupeD === '45';
   const hasAngleG = t.coupeG === '45';
   const hasAngleD = t.coupeD === '45';
@@ -160,9 +160,9 @@ export function TraveePaint({ travee: t, onUpdate }: Props) {
         <span className="font-medium text-white">Editeur de travee</span>
         <span>Cliquez les extremites pour changer la fixation — Tirez les bords pour ajuster les cotes</span>
         <div className="flex-1" />
-        <button onClick={() => setFlipped(f => !f)}
+        <button onClick={() => setRotation(r => (r + 45) % 360)}
           className="flex items-center gap-1 px-2.5 py-1 rounded border border-[#353840] text-gray-400 hover:text-white hover:border-blue-500/40 transition-colors">
-          ↕ Retours cote {flipped ? 'INT (batiment)' : 'EXT (vide)'}
+          ↻ Rotation {rotation}°
         </button>
       </div>
 
@@ -178,9 +178,12 @@ export function TraveePaint({ travee: t, onUpdate }: Props) {
           </defs>
           <rect width={svgW} height={svgH} fill="url(#paint-grid)" />
 
-          {/* EXT always top, INT always bottom */}
+          {/* EXT / INT labels (fixed, don't rotate) */}
           <text x={15} y={20} fill="#4b5563" fontSize={10} fontFamily="monospace">EXT</text>
           <text x={15} y={svgH - 10} fill="#6b7280" fontSize={10} fontFamily="monospace">INT</text>
+
+          {/* Rotatable group */}
+          <g transform={`rotate(${rotation}, ${svgW / 2}, ${svgH / 2})`}>
 
           {/* Segments */}
           {segments.map((seg, si) => (
@@ -271,6 +274,8 @@ export function TraveePaint({ travee: t, onUpdate }: Props) {
           {/* Angle markers at junctions */}
           {hasAngleG && <text x={80 - 15} y={segments[0].start.y + 5} fill="#f59e0b" fontSize={8} fontFamily="monospace" textAnchor="end">90°</text>}
           {hasAngleD && <text x={80 + t.largeur * PX_PER_MM + 15} y={segments[0].start.y + 5} fill="#10b981" fontSize={8} fontFamily="monospace">90°</text>}
+
+          </g>{/* end rotation group */}
         </svg>
 
         {/* Fixation popup */}
