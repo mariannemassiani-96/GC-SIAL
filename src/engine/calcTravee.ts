@@ -90,7 +90,13 @@ export function calcTravee(travee: Travee, _affaire: Affaire): ResultatTravee {
 
   let posRaidisseurs: number[];
   if (hasForcePos) {
-    posRaidisseurs = travee.posRaidForce!.map(p => Math.round(p * 10) / 10);
+    posRaidisseurs = travee.posRaidForce!
+      .map(p => Math.round(p * 10) / 10)
+      .filter(p => {
+        if (hasAngleG && p < 1) return false;
+        if (hasAngleD && Math.abs(p - travee.largeur) < 1) return false;
+        return true;
+      });
   } else if (hasForceNb) {
     const forceNb = travee.nbRaidForce!;
     const totalPoints = forceNb + (hasAngleG ? 1 : 0) + (hasAngleD ? 1 : 0);
