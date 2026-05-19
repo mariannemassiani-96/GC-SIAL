@@ -64,25 +64,52 @@ export function calcTravee(travee: Travee, _affaire: Affaire): ResultatTravee {
   const mc = TYPES_MC[travee.mc];
   const alertes: Alerte[] = [];
 
-  // 1. Nombre de raidisseurs
-  // Aux angles 45° (L/U), pas de raidisseur à la jonction — c'est le raccord 90° (110962)
+  // 1. Positions raidisseurs et entraxe
   const hasAngleG = travee.coupeG === '45';
   const hasAngleD = travee.coupeD === '45';
   const entraxeMax = ENTRAXE[travee.lieu][travee.angle];
-  let nbRaid: number;
-  let entraxeEff: number;
-  const hasForceNb = travee.nbRaidForce !== undefined && travee.nbRaidForce >= 2;
-  if (hasForceNb) {
-    nbRaid = travee.nbRaidForce!;
-    entraxeEff = travee.largeur / (nbRaid + (hasAngleG ? 1 : 0) + (hasAngleD ? 1 : 0) - 1);
-  } else {
-    // Nombre total de divisions sur la largeur
-    const nbDivisions = Math.ceil(travee.largeur / entraxeMax);
-    // Nombre de raidisseurs = points - ceux aux angles
-    nbRaid = nbDivisions + 1 - (hasAngleG ? 1 : 0) - (hasAngleD ? 1 : 0);
-    nbRaid = Math.max(nbRaid, hasAngleG || hasAngleD ? 1 : 2);
-    entraxeEff = travee.largeur / nbDivisions;
+
+  // Step 1: Generate ALL division points along the largeur (including edges)
+  const nbDivisions = Math.max(1, Math.ceil(travee.largeur / entraxeMax));
+  const stepMM = travee.largeur / nbDivisions;
+  const allDivisionPoints: number[] = [];
+  for (let i = 0; i <= nbDivisions; i++) {
+    allDivisionPoints.push(Math.round(i * stepMM * 10) / 10);
   }
+
+  // Step 2: Filter out angle junctions — raccord 90° replaces raidisseur there
+  const autoPositions = allDivisionPoints.filter(p => {
+    if (hasAngleG && p < 1) return false;
+    if (hasAngleD && Math.abs(p - travee.largeur) < 1) return false;
+    return true;
+  });
+
+  // Step 3: Use forced or auto positions
+  const hasForcePos = travee.posRaidForce && travee.posRaidForce.length >= 2;
+  const hasForceNb = !hasForcePos && travee.nbRaidForce !== undefined && travee.nbRaidForce >= 2;
+
+  let posRaidisseurs: number[];
+  if (hasForcePos) {
+    posRaidisseurs = travee.posRaidForce!.map(p => Math.round(p * 10) / 10);
+  } else if (hasForceNb) {
+    const forceNb = travee.nbRaidForce!;
+    const totalPoints = forceNb + (hasAngleG ? 1 : 0) + (hasAngleD ? 1 : 0);
+    const forceStep = travee.largeur / (totalPoints - 1);
+    const forceAll: number[] = [];
+    for (let i = 0; i < totalPoints; i++) forceAll.push(Math.round(i * forceStep * 10) / 10);
+    posRaidisseurs = forceAll.filter(p => {
+      if (hasAngleG && p < 1) return false;
+      if (hasAngleD && Math.abs(p - travee.largeur) < 1) return false;
+      return true;
+    });
+  } else {
+    posRaidisseurs = autoPositions;
+  }
+
+  const nbRaid = posRaidisseurs.length;
+  const entraxeEff = nbRaid >= 2
+    ? (posRaidisseurs[posRaidisseurs.length - 1] - posRaidisseurs[0]) / (nbRaid - 1)
+    : travee.largeur;
 
   // 2. Débit raidisseur (H + offset from Kawneer doc, or manual override)
   const debitOffsets = mc.debits[travee.pose];
@@ -120,25 +147,7 @@ export function calcTravee(travee: Travee, _affaire: Affaire): ResultatTravee {
     largVitre = Math.max(0, entraxeEff - 10);
   }
 
-  // 7. Positions raidisseurs (mm depuis bord gauche de la lisse)
-  // Skip positions at angle junctions (0 if angleG, largeur if angleD)
-  let posRaidisseurs: number[];
-  const hasForcePos = travee.posRaidForce && travee.posRaidForce.length >= 2;
-  if (hasForcePos) {
-    posRaidisseurs = travee.posRaidForce!.map(p => Math.round(p * 10) / 10);
-  } else {
-    const nbDivisions = Math.ceil(travee.largeur / entraxeMax);
-    const allPositions: number[] = [];
-    for (let i = 0; i <= nbDivisions; i++) {
-      allPositions.push(Math.round(i * entraxeEff * 10) / 10);
-    }
-    // Remove positions at angle junctions
-    posRaidisseurs = allPositions.filter(p => {
-      if (hasAngleG && p < 1) return false;
-      if (hasAngleD && Math.abs(p - travee.largeur) < 1) return false;
-      return true;
-    });
-  }
+  // 7. (positions already computed in step 1)
 
   // 8. Usinages — calculer pour chaque lisse
   const nbLisses =
