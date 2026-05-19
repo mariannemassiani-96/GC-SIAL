@@ -28,15 +28,21 @@ function snap(v: number, grid: number): number {
   return Math.round(v / grid) * grid;
 }
 
-function buildSegments(t: Travee, flipped: boolean): Segment[] {
+function buildSegments(t: Travee): Segment[] {
   const segs: Segment[] = [];
   const isU = t.coupeG === '45' && t.coupeD === '45';
   const hasAngleG = t.coupeG === '45';
   const hasAngleD = t.coupeD === '45';
 
-  const originX = 80;
-  const originY = 200; // centre bar always in the middle
-  const dir = flipped ? 1 : -1; // -1 = retours go up (toward EXT top), 1 = retours go down (toward INT bottom)
+  // Calculate total bounding box to center the drawing
+  const centreW = t.largeur * PX_PER_MM;
+  const leftH = hasAngleG ? (isU ? (t.largeur3 || 1000) : (t.largeur2 || 1000)) * PX_PER_MM : 0;
+  const rightH = hasAngleD ? t.largeur2 * PX_PER_MM : 0;
+  const maxRetour = Math.max(leftH, rightH);
+
+  // Center in 700x400 SVG
+  const originX = 350 - centreW / 2;
+  const originY = 200 + maxRetour / 2;
 
   if (hasAngleG) {
     const len = isU ? (t.largeur3 || 1000) : (t.largeur2 || 1000);
@@ -44,7 +50,7 @@ function buildSegments(t: Travee, flipped: boolean): Segment[] {
       label: isU ? 'Gauche' : 'Retour G',
       color: '#f59e0b',
       start: { x: originX, y: originY },
-      end: { x: originX, y: originY + dir * len * PX_PER_MM },
+      end: { x: originX, y: originY - len * PX_PER_MM },
       longueur: len,
       direction: 'v',
     });
@@ -65,7 +71,7 @@ function buildSegments(t: Travee, flipped: boolean): Segment[] {
       label: isU ? 'Droite' : 'Retour D',
       color: '#10b981',
       start: { x: endX, y: originY },
-      end: { x: endX, y: originY + dir * t.largeur2 * PX_PER_MM },
+      end: { x: endX, y: originY - t.largeur2 * PX_PER_MM },
       longueur: t.largeur2,
       direction: 'v',
     });
@@ -91,7 +97,7 @@ export function TraveePaint({ travee: t, onUpdate }: Props) {
   const [selectedEnd, setSelectedEnd] = useState<SelectedEnd>(null);
   const [rotation, setRotation] = useState(0);
 
-  const segments = buildSegments(t, false);
+  const segments = buildSegments(t);
   const isU = t.coupeG === '45' && t.coupeD === '45';
   const hasAngleG = t.coupeG === '45';
   const hasAngleD = t.coupeD === '45';
@@ -272,8 +278,8 @@ export function TraveePaint({ travee: t, onUpdate }: Props) {
           })()}
 
           {/* Angle markers at junctions */}
-          {hasAngleG && <text x={80 - 15} y={segments[0].start.y + 5} fill="#f59e0b" fontSize={8} fontFamily="monospace" textAnchor="end">90°</text>}
-          {hasAngleD && <text x={80 + t.largeur * PX_PER_MM + 15} y={segments[0].start.y + 5} fill="#10b981" fontSize={8} fontFamily="monospace">90°</text>}
+          {hasAngleG && (() => { const cs = segments.find(s => s.label.includes('Centre') || s.label.includes('Trav')); return cs ? <text x={cs.start.x - 15} y={cs.start.y + 5} fill="#f59e0b" fontSize={8} fontFamily="monospace" textAnchor="end">90°</text> : null; })()}
+          {hasAngleD && (() => { const cs = segments.find(s => s.label.includes('Centre') || s.label.includes('Trav')); return cs ? <text x={cs.end.x + 15} y={cs.end.y + 5} fill="#10b981" fontSize={8} fontFamily="monospace">90°</text> : null; })()}
 
           </g>{/* end rotation group */}
         </svg>
