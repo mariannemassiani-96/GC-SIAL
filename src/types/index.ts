@@ -56,6 +56,8 @@ export interface Travee extends TraveeConfig {
   debRaidForce?: number;
   /** Forcer le débit barreau (mm) — désactive le calcul auto */
   debBarreauForce?: number;
+  /** Points du dessin CAD (persistés pour garder l'orientation) */
+  drawPoints?: { x: number; y: number }[];
 }
 
 /** Affaire = enveloppe projet + valeurs par défaut pour nouvelles travées */
