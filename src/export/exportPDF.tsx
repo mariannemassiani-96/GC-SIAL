@@ -1,8 +1,9 @@
-import { Document, Page, Text, View, StyleSheet, pdf, Svg, Rect, Line } from '@react-pdf/renderer';
+import { Document, Page, Text, View, StyleSheet, pdf, Svg, Rect, Line, Circle } from '@react-pdf/renderer';
 import type { Affaire, ResultatAffaire, ResultatTravee } from '../types';
 import { ACCESSOIRES } from '../constants/profils';
 import { TYPES_GC, TYPES_MC, POSE_DATA } from '../constants/typesGC';
 import { USINAGE_ANGLE } from '../constants/parametres';
+import { FIXATIONS } from '../constants/fixations';
 
 const s = StyleSheet.create({
   page: { padding: 30, fontSize: 8, fontFamily: 'Helvetica' },
@@ -94,6 +95,88 @@ function SchemaLissePDF({ rt, lisseLabel }: { rt: ResultatTravee; lisseLabel: st
   );
 }
 
+function SchemaConfigPDF({ rt }: { rt: ResultatTravee }) {
+  const t = rt.travee;
+  const hasAngleG = t.coupeG === '45';
+  const hasAngleD = t.coupeD === '45';
+  const isU = hasAngleG && hasAngleD;
+
+  const svgW = 500;
+  const svgH = 140;
+  const px = 0.07; // mm to px
+  const barH = 6;
+
+  const centreW = t.largeur * px;
+  const leftH = hasAngleG ? (isU ? (t.largeur3 || 0) : (t.largeur2 || 0)) * px : 0;
+  const rightH = hasAngleD ? (t.largeur2 || 0) * px : 0;
+  const maxRetour = Math.max(leftH, rightH);
+
+  const originX = svgW / 2 - centreW / 2;
+  const originY = 20 + maxRetour;
+
+  const fixLabel = (id: string) => FIXATIONS[id as keyof typeof FIXATIONS]?.label ?? id;
+
+  return (
+    <Svg viewBox={`0 0 ${svgW} ${svgH}`} style={{ width: svgW, height: svgH, marginBottom: 4 }}>
+      {/* Centre bar */}
+      <Rect x={originX} y={originY - barH / 2} width={centreW} height={barH} fill="#3b82f6" opacity={0.5} />
+      <Line x1={originX} y1={originY} x2={originX + centreW} y2={originY} stroke="#3b82f6" strokeWidth={1.5} />
+
+      {/* Left branch */}
+      {hasAngleG && leftH > 0 && (
+        <>
+          <Rect x={originX - barH / 2} y={originY - leftH} width={barH} height={leftH} fill="#f59e0b" opacity={0.4} />
+          <Line x1={originX} y1={originY} x2={originX} y2={originY - leftH} stroke="#f59e0b" strokeWidth={1.5} />
+          <Text x={originX - 12} y={originY - leftH / 2} style={{ fontSize: 6, color: '#f59e0b' }}>{isU ? t.largeur3 : t.largeur2}</Text>
+        </>
+      )}
+
+      {/* Right branch */}
+      {hasAngleD && rightH > 0 && (
+        <>
+          <Rect x={originX + centreW - barH / 2} y={originY - rightH} width={barH} height={rightH} fill="#10b981" opacity={0.4} />
+          <Line x1={originX + centreW} y1={originY} x2={originX + centreW} y2={originY - rightH} stroke="#10b981" strokeWidth={1.5} />
+          <Text x={originX + centreW + 4} y={originY - rightH / 2} style={{ fontSize: 6, color: '#10b981' }}>{t.largeur2}</Text>
+        </>
+      )}
+
+      {/* Raidisseurs on centre */}
+      {rt.posRaidisseurs.map((pos, i) => (
+        <Rect key={`r-${i}`} x={originX + pos * px - 2} y={originY - 10} width={4} height={20} fill="#ef4444" opacity={0.6} />
+      ))}
+
+      {/* Centre dimension */}
+      <Line x1={originX} y1={originY + 14} x2={originX + centreW} y2={originY + 14} stroke="#666" strokeWidth={0.3} />
+      <Text x={originX + centreW / 2 - 10} y={originY + 20} style={{ fontSize: 6 }}>{t.largeur} mm</Text>
+
+      {/* Fixation labels */}
+      {!hasAngleG && <Text x={originX - 2} y={originY + 28} style={{ fontSize: 5, color: '#999' }}>{fixLabel(t.fixG)}</Text>}
+      {!hasAngleD && <Text x={originX + centreW - 20} y={originY + 28} style={{ fontSize: 5, color: '#999' }}>{fixLabel(t.fixD)}</Text>}
+      {hasAngleG && <Text x={originX - 4} y={originY + 4} style={{ fontSize: 5, color: '#f59e0b' }}>90°</Text>}
+      {hasAngleD && <Text x={originX + centreW + 2} y={originY + 4} style={{ fontSize: 5, color: '#10b981' }}>90°</Text>}
+
+      {/* Raidisseur count */}
+      <Text x={2} y={svgH - 6} style={{ fontSize: 6, color: '#ef4444' }}>{rt.nbRaid} raidisseurs — entraxe {rt.entraxeEff.toFixed(0)} mm</Text>
+
+      {/* Labels EXT / INT */}
+      <Text x={2} y={8} style={{ fontSize: 5, color: '#999' }}>EXT</Text>
+      <Text x={2} y={svgH - 16} style={{ fontSize: 5, color: '#999' }}>INT</Text>
+
+      {/* Retour end fixations */}
+      {hasAngleG && (
+        (t.fixRetourG ?? 'libre') === 'mur'
+          ? <Rect x={originX - 4} y={originY - leftH - 2} width={8} height={3} fill="#999" />
+          : <Circle cx={originX} cy={originY - leftH} r={2.5} fill="none" stroke="#ef4444" strokeWidth={0.7} />
+      )}
+      {hasAngleD && (
+        (t.fixRetourD ?? 'libre') === 'mur'
+          ? <Rect x={originX + centreW - 4} y={originY - rightH - 2} width={8} height={3} fill="#999" />
+          : <Circle cx={originX + centreW} cy={originY - rightH} r={2.5} fill="none" stroke="#ef4444" strokeWidth={0.7} />
+      )}
+    </Svg>
+  );
+}
+
 function FicheFabricationPage({ affaire, rt }: { affaire: Affaire; rt: ResultatTravee }) {
   const t = rt.travee;
   const gc = TYPES_GC[t.typeGC];
@@ -103,8 +186,6 @@ function FicheFabricationPage({ affaire, rt }: { affaire: Affaire; rt: ResultatT
   const lisseLabels = ['INF', 'SUP', 'MED'];
 
   const raidSet = new Set(rt.posRaidisseurs.map((p) => Math.round(p * 10) / 10));
-  const goupilleG = 68.3;
-  const goupilleD = Math.round((rt.longueurLisse - 68.3) * 10) / 10;
 
   return (
     <Page size="A4" style={s.page}>
@@ -139,6 +220,12 @@ function FicheFabricationPage({ affaire, rt }: { affaire: Affaire; rt: ResultatT
         </Text>
       </View>
 
+      {/* Schema de configuration avec position raidisseurs */}
+      <View style={s.section}>
+        <Text style={{ fontSize: 9, fontWeight: 'bold', marginBottom: 3 }}>Schéma de configuration</Text>
+        <SchemaConfigPDF rt={rt} />
+      </View>
+
       {/* Debits table */}
       <View style={s.section}>
         <Text style={{ fontSize: 9, fontWeight: 'bold', marginBottom: 3 }}>Débits</Text>
@@ -171,10 +258,7 @@ function FicheFabricationPage({ affaire, rt }: { affaire: Affaire; rt: ResultatT
           {/* Positions table */}
           {rt.usinages.map((u, li) => {
             const posBarreaux = u.percageLisse.filter(
-              (p) =>
-                !raidSet.has(Math.round(p * 10) / 10) &&
-                Math.abs(p - goupilleG) > 0.05 &&
-                Math.abs(p - goupilleD) > 0.05
+              (p) => !raidSet.has(Math.round(p * 10) / 10)
             );
             const posRaid = u.percageLisse.filter((p) => raidSet.has(Math.round(p * 10) / 10));
 
@@ -188,11 +272,6 @@ function FicheFabricationPage({ affaire, rt }: { affaire: Affaire; rt: ResultatT
                     <Text style={{ width: '28%', paddingHorizontal: 2, fontSize: 6 }}>Opération</Text>
                     <Text style={{ width: '7%', paddingHorizontal: 2, fontSize: 6, textAlign: 'right' }}>Nb</Text>
                     <Text style={{ width: '65%', paddingHorizontal: 2, fontSize: 6 }}>Positions X (mm)</Text>
-                  </View>
-                  <View style={s.tableRow}>
-                    <Text style={{ width: '28%', paddingHorizontal: 2, fontSize: 6 }}>Goupilles extrémité</Text>
-                    <Text style={{ width: '7%', paddingHorizontal: 2, fontSize: 6, textAlign: 'right' }}>2</Text>
-                    <Text style={{ width: '65%', paddingHorizontal: 2, fontSize: 6 }}>{goupilleG.toFixed(1)} ; {goupilleD.toFixed(1)}</Text>
                   </View>
                   <View style={s.tableRow}>
                     <Text style={{ width: '28%', paddingHorizontal: 2, fontSize: 6 }}>Perçage barreaux</Text>
