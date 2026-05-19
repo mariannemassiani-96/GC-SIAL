@@ -83,12 +83,14 @@ export function calcTravee(travee: Travee, _affaire: Affaire): ResultatTravee {
     entraxeEff = travee.largeur / nbDivisions;
   }
 
-  // 2. Débit raidisseur
-  const debRaid = travee.hauteur + pose.offsets[mc.raidKey];
+  // 2. Débit raidisseur (H + offset from Kawneer doc, or manual override)
+  const debitOffsets = mc.debits[travee.pose];
+  const debRaid = travee.debRaidForce ?? (travee.hauteur + debitOffsets.raidisseur);
 
-  // 3. h1 et débit barreau
-  const h1 = debRaid - 20 - mc.hauteur;
-  const debBarreau = gc.hasBarreaux ? Math.max(0, h1 + mc.barreauDelta) : 0;
+  // 3. Débit barreau (H + offset from Kawneer doc, or manual override)
+  const debBarreau = gc.hasBarreaux
+    ? (travee.debBarreauForce ?? Math.max(0, travee.hauteur + debitOffsets.barreau))
+    : 0;
 
   // 4. Nombre de barreaux (même nombre par intervalle, espacement ≤ 130mm NF P01-012)
   let nbBarreaux = 0;
@@ -110,7 +112,7 @@ export function calcTravee(travee: Travee, _affaire: Affaire): ResultatTravee {
   let hautVitre = 0;
   let largVitre = 0;
   if (gc.hasRemplissage) {
-    const deltaH = mc.raidKey === 'std' ? -112 : -80;
+    const deltaH = mc.hauteur >= 48 ? -80 : -112;
     const X = 20;
     const Y = 20;
     hautVitre = Math.max(0, travee.hauteur + deltaH - X - Y);
