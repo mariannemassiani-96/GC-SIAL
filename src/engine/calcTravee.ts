@@ -70,7 +70,9 @@ export function calcTravee(travee: Travee, _affaire: Affaire): ResultatTravee {
   const entraxeMax = ENTRAXE[travee.lieu][travee.angle];
 
   // Step 1: Generate ALL division points along the largeur (including edges)
-  const nbDivisions = Math.max(1, Math.ceil(travee.largeur / entraxeMax));
+  // Ensure at least 2 raidisseurs remain after filtering angle junctions
+  const anglesFiltered = (hasAngleG ? 1 : 0) + (hasAngleD ? 1 : 0);
+  const nbDivisions = Math.max(1 + anglesFiltered, Math.ceil(travee.largeur / entraxeMax));
   const stepMM = travee.largeur / nbDivisions;
   const allDivisionPoints: number[] = [];
   for (let i = 0; i <= nbDivisions; i++) {

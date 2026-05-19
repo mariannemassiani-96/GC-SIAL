@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import type { ResultatTravee, Travee, RaidBranche } from '../types';
 import { TYPES_GC } from '../constants/typesGC';
-import { ESPACEMENT_BARREAU } from '../constants/parametres';
+import { ESPACEMENT_BARREAU, ENTRAXE } from '../constants/parametres';
 
 interface Props {
   rt: ResultatTravee;
@@ -39,7 +39,8 @@ function getRaidPositions(t: Travee, branche: BrancheDef, rt: ResultatTravee): n
   if (branche.key === 'raidCentre') {
     return rt.posRaidisseurs;
   }
-  const autoNb = Math.max(2, Math.ceil(branche.longueur / 1400) + 1);
+  const entraxeMax = ENTRAXE[t.lieu]?.[t.angle] ?? 1560;
+  const autoNb = Math.max(2, Math.ceil(branche.longueur / entraxeMax) + 1);
   const step = branche.longueur / (autoNb - 1);
   return Array.from({ length: autoNb }, (_, i) => Math.round(i * step));
 }

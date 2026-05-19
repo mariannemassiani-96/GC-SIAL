@@ -3,6 +3,7 @@ import { Plus, Trash2, Copy, ChevronDown, ChevronRight } from 'lucide-react';
 import type { Affaire, Travee, TraveeConfig, Alerte, FixationId, RaidBranche } from '../types';
 import { createEmptyTravee, duplicateTravee } from '../store/affaires';
 import { TYPES_GC, TYPES_MC, POSE_DATA } from '../constants/typesGC';
+import { ENTRAXE } from '../constants/parametres';
 import { TraveeDrawTool } from './TraveeDrawTool';
 import { Button } from './ui/Button';
 import { Badge } from './ui/Badge';
@@ -325,12 +326,12 @@ export function SectionTravees({ affaire, onChange, alertesByTravee }: SectionTr
   );
 }
 
-function BrancheRaidEditor({ label, color, longueur, branche, onChange }: {
-  label: string; color: string; longueur: number; branche: RaidBranche | undefined; onChange: (b: RaidBranche | undefined) => void;
+function BrancheRaidEditor({ label, color, longueur, entraxeMax, branche, onChange }: {
+  label: string; color: string; longueur: number; entraxeMax: number; branche: RaidBranche | undefined; onChange: (b: RaidBranche | undefined) => void;
 }) {
   const isActive = branche && typeof branche.nb === 'number' && branche.nb >= 2;
   const hasPos = branche?.positions && Array.isArray(branche.positions) && branche.positions.length >= 2;
-  const autoNb = Math.ceil(longueur / 1400) + 1;
+  const autoNb = Math.max(2, Math.ceil(longueur / entraxeMax) + 1);
 
   return (
     <div className="space-y-1.5">
@@ -406,6 +407,7 @@ function RaidisseursEditor({ travee: t, onUpdate }: { travee: Travee; onUpdate: 
           label={b.label}
           color={b.color}
           longueur={b.longueur}
+          entraxeMax={ENTRAXE[t.lieu]?.[t.angle] ?? 1560}
           branche={b.key === 'raidCentre' ? (t.raidCentre ?? (t.nbRaidForce ? { nb: t.nbRaidForce, positions: t.posRaidForce } : undefined)) : t[b.key]}
           onChange={(v) => {
             if (b.key === 'raidCentre') {
