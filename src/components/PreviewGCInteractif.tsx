@@ -37,9 +37,9 @@ function getRaidPositions(t: Travee, branche: BrancheDef, rt: ResultatTravee): n
     return Array.from({ length: rb.nb }, (_, i) => Math.round(i * step));
   }
   if (branche.key === 'raidCentre') {
-    return Array.from({ length: rt.nbRaid }, (_, i) => Math.round(i * rt.entraxeEff));
+    return rt.posRaidisseurs;
   }
-  const autoNb = Math.ceil(branche.longueur / 1400) + 1;
+  const autoNb = Math.max(2, Math.ceil(branche.longueur / 1400) + 1);
   const step = branche.longueur / (autoNb - 1);
   return Array.from({ length: autoNb }, (_, i) => Math.round(i * step));
 }
