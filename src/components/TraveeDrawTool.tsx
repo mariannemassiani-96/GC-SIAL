@@ -127,13 +127,19 @@ export function TraveeDrawTool({ travee: t, onUpdate }: Props) {
     return pointAtAngle(lastPt, snapped, length);
   }, []);
 
+  const startDrawing = useCallback(() => {
+    setDrawing(true);
+    setPoints([]);
+    setEditIdx(null);
+  }, []);
+
   const handleClick = useCallback((e: React.MouseEvent) => {
     if (editIdx) return;
+    if (!drawing) return;
     const svgPt = toSvg(e);
 
-    if (!drawing) {
+    if (points.length === 0) {
       setPoints([svgPt]);
-      setDrawing(true);
       return;
     }
 
@@ -235,9 +241,19 @@ export function TraveeDrawTool({ travee: t, onUpdate }: Props) {
         {drawing ? (
           <span className="text-green-400">Cliquez pour poser les points — Double-clic ou Echap pour terminer</span>
         ) : (
-          <span className="text-gray-400">Cliquez pour commencer un nouveau dessin — Double-cliquez sur une cote pour la modifier</span>
+          <span className="text-gray-400">Double-cliquez sur une cote ou un angle pour le modifier</span>
         )}
         <div className="flex-1" />
+        {!drawing && (
+          <button onClick={startDrawing} className="px-2.5 py-1 text-xs text-green-400 border border-green-500/30 rounded hover:bg-green-600/10">
+            Nouveau dessin
+          </button>
+        )}
+        {drawing && (
+          <button onClick={() => { if (points.length >= 2) { setDrawing(false); onUpdate(ptsToTravee(points)); } }} className="px-2.5 py-1 text-xs text-green-400 border border-green-500/30 rounded hover:bg-green-600/10">
+            Terminer
+          </button>
+        )}
         <button onClick={resetDrawing} className="px-2 py-1 text-xs text-gray-400 border border-[#353840] rounded hover:text-white hover:border-red-500/40">
           Reinitialiser
         </button>
