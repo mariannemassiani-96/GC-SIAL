@@ -102,11 +102,15 @@ function ptsToTravee(pts: Pt[]): Partial<Travee> {
   return {};
 }
 
+function applyPoints(pts: Pt[], onUpdate: (p: Partial<Travee>) => void) {
+  onUpdate({ ...ptsToTravee(pts), drawPoints: pts });
+}
+
 const COLORS = ['#f59e0b', '#3b82f6', '#10b981', '#ef4444'];
 
 export function TraveeDrawTool({ travee: t, onUpdate }: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
-  const [points, setPoints] = useState<Pt[]>(() => buildSegmentsFromTravee(t));
+  const [points, setPoints] = useState<Pt[]>(() => t.drawPoints && t.drawPoints.length >= 2 ? t.drawPoints : buildSegmentsFromTravee(t));
   const [drawing, setDrawing] = useState(false);
   const [mousePos, setMousePos] = useState<Pt | null>(null);
   const [editIdx, setEditIdx] = useState<{ type: 'length' | 'angle'; segIdx: number } | null>(null);
@@ -150,7 +154,7 @@ export function TraveeDrawTool({ travee: t, onUpdate }: Props) {
 
     if (newPts.length >= 4) {
       setDrawing(false);
-      onUpdate(ptsToTravee(newPts));
+      applyPoints(newPts, onUpdate);
     }
   }, [drawing, points, toSvg, getSnappedPoint, editIdx, onUpdate]);
 
@@ -159,7 +163,7 @@ export function TraveeDrawTool({ travee: t, onUpdate }: Props) {
     e.stopPropagation();
     if (drawing && points.length >= 2) {
       setDrawing(false);
-      onUpdate(ptsToTravee(points));
+      applyPoints(points, onUpdate);
     }
   }, [drawing, points, onUpdate]);
 
@@ -174,7 +178,7 @@ export function TraveeDrawTool({ travee: t, onUpdate }: Props) {
     if (e.key === 'Escape') {
       if (drawing && points.length >= 2) {
         setDrawing(false);
-        onUpdate(ptsToTravee(points));
+        applyPoints(points, onUpdate);
       } else {
         setDrawing(false);
         setPoints(buildSegmentsFromTravee(t));
@@ -223,7 +227,7 @@ export function TraveeDrawTool({ travee: t, onUpdate }: Props) {
         newPts[i] = { x: newPts[i].x + dx, y: newPts[i].y + dy };
       }
       setPoints(newPts);
-      onUpdate(ptsToTravee(newPts));
+      applyPoints(newPts, onUpdate);
     }
     setEditIdx(null);
   };
@@ -250,7 +254,7 @@ export function TraveeDrawTool({ travee: t, onUpdate }: Props) {
           </button>
         )}
         {drawing && (
-          <button onClick={() => { if (points.length >= 2) { setDrawing(false); onUpdate(ptsToTravee(points)); } }} className="px-2.5 py-1 text-xs text-green-400 border border-green-500/30 rounded hover:bg-green-600/10">
+          <button onClick={() => { if (points.length >= 2) { setDrawing(false); applyPoints(points, onUpdate); } }} className="px-2.5 py-1 text-xs text-green-400 border border-green-500/30 rounded hover:bg-green-600/10">
             Terminer
           </button>
         )}
