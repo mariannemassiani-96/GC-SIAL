@@ -3,7 +3,7 @@ import { Plus, Trash2, Copy, ChevronDown, ChevronRight } from 'lucide-react';
 import type { Affaire, Travee, TraveeConfig, Alerte, FixationId, RaidBranche } from '../types';
 import { createEmptyTravee, duplicateTravee } from '../store/affaires';
 import { TYPES_GC, TYPES_MC, POSE_DATA } from '../constants/typesGC';
-import { TraveePaint } from './TraveePaint';
+import { TraveeDrawTool } from './TraveeDrawTool';
 import { Button } from './ui/Button';
 import { Badge } from './ui/Badge';
 
@@ -297,37 +297,8 @@ export function SectionTravees({ affaire, onChange, alertesByTravee }: SectionTr
                       </div>
                     </div>
 
-                    {/* Editeur visuel Paint */}
-                    <TraveePaint travee={t} onUpdate={(patch) => updateTravee(t.id, patch)} />
-
-                    {/* Row 3: Schéma de pose rapide */}
-                    <div>
-                      <label className="block text-[10px] text-gray-500 mb-1.5">Schemas rapides</label>
-                      <div className="grid grid-cols-4 sm:grid-cols-9 gap-1.5">
-                        {SCHEMAS_POSE.map((schema) => {
-                          const isActive = currentSchema === schema.id;
-                          return (
-                            <button
-                              key={schema.id}
-                              onClick={() => applySchema(t.id, schema)}
-                              className={`relative border rounded p-1 transition-all ${
-                                isActive
-                                  ? 'border-blue-500 bg-blue-500/10'
-                                  : 'border-[#353840] bg-[#1e2028] hover:border-[#4a4d58]'
-                              }`}
-                              title={schema.desc}
-                            >
-                              <div className="h-10">
-                                <SchemaPoseMini schema={schema} />
-                              </div>
-                              <span className={`block text-center text-[10px] font-mono mt-0.5 ${isActive ? 'text-blue-400 font-bold' : 'text-gray-500'}`}>
-                                {schema.id}
-                              </span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
+                    {/* Outil de dessin CAD */}
+                    <TraveeDrawTool travee={t} onUpdate={(patch) => updateTravee(t.id, patch)} />
 
                     {/* Row 4: Fixation des retours (L, U, C, D, G) */}
                     {schemaHasAngle(t) && (
