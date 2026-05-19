@@ -79,15 +79,23 @@ export interface MCDef {
 
 export const TYPES_MC: Record<MCId, MCDef> = {
   std: {
-    label: 'Standard plate 52×25',
+    label: 'MC 25mm plate — 180030',
     ref: '180030',
     bouchon: '127143',
     barreauDelta: -80,
     raidKey: 'std',
     hauteur: 25,
   },
+  mc80: {
+    label: 'MC 80mm — 180031',
+    ref: '180031',
+    bouchon: '127143',
+    barreauDelta: -135,
+    raidKey: 'std',
+    hauteur: 80,
+  },
   design: {
-    label: 'Design ogive 90×25',
+    label: 'MC Design ogive 90×25 — 180032',
     ref: '180032',
     bouchon: '127143',
     barreauDelta: -80,
@@ -95,7 +103,7 @@ export const TYPES_MC: Record<MCId, MCDef> = {
     hauteur: 25,
   },
   ronde: {
-    label: 'Ronde Ø60',
+    label: 'MC Ronde Ø60 — 180033',
     ref: '180033',
     bouchon: '127158',
     barreauDelta: -57,

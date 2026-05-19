@@ -7,7 +7,7 @@ export type TypeGCId =
   | 'bateau1'
   | 'bateau2';
 
-export type MCId = 'std' | 'design' | 'ronde';
+export type MCId = 'std' | 'mc80' | 'design' | 'ronde';
 export type PoseId = 'dalle' | 'anglaise';
 export type LieuId = 'prive' | 'public';
 export type FixationId = 'libre' | 'mur_d' | 'mur_g' | 'raccord90' | 'raccord_droit';
