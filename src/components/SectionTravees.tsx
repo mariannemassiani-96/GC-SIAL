@@ -328,8 +328,8 @@ export function SectionTravees({ affaire, onChange, alertesByTravee }: SectionTr
 function BrancheRaidEditor({ label, color, longueur, branche, onChange }: {
   label: string; color: string; longueur: number; branche: RaidBranche | undefined; onChange: (b: RaidBranche | undefined) => void;
 }) {
-  const isActive = branche && branche.nb !== undefined && branche.nb >= 2;
-  const hasPos = branche?.positions && branche.positions.length >= 2;
+  const isActive = branche && typeof branche.nb === 'number' && branche.nb >= 2;
+  const hasPos = branche?.positions && Array.isArray(branche.positions) && branche.positions.length >= 2;
   const autoNb = Math.ceil(longueur / 1400) + 1;
 
   return (
@@ -409,9 +409,9 @@ function RaidisseursEditor({ travee: t, onUpdate }: { travee: Travee; onUpdate: 
           branche={b.key === 'raidCentre' ? (t.raidCentre ?? (t.nbRaidForce ? { nb: t.nbRaidForce, positions: t.posRaidForce } : undefined)) : t[b.key]}
           onChange={(v) => {
             if (b.key === 'raidCentre') {
-              onUpdate({ raidCentre: v, nbRaidForce: v?.nb, posRaidForce: v?.positions });
+              onUpdate({ raidCentre: v || null, nbRaidForce: v?.nb || null, posRaidForce: v?.positions || null } as Partial<Travee>);
             } else {
-              onUpdate({ [b.key]: v });
+              onUpdate({ [b.key]: v || null } as Partial<Travee>);
             }
           }}
         />

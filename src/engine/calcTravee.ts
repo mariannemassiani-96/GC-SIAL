@@ -85,8 +85,8 @@ export function calcTravee(travee: Travee, _affaire: Affaire): ResultatTravee {
   });
 
   // Step 3: Use forced or auto positions
-  const hasForcePos = travee.posRaidForce && travee.posRaidForce.length >= 2;
-  const hasForceNb = !hasForcePos && travee.nbRaidForce !== undefined && travee.nbRaidForce >= 2;
+  const hasForcePos = travee.posRaidForce && Array.isArray(travee.posRaidForce) && travee.posRaidForce.length >= 2;
+  const hasForceNb = !hasForcePos && typeof travee.nbRaidForce === 'number' && travee.nbRaidForce >= 2;
 
   let posRaidisseurs: number[];
   if (hasForcePos) {
