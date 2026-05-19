@@ -246,6 +246,40 @@ export function SectionTravees({ affaire, onChange, alertesByTravee }: SectionTr
                     {/* Outil de dessin CAD */}
                     <TraveeDrawTool travee={t} onUpdate={(patch) => updateTravee(t.id, patch)} />
 
+                    {/* Fixations gauche / droite */}
+                    <div className="flex items-center gap-6 flex-wrap">
+                      {t.coupeG !== '45' && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] text-gray-500">Fixation gauche :</span>
+                          {[
+                            { id: 'libre' as FixationId, label: 'Bouchon' },
+                            { id: 'mur_g' as FixationId, label: 'Patte murale' },
+                            { id: 'raccord_droit' as FixationId, label: 'Eclisse' },
+                          ].map(f => (
+                            <button key={f.id} onClick={() => updateTravee(t.id, { fixG: f.id })}
+                              className={`px-2.5 py-1 rounded text-[10px] border ${t.fixG === f.id ? 'bg-blue-600/20 text-blue-400 border-blue-500/40' : 'text-gray-500 border-[#353840]'}`}>
+                              {f.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {t.coupeD !== '45' && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] text-gray-500">Fixation droite :</span>
+                          {[
+                            { id: 'libre' as FixationId, label: 'Bouchon' },
+                            { id: 'mur_d' as FixationId, label: 'Patte murale' },
+                            { id: 'raccord_droit' as FixationId, label: 'Eclisse' },
+                          ].map(f => (
+                            <button key={f.id} onClick={() => updateTravee(t.id, { fixD: f.id })}
+                              className={`px-2.5 py-1 rounded text-[10px] border ${t.fixD === f.id ? 'bg-blue-600/20 text-blue-400 border-blue-500/40' : 'text-gray-500 border-[#353840]'}`}>
+                              {f.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
                     {/* Row 4: Fixation des retours (L, U, C, D, G) */}
                     {schemaHasAngle(t) && (
                       <div className="flex items-center gap-4">
