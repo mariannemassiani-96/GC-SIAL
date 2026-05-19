@@ -45,13 +45,8 @@ export function PreviewGC({ rt }: PreviewGCProps) {
   const sabotH = 20 * scale;
   const dalleH = 8;
 
-  // Raidisseur positions (relative to left edge of the guardrail, in mm)
-  // posRaidisseurs are relative to the lisse (with DEPASSEMENT_LISSE offset)
-  // We need positions relative to the guardrail width: raidisseur i is at i * entraxeEff
-  const raidPositions: number[] = [];
-  for (let i = 0; i < rt.nbRaid; i++) {
-    raidPositions.push(i * rt.entraxeEff);
-  }
+  // Use positions from the calculation engine (already filtered for angle junctions)
+  const raidPositions = rt.posRaidisseurs;
 
   // Barreaux positions between raidisseurs
   const barreauPositions: number[] = [];

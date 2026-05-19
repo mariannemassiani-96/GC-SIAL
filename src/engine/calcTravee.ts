@@ -131,8 +131,8 @@ export function calcTravee(travee: Travee, _affaire: Affaire): ResultatTravee {
     }
     // Remove positions at angle junctions
     posRaidisseurs = allPositions.filter(p => {
-      if (hasAngleG && p < 0.1) return false;
-      if (hasAngleD && Math.abs(p - travee.largeur) < 0.1) return false;
+      if (hasAngleG && p < 1) return false;
+      if (hasAngleD && Math.abs(p - travee.largeur) < 1) return false;
       return true;
     });
   }
