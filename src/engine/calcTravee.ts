@@ -64,16 +64,23 @@ export function calcTravee(travee: Travee, _affaire: Affaire): ResultatTravee {
   const alertes: Alerte[] = [];
 
   // 1. Nombre de raidisseurs
+  // Aux angles 45° (L/U), pas de raidisseur à la jonction — c'est le raccord 90° (110962)
+  const hasAngleG = travee.coupeG === '45';
+  const hasAngleD = travee.coupeD === '45';
   const entraxeMax = ENTRAXE[travee.lieu][travee.angle];
   let nbRaid: number;
   let entraxeEff: number;
   const hasForceNb = travee.nbRaidForce !== undefined && travee.nbRaidForce >= 2;
   if (hasForceNb) {
     nbRaid = travee.nbRaidForce!;
-    entraxeEff = travee.largeur / (nbRaid - 1);
+    entraxeEff = travee.largeur / (nbRaid + (hasAngleG ? 1 : 0) + (hasAngleD ? 1 : 0) - 1);
   } else {
-    nbRaid = Math.ceil(travee.largeur / entraxeMax) + 1;
-    entraxeEff = travee.largeur / (nbRaid - 1);
+    // Nombre total de divisions sur la largeur
+    const nbDivisions = Math.ceil(travee.largeur / entraxeMax);
+    // Nombre de raidisseurs = points - ceux aux angles
+    nbRaid = nbDivisions + 1 - (hasAngleG ? 1 : 0) - (hasAngleD ? 1 : 0);
+    nbRaid = Math.max(nbRaid, hasAngleG || hasAngleD ? 1 : 2);
+    entraxeEff = travee.largeur / nbDivisions;
   }
 
   // 2. Débit raidisseur
@@ -111,15 +118,23 @@ export function calcTravee(travee: Travee, _affaire: Affaire): ResultatTravee {
   }
 
   // 7. Positions raidisseurs (mm depuis bord gauche de la lisse)
+  // Skip positions at angle junctions (0 if angleG, largeur if angleD)
   let posRaidisseurs: number[];
   const hasForcePos = travee.posRaidForce && travee.posRaidForce.length >= 2;
   if (hasForcePos) {
     posRaidisseurs = travee.posRaidForce!.map(p => Math.round(p * 10) / 10);
   } else {
-    posRaidisseurs = [];
-    for (let i = 0; i < nbRaid; i++) {
-      posRaidisseurs.push(Math.round(i * entraxeEff * 10) / 10);
+    const nbDivisions = Math.ceil(travee.largeur / entraxeMax);
+    const allPositions: number[] = [];
+    for (let i = 0; i <= nbDivisions; i++) {
+      allPositions.push(Math.round(i * entraxeEff * 10) / 10);
     }
+    // Remove positions at angle junctions
+    posRaidisseurs = allPositions.filter(p => {
+      if (hasAngleG && p < 0.1) return false;
+      if (hasAngleD && Math.abs(p - travee.largeur) < 0.1) return false;
+      return true;
+    });
   }
 
   // 8. Usinages — calculer pour chaque lisse
