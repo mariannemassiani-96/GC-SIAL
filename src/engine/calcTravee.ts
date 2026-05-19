@@ -28,21 +28,15 @@ function barreauxDansIntervalle(start: number, end: number, nbBar: number): numb
 }
 
 export function calcPositionsUsinages(
-  _longueurLisse: number,
-  nbRaid: number,
-  entraxeEff: number
+  raidPositions: number[],
 ): UsinageLisse {
-  // Positions des raidisseurs (mm depuis bord gauche)
-  const posRaidisseurs: number[] = [];
-  for (let i = 0; i < nbRaid; i++) {
-    posRaidisseurs.push(Math.round(i * entraxeEff * 10) / 10);
-  }
+  const posRaidisseurs = [...raidPositions].sort((a, b) => a - b);
+  const nbRaid = posRaidisseurs.length;
 
-  // Barreaux : même nombre dans chaque intervalle, répartis symétriquement
-  // Le nombre est calculé une seule fois sur l'entraxe pour garantir l'uniformité
-  const barParInterval = calcBarParIntervalle(entraxeEff);
   const posBarreaux: number[] = [];
   for (let i = 0; i < nbRaid - 1; i++) {
+    const entraxe = posRaidisseurs[i + 1] - posRaidisseurs[i];
+    const barParInterval = calcBarParIntervalle(entraxe);
     posBarreaux.push(...barreauxDansIntervalle(posRaidisseurs[i], posRaidisseurs[i + 1], barParInterval));
   }
 
@@ -149,7 +143,7 @@ export function calcTravee(travee: Travee, _affaire: Affaire): ResultatTravee {
       : 0;
   const usinages: UsinageLisse[] = [];
   for (let i = 0; i < nbLisses; i++) {
-    usinages.push(calcPositionsUsinages(longueurLisse, nbRaid, entraxeEff));
+    usinages.push(calcPositionsUsinages(posRaidisseurs));
   }
 
   // 9. Contrôle NF P01-012 : vérifier que tous les espacements ≤ 130mm
