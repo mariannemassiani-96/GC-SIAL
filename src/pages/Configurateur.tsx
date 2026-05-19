@@ -35,8 +35,10 @@ function downloadBlob(blob: Blob, filename: string) {
 }
 
 export function Configurateur({ affaire, onUpdate, onBack }: ConfigurateurProps) {
-  const [activeTab, setActiveTab] = useState<TabId>('config');
-  const [selectedTraveeIdx, setSelectedTraveeIdx] = useState(0);
+  const [activeTab, setActiveTabRaw] = useState<TabId>(() => (sessionStorage.getItem('sial_gc_tab') as TabId) || 'config');
+  const setActiveTab = useCallback((t: TabId) => { sessionStorage.setItem('sial_gc_tab', t); setActiveTabRaw(t); }, []);
+  const [selectedTraveeIdx, setSelectedTraveeIdxRaw] = useState(() => Number(sessionStorage.getItem('sial_gc_travee') || '0'));
+  const setSelectedTraveeIdx = useCallback((i: number) => { sessionStorage.setItem('sial_gc_travee', String(i)); setSelectedTraveeIdxRaw(i); }, []);
 
   const resultat = useMemo(() => {
     if (affaire.travees.length === 0) return null;
