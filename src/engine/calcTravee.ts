@@ -29,15 +29,23 @@ function barreauxDansIntervalle(start: number, end: number, nbBar: number): numb
 
 export function calcPositionsUsinages(
   raidPositions: number[],
+  longueurLisse: number,
 ): UsinageLisse {
   const posRaidisseurs = [...raidPositions].sort((a, b) => a - b);
-  const nbRaid = posRaidisseurs.length;
+
+  // For barreau calculation, include lisse edges (0 and longueurLisse) as boundaries
+  const boundaries = [0, ...posRaidisseurs, longueurLisse];
+  // Deduplicate and sort
+  const uniqueBoundaries = [...new Set(boundaries.map(v => Math.round(v * 10) / 10))].sort((a, b) => a - b);
 
   const posBarreaux: number[] = [];
-  for (let i = 0; i < nbRaid - 1; i++) {
-    const entraxe = posRaidisseurs[i + 1] - posRaidisseurs[i];
-    const barParInterval = calcBarParIntervalle(entraxe);
-    posBarreaux.push(...barreauxDansIntervalle(posRaidisseurs[i], posRaidisseurs[i + 1], barParInterval));
+  for (let i = 0; i < uniqueBoundaries.length - 1; i++) {
+    const left = uniqueBoundaries[i];
+    const right = uniqueBoundaries[i + 1];
+    const interval = right - left;
+    if (interval < 10) continue;
+    const barParInterval = calcBarParIntervalle(interval);
+    posBarreaux.push(...barreauxDansIntervalle(left, right, barParInterval));
   }
 
   // percageLisse = barreaux + positions raidisseurs (sans goupilles ext)
@@ -143,7 +151,7 @@ export function calcTravee(travee: Travee, _affaire: Affaire): ResultatTravee {
       : 0;
   const usinages: UsinageLisse[] = [];
   for (let i = 0; i < nbLisses; i++) {
-    usinages.push(calcPositionsUsinages(posRaidisseurs));
+    usinages.push(calcPositionsUsinages(posRaidisseurs, longueurLisse));
   }
 
   // 9. Contrôle NF P01-012 : vérifier que tous les espacements ≤ 130mm
