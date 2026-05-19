@@ -53,46 +53,6 @@ function schemaIsU(t: Travee): boolean {
   return t.coupeG === '45' && t.coupeD === '45';
 }
 
-/** Petit SVG schématique du schéma de pose (vue intérieure) */
-function SchemaPoseMini({ schema }: { schema: SchemaPose }) {
-  const w = 80, h = 36, pad = 6;
-  const barY = 20;
-
-  const fG: FixationId = schema.fixG;
-  const fD: FixationId = schema.fixD;
-  const leftWall = fG === 'mur_g' || fG === 'mur_d';
-  const leftAngle = fG === 'raccord90';
-  const rightWall = fD === 'mur_d' || fD === 'mur_g';
-  const rightAngle = fD === 'raccord90';
-
-  return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-full">
-      {/* EXT en haut, INT en bas */}
-      <text x={2} y={7} fill="#4b5563" fontSize={4.5} fontFamily="sans-serif">EXT</text>
-      <text x={2} y={h - 2} fill="#6b7280" fontSize={4.5} fontFamily="sans-serif">INT</text>
-      {/* Ligne séparatrice ext/int */}
-      <line x1={pad} y1={barY + 5} x2={w - pad} y2={barY + 5} stroke="#2a2d35" strokeWidth={0.5} strokeDasharray="2,2" />
-      {/* Main bar (sur la façade, côté extérieur) */}
-      <line x1={pad} y1={barY} x2={w - pad} y2={barY} stroke="#60a5fa" strokeWidth={2.5} />
-      {/* Left end */}
-      {leftWall && (<>
-        <rect x={1} y={barY - 8} width={3} height={16} fill="#9ca3af" rx={0.5} />
-        <line x1={pad} y1={barY} x2={4} y2={barY} stroke="#f59e0b" strokeWidth={1.5} />
-      </>)}
-      {leftAngle && (<line x1={pad} y1={barY} x2={pad} y2={barY - 12} stroke="#f59e0b" strokeWidth={2} />)}
-      {schema.fixG === 'libre' && (<circle cx={pad} cy={barY} r={2} fill="#ef4444" />)}
-      {schema.fixG === 'raccord_droit' && (<line x1={pad - 3} y1={barY} x2={pad} y2={barY} stroke="#60a5fa" strokeWidth={2} strokeDasharray="2,1" />)}
-      {/* Right end */}
-      {rightWall && (<>
-        <rect x={w - 4} y={barY - 8} width={3} height={16} fill="#9ca3af" rx={0.5} />
-        <line x1={w - pad} y1={barY} x2={w - 4} y2={barY} stroke="#f59e0b" strokeWidth={1.5} />
-      </>)}
-      {rightAngle && (<line x1={w - pad} y1={barY} x2={w - pad} y2={barY - 12} stroke="#f59e0b" strokeWidth={2} />)}
-      {schema.fixD === 'libre' && (<circle cx={w - pad} cy={barY} r={2} fill="#ef4444" />)}
-      {schema.fixD === 'raccord_droit' && (<line x1={w - pad} y1={barY} x2={w - pad + 3} y2={barY} stroke="#60a5fa" strokeWidth={2} strokeDasharray="2,1" />)}
-    </svg>
-  );
-}
 
 function MiniSelect({ value, onChange, options, className = '' }: {
   value: string;
@@ -139,20 +99,6 @@ export function SectionTravees({ affaire, onChange, alertesByTravee }: SectionTr
     onChange({ travees: [...affaire.travees, dup] });
   };
 
-  const applySchema = (id: string, schema: SchemaPose) => {
-    const hasAngleR = schema.coupeD === '45';
-    const hasAngleL = schema.coupeG === '45';
-    const isU = hasAngleL && hasAngleR;
-    const travee = affaire.travees.find((t) => t.id === id);
-    updateTravee(id, {
-      fixG: schema.fixG,
-      fixD: schema.fixD,
-      coupeG: schema.coupeG,
-      coupeD: schema.coupeD,
-      largeur2: hasAngleR ? (travee?.largeur2 || travee?.largeur || 2000) : (hasAngleL ? (travee?.largeur2 || travee?.largeur || 2000) : 0),
-      largeur3: isU ? (travee?.largeur3 || travee?.largeur || 2000) : 0,
-    });
-  };
 
   return (
     <div className="bg-[#181c25] rounded-lg border border-[#252830] p-4">
