@@ -1,6 +1,6 @@
 import type { Affaire, Travee, ResultatTravee, UsinageLisse, Alerte } from '../types';
 import { ENTRAXE, ESPACEMENT_BARREAU } from '../constants/parametres';
-import { TYPES_GC, TYPES_MC, POSE_DATA } from '../constants/typesGC';
+import { TYPES_GC, TYPES_MC } from '../constants/typesGC';
 import { calcNomenclature } from './calcNomenclature';
 
 /**
@@ -60,7 +60,6 @@ export function calcTravee(travee: Travee, _affaire: Affaire): ResultatTravee {
   // Config is now on the travee itself
   const gc = TYPES_GC[travee.typeGC];
   const mc = TYPES_MC[travee.mc];
-  const pose = POSE_DATA[travee.pose];
   const alertes: Alerte[] = [];
 
   // 1. Nombre de raidisseurs
@@ -205,7 +204,7 @@ export function calcTravee(travee: Travee, _affaire: Affaire): ResultatTravee {
     nbRaid,
     entraxeEff,
     debRaid,
-    h1,
+    h1: debRaid - 20 - mc.hauteur,
     debBarreau,
     nbBarreaux,
     debMC,
