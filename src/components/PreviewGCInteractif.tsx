@@ -181,17 +181,27 @@ function PlanView({ t, rt, branches, svgW, svgH, pad, hoverKey, setHoverKey, onU
   const barThick = 12;
   const slotR = 6;
 
-  // Centre bar position
-  const centreY = pad + Math.max(leftLen, rightLen) * scale + 20;
+  // Centre bar position — branches go downward (toward INT, like the draw tool)
+  const centreY = pad + 20;
   const centreX0 = pad + (leftLen > 0 ? 30 : 0);
 
   const allBranchData = useMemo(() => {
-    return branches.map(b => ({
-      ...b,
-      raidPos: getRaidPositions(t, b, rt),
-      slots: generateSlots(b.longueur),
-    }));
-  }, [branches, t, rt]);
+    return branches.map(b => {
+      const allSlots = generateSlots(b.longueur);
+      const isAngleAtStart = (b.key === 'raidCentre' && hasAngleG) || b.key === 'raidDroite' || b.key === 'raidGauche';
+      const isAngleAtEnd = (b.key === 'raidCentre' && hasAngleD);
+      const slots = allSlots.filter(s => {
+        if (isAngleAtStart && s < 1) return false;
+        if (isAngleAtEnd && Math.abs(s - b.longueur) < 1) return false;
+        return true;
+      });
+      return {
+        ...b,
+        raidPos: getRaidPositions(t, b, rt),
+        slots,
+      };
+    });
+  }, [branches, t, rt, hasAngleG, hasAngleD]);
 
   const toggle = (branche: BrancheDef, slotPos: number, currentPos: number[]) => {
     const tolerance = branche.longueur / Math.max(generateSlots(branche.longueur).length - 1, 1) * 0.4;
@@ -267,16 +277,16 @@ function PlanView({ t, rt, branches, svgW, svgH, pad, hoverKey, setHoverKey, onU
             const bx = centreX0;
             return (
               <g>
-                <rect x={bx - barThick / 2} y={centreY - bd.longueur * scale} width={barThick} height={bd.longueur * scale} fill={bd.color} opacity={0.3} rx={2} />
-                <text x={bx - barThick / 2 - 10} y={centreY - bd.longueur * scale / 2} fill="#f59e0b" fontSize={8} fontFamily="monospace" textAnchor="end" dominantBaseline="middle">{bd.longueur}</text>
-                <text x={bx + barThick / 2 + 8} y={centreY - bd.longueur * scale + 10} fill={bd.color} fontSize={8} fontFamily="monospace" fontWeight="bold">{bd.label}</text>
+                <rect x={bx - barThick / 2} y={centreY} width={barThick} height={bd.longueur * scale} fill={bd.color} opacity={0.3} rx={2} />
+                <text x={bx - barThick / 2 - 10} y={centreY + bd.longueur * scale / 2} fill="#f59e0b" fontSize={8} fontFamily="monospace" textAnchor="end" dominantBaseline="middle">{bd.longueur}</text>
+                <text x={bx + barThick / 2 + 8} y={centreY + bd.longueur * scale - 10} fill={bd.color} fontSize={8} fontFamily="monospace" fontWeight="bold">{bd.label}</text>
                 {/* Angle marker */}
                 <rect x={bx - barThick / 2 - 1} y={centreY - barThick / 2 - 1} width={barThick + 2} height={barThick + 2} fill={bd.color} opacity={0.15} rx={2} />
                 {bd.slots.map((slotPos, si) => {
                   const isR = isAtPosition(slotPos, bd.raidPos, tolerance);
                   const key = `g-${si}`;
                   const isH = hoverKey === key;
-                  const cy = centreY - slotPos * scale;
+                  const cy = centreY + slotPos * scale;
                   return (
                     <g key={key} onMouseEnter={() => setHoverKey(key)} onMouseLeave={() => setHoverKey(null)} onClick={() => toggle(bd, slotPos, bd.raidPos)} className="cursor-pointer">
                       <rect x={bx - barThick} y={cy - slotR - 2} width={barThick * 2} height={slotR * 2 + 4} fill="transparent" />
@@ -288,9 +298,9 @@ function PlanView({ t, rt, branches, svgW, svgH, pad, hoverKey, setHoverKey, onU
                 })}
                 {/* Fixation retour */}
                 {(t.fixRetourG ?? 'libre') === 'mur' ? (
-                  <rect x={bx - barThick / 2 - 3} y={centreY - bd.longueur * scale - 3} width={barThick + 6} height={4} fill="#9ca3af" rx={1} />
+                  <rect x={bx - barThick / 2 - 3} y={centreY + bd.longueur * scale - 1} width={barThick + 6} height={4} fill="#9ca3af" rx={1} />
                 ) : (
-                  <circle cx={bx} cy={centreY - bd.longueur * scale} r={4} fill="none" stroke="#ef4444" strokeWidth={1.5} />
+                  <circle cx={bx} cy={centreY + bd.longueur * scale} r={4} fill="none" stroke="#ef4444" strokeWidth={1.5} />
                 )}
               </g>
             );
@@ -304,15 +314,15 @@ function PlanView({ t, rt, branches, svgW, svgH, pad, hoverKey, setHoverKey, onU
             const bx = centreX0 + centreLen * scale;
             return (
               <g>
-                <rect x={bx - barThick / 2} y={centreY - bd.longueur * scale} width={barThick} height={bd.longueur * scale} fill={bd.color} opacity={0.3} rx={2} />
-                <text x={bx + barThick / 2 + 10} y={centreY - bd.longueur * scale / 2} fill="#f59e0b" fontSize={8} fontFamily="monospace" dominantBaseline="middle">{bd.longueur}</text>
-                <text x={bx - barThick / 2 - 8} y={centreY - bd.longueur * scale + 10} fill={bd.color} fontSize={8} fontFamily="monospace" textAnchor="end" fontWeight="bold">{bd.label}</text>
+                <rect x={bx - barThick / 2} y={centreY} width={barThick} height={bd.longueur * scale} fill={bd.color} opacity={0.3} rx={2} />
+                <text x={bx + barThick / 2 + 10} y={centreY + bd.longueur * scale / 2} fill="#f59e0b" fontSize={8} fontFamily="monospace" dominantBaseline="middle">{bd.longueur}</text>
+                <text x={bx - barThick / 2 - 8} y={centreY + bd.longueur * scale - 10} fill={bd.color} fontSize={8} fontFamily="monospace" textAnchor="end" fontWeight="bold">{bd.label}</text>
                 <rect x={bx - barThick / 2 - 1} y={centreY - barThick / 2 - 1} width={barThick + 2} height={barThick + 2} fill={bd.color} opacity={0.15} rx={2} />
                 {bd.slots.map((slotPos, si) => {
                   const isR = isAtPosition(slotPos, bd.raidPos, tolerance);
                   const key = `d-${si}`;
                   const isH = hoverKey === key;
-                  const cy = centreY - slotPos * scale;
+                  const cy = centreY + slotPos * scale;
                   return (
                     <g key={key} onMouseEnter={() => setHoverKey(key)} onMouseLeave={() => setHoverKey(null)} onClick={() => toggle(bd, slotPos, bd.raidPos)} className="cursor-pointer">
                       <rect x={bx - barThick} y={cy - slotR - 2} width={barThick * 2} height={slotR * 2 + 4} fill="transparent" />
@@ -323,9 +333,9 @@ function PlanView({ t, rt, branches, svgW, svgH, pad, hoverKey, setHoverKey, onU
                   );
                 })}
                 {(t.fixRetourD ?? 'libre') === 'mur' ? (
-                  <rect x={bx - barThick / 2 - 3} y={centreY - bd.longueur * scale - 3} width={barThick + 6} height={4} fill="#9ca3af" rx={1} />
+                  <rect x={bx - barThick / 2 - 3} y={centreY + bd.longueur * scale - 1} width={barThick + 6} height={4} fill="#9ca3af" rx={1} />
                 ) : (
-                  <circle cx={bx} cy={centreY - bd.longueur * scale} r={4} fill="none" stroke="#ef4444" strokeWidth={1.5} />
+                  <circle cx={bx} cy={centreY + bd.longueur * scale} r={4} fill="none" stroke="#ef4444" strokeWidth={1.5} />
                 )}
               </g>
             );
