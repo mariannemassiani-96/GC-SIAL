@@ -183,16 +183,29 @@ function HubFabrication({ onSelect }: { onSelect: (mode: AppMode) => void }) {
 
 function AppContent() {
   const { user } = useAuth();
-  const [mode, setMode] = useState<AppMode>('home');
+  const [mode, setModeRaw] = useState<AppMode>(() => {
+    const saved = sessionStorage.getItem('sial_mode');
+    return (saved as AppMode) || 'home';
+  });
+  const setMode = useCallback((m: AppMode) => {
+    sessionStorage.setItem('sial_mode', m);
+    setModeRaw(m);
+  }, []);
 
   const { affaires, addAffaire, updateAffaire, deleteAffaire, duplicateAffaire } = useAffaires();
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedIdRaw] = useState<string | null>(() => sessionStorage.getItem('sial_affaire_id'));
+  const setSelectedId = useCallback((id: string | null) => {
+    setSelectedIdRaw(id);
+    if (id) sessionStorage.setItem('sial_affaire_id', id);
+    else sessionStorage.removeItem('sial_affaire_id');
+  }, []);
   const selectedAffaire = affaires.find((a) => a.id === selectedId) ?? null;
 
   const handleNew = useCallback(() => {
     const newAffaire = createEmptyAffaire();
     addAffaire(newAffaire);
     setSelectedId(newAffaire.id);
+    sessionStorage.setItem('sial_affaire_id', newAffaire.id);
   }, [addAffaire]);
 
   const handleUpdate = useCallback(
@@ -205,7 +218,7 @@ function AppContent() {
   const goHome = useCallback(() => {
     setMode('home');
     setSelectedId(null);
-  }, []);
+  }, [setMode, setSelectedId]);
 
   if (!user) return <LoginScreen />;
 
