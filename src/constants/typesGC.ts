@@ -82,7 +82,7 @@ export const TYPES_MC: Record<MCId, MCDef> = {
     label: 'Standard plate 52×25',
     ref: '180030',
     bouchon: '127143',
-    barreauDelta: -23,
+    barreauDelta: -80,
     raidKey: 'std',
     hauteur: 25,
   },
@@ -90,7 +90,7 @@ export const TYPES_MC: Record<MCId, MCDef> = {
     label: 'Design ogive 90×25',
     ref: '180032',
     bouchon: '127143',
-    barreauDelta: -23,
+    barreauDelta: -80,
     raidKey: 'std',
     hauteur: 25,
   },
@@ -117,11 +117,11 @@ export const POSE_DATA: Record<'dalle' | 'anglaise', PoseDef> = {
   dalle: {
     label: 'Sur dalle — à la française',
     sabot: '6003992',
-    offsets: { std: -30, ronde: -53 },
+    offsets: { std: -70, ronde: -93 },
   },
   anglaise: {
     label: 'Sur nez de dalle — à l\'anglaise',
     sabot: '6004105',
-    offsets: { std: 102, ronde: 79 },
+    offsets: { std: 62, ronde: 39 },
   },
 };
