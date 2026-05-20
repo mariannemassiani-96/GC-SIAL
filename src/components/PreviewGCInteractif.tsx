@@ -242,7 +242,7 @@ function PlanView({ t, rt, retourD, retourG, svgW, svgH, pad, hoverKey, setHover
   }, [branches]);
 
   const toggle = (branch: BrancheDef, slotPos: number) => {
-    const tolerance = branch.longueur / Math.max(generateSlots(branch.longueur).length - 1, 1) * 0.4;
+    const tolerance = ESPACEMENT_BARREAU * 0.4;
     const isR = isAtPosition(slotPos, branch.positions, tolerance);
     let newPos: number[];
     if (isR) {
