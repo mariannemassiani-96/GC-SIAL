@@ -1,5 +1,5 @@
 import type { Affaire, Travee, ResultatTravee, UsinageLisse, Alerte } from '../types';
-import { ENTRAXE, ESPACEMENT_BARREAU } from '../constants/parametres';
+import { ENTRAXE, ESPACEMENT_BARREAU, MIN_BORD_BARREAU } from '../constants/parametres';
 import { TYPES_GC, TYPES_MC } from '../constants/typesGC';
 import { calcNomenclature } from './calcNomenclature';
 
@@ -47,9 +47,13 @@ export function calcPositionsUsinages(
     const barParInterval = calcBarParIntervalle(interval);
     posBarreaux.push(...barreauxDansIntervalle(left, right, barParInterval));
   }
+  // Minimum 35mm du bord de la lisse
+  const filteredBarreaux = posBarreaux.filter(p =>
+    p >= MIN_BORD_BARREAU && p <= longueurLisse - MIN_BORD_BARREAU
+  );
 
   // percageLisse = barreaux + positions raidisseurs (sans goupilles ext)
-  const allPercage = [...posBarreaux, ...posRaidisseurs];
+  const allPercage = [...filteredBarreaux, ...posRaidisseurs];
   const uniquePercage = [...new Set(allPercage.map(v => Math.round(v * 10) / 10))].sort((a, b) => a - b);
 
   return {
