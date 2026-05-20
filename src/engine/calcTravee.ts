@@ -4,73 +4,94 @@ import { TYPES_GC, TYPES_MC } from '../constants/typesGC';
 import { calcNomenclature } from './calcNomenclature';
 
 /**
- * Calcule une grille uniforme de trous sur la lisse.
- * Tous les trous sont espacés de exactement ESPACEMENT_BARREAU (130mm).
- * Les raidisseurs tombent sur des trous de la grille (chaque K trous).
- * Seul l'écart bord↔premier trou varie.
+ * Grille canonique : offset symétrique ∈ [MIN_BORD, ESPACEMENT] puis 130mm fixe.
+ * Le bord fait toujours ≤ 130mm — on « saute un trou » pour ça.
  */
-function calcGrille(longueurLisse: number, entraxeMax: number) {
+function computeGridPositions(longueurLisse: number): number[] {
   const E = ESPACEMENT_BARREAU;
-  const K_max = Math.floor(entraxeMax / E);
-
-  // 1 raidisseur suffit si le bord↔raidisseur ≤ entraxeMax (longueur ≤ 2×entraxeMax)
-  if (longueurLisse <= 2 * entraxeMax) {
-    const offset = Math.round(longueurLisse / 2 * 10) / 10;
-    if (offset >= MIN_BORD_BARREAU) {
-      return buildGrid(longueurLisse, 1, 1, offset);
-    }
+  const intervals = Math.floor((longueurLisse - 2 * MIN_BORD_BARREAU) / E);
+  if (intervals < 0) return [];
+  const count = intervals + 1;
+  const offset = Math.round((longueurLisse - intervals * E) / 2 * 10) / 10;
+  const positions: number[] = [];
+  for (let i = 0; i < count; i++) {
+    positions.push(Math.round((offset + i * E) * 10) / 10);
   }
-
-  // Sinon, chercher nbRaid ≥ 2 avec K intervalles de 130mm entre raidisseurs
-  let nbRaid = 2;
-  let K = K_max;
-  while (nbRaid <= 50) {
-    while (K >= 1) {
-      const span = (nbRaid - 1) * K * E;
-      const offset = (longueurLisse - span) / 2;
-      if (offset >= MIN_BORD_BARREAU && offset <= entraxeMax) {
-        return buildGrid(longueurLisse, nbRaid, K, offset);
-      }
-      K--;
-    }
-    nbRaid++;
-    K = K_max;
-  }
-
-  return buildGrid(longueurLisse, 1, 1, longueurLisse / 2);
+  return positions;
 }
 
-function buildGrid(longueurLisse: number, nbRaid: number, K: number, offset: number) {
+function snapToGrid(positions: number[], grid: number[]): number[] {
+  if (grid.length === 0) return [];
+  const snapped = positions.map(p => {
+    let best = grid[0];
+    for (const gp of grid) {
+      if (Math.abs(gp - p) < Math.abs(best - p)) best = gp;
+    }
+    return best;
+  });
+  return [...new Set(snapped)].sort((a, b) => a - b);
+}
+
+function calcGrille(longueurLisse: number, entraxeMax: number) {
   const E = ESPACEMENT_BARREAU;
-  const firstRaid = Math.round(offset * 10) / 10;
+  const gridPositions = computeGridPositions(longueurLisse);
+  const count = gridPositions.length;
 
-  // Positions raidisseurs (sur la grille, chaque K trous)
-  const raidPositions: number[] = [];
-  for (let r = 0; r < nbRaid; r++) {
-    raidPositions.push(Math.round((firstRaid + r * K * E) * 10) / 10);
+  if (count === 0) {
+    return { raidPositions: [], barreauPositions: [], allPositions: [], entraxeRaid: 0 };
   }
 
-  // Grille complète : depuis le premier raidisseur, étendre à gauche et à droite par pas de 130mm
-  const allPositions = new Set<number>();
-  for (const rp of raidPositions) allPositions.add(rp);
-
-  // Vers la droite depuis le premier raidisseur
-  for (let pos = firstRaid + E; pos <= longueurLisse - MIN_BORD_BARREAU + 0.5; pos += E) {
-    allPositions.add(Math.round(pos * 10) / 10);
+  // 1 raidisseur si la lisse est courte
+  if (longueurLisse <= 2 * entraxeMax) {
+    const center = longueurLisse / 2;
+    let bestIdx = 0;
+    for (let i = 1; i < count; i++) {
+      if (Math.abs(gridPositions[i] - center) < Math.abs(gridPositions[bestIdx] - center)) bestIdx = i;
+    }
+    return {
+      raidPositions: [gridPositions[bestIdx]],
+      barreauPositions: gridPositions.filter((_, i) => i !== bestIdx),
+      allPositions: gridPositions,
+      entraxeRaid: 0,
+    };
   }
-  // Vers la gauche depuis le premier raidisseur
-  for (let pos = firstRaid - E; pos >= MIN_BORD_BARREAU - 0.5; pos -= E) {
-    allPositions.add(Math.round(pos * 10) / 10);
+
+  // Plusieurs raidisseurs : chercher K (nb intervalles 130mm entre raids)
+  const K_max = Math.floor(entraxeMax / E);
+  for (let nbRaid = 2; nbRaid <= 50; nbRaid++) {
+    for (let K = K_max; K >= 1; K--) {
+      const raidSpan = (nbRaid - 1) * K;
+      if (raidSpan >= count) continue;
+      const startIdx = Math.round((count - 1 - raidSpan) / 2);
+      if (startIdx < 0) continue;
+      const endIdx = startIdx + raidSpan;
+      if (endIdx >= count) continue;
+      if (gridPositions[startIdx] > entraxeMax) continue;
+      if (longueurLisse - gridPositions[endIdx] > entraxeMax) continue;
+
+      const raidPositions: number[] = [];
+      for (let r = 0; r < nbRaid; r++) {
+        raidPositions.push(gridPositions[startIdx + r * K]);
+      }
+      return {
+        raidPositions,
+        barreauPositions: gridPositions.filter(p => !raidPositions.some(rp => Math.abs(rp - p) < 1)),
+        allPositions: gridPositions,
+        entraxeRaid: K * E,
+      };
+    }
   }
 
-  const sortedAll = [...allPositions].sort((a, b) => a - b);
-  const barreauPositions = sortedAll.filter(p => !raidPositions.some(r => Math.abs(r - p) < 1));
-
+  const center = longueurLisse / 2;
+  let bestIdx = 0;
+  for (let i = 1; i < count; i++) {
+    if (Math.abs(gridPositions[i] - center) < Math.abs(gridPositions[bestIdx] - center)) bestIdx = i;
+  }
   return {
-    raidPositions,
-    barreauPositions,
-    allPositions: sortedAll,
-    entraxeRaid: K * E,
+    raidPositions: [gridPositions[bestIdx]],
+    barreauPositions: gridPositions.filter((_, i) => i !== bestIdx),
+    allPositions: gridPositions,
+    entraxeRaid: 0,
   };
 }
 
@@ -78,30 +99,13 @@ export function calcPositionsUsinages(
   raidPositions: number[],
   longueurLisse: number,
 ): UsinageLisse {
-  const entraxeMax = 1560; // fallback, the real value comes from calcTravee
-  const grille = calcGrille(longueurLisse, entraxeMax);
-
-  // Si des positions raidisseurs sont fournies explicitement, on les utilise
-  const finalRaid = raidPositions.length >= 2 ? [...raidPositions].sort((a, b) => a - b) : grille.raidPositions;
-
-  // Recalculer la grille complète basée sur les raidisseurs réels
-  const allPositions = new Set<number>();
-  for (const rp of finalRaid) allPositions.add(Math.round(rp * 10) / 10);
-
-  // Étendre la grille à 130mm depuis chaque raidisseur
-  for (const rp of finalRaid) {
-    for (let pos = rp + ESPACEMENT_BARREAU; pos <= longueurLisse - MIN_BORD_BARREAU + 0.5; pos += ESPACEMENT_BARREAU) {
-      allPositions.add(Math.round(pos * 10) / 10);
-    }
-    for (let pos = rp - ESPACEMENT_BARREAU; pos >= MIN_BORD_BARREAU - 0.5; pos -= ESPACEMENT_BARREAU) {
-      allPositions.add(Math.round(pos * 10) / 10);
-    }
-  }
-
-  const sortedAll = [...allPositions].sort((a, b) => a - b);
+  const gridPositions = computeGridPositions(longueurLisse);
+  const finalRaid = raidPositions.length > 0
+    ? snapToGrid(raidPositions, gridPositions)
+    : [];
 
   return {
-    percageLisse: sortedAll,
+    percageLisse: gridPositions,
     percageLisseRaidisseur: finalRaid,
   };
 }
@@ -127,10 +131,13 @@ export function calcTravee(travee: Travee, _affaire: Affaire): ResultatTravee {
 
   let posRaidisseurs: number[];
 
+  const canonicalGrid = computeGridPositions(longueurLisse);
+
   if (hasForcePos) {
-    posRaidisseurs = override!.positions!
+    const raw = override!.positions!
       .map(p => Math.round(p * 10) / 10)
       .filter(p => p > 1 && Math.abs(p - travee.largeur) > 1);
+    posRaidisseurs = snapToGrid(raw, canonicalGrid);
   } else if (hasForceNb) {
     // Forcer N raidisseurs sur la grille 130mm
     const grille = calcGrille(longueurLisse, entraxeMax);
@@ -190,18 +197,9 @@ export function calcTravee(travee: Travee, _affaire: Affaire): ResultatTravee {
     usinages.push(calcPositionsUsinages(posRaidisseurs, longueurLisse));
   }
 
-  // 8. Contrôle NF P01-012
+  // 8. Contrôle NF P01-012 — espacement entre éléments verticaux consécutifs
   if (gc.hasBarreaux && usinages.length > 0) {
     const posVerticaux = [...usinages[0].percageLisse].sort((a, b) => a - b);
-    if (posVerticaux.length > 0 && posVerticaux[0] > ESPACEMENT_BARREAU + 0.5) {
-      alertes.push({ niveau: 'attention', message: `Espace bord gauche → 1er élément = ${posVerticaux[0].toFixed(1)}mm > ${ESPACEMENT_BARREAU}mm` });
-    }
-    if (posVerticaux.length > 0) {
-      const gapDroit = longueurLisse - posVerticaux[posVerticaux.length - 1];
-      if (gapDroit > ESPACEMENT_BARREAU + 0.5) {
-        alertes.push({ niveau: 'attention', message: `Espace dernier élément → bord droit = ${gapDroit.toFixed(1)}mm > ${ESPACEMENT_BARREAU}mm` });
-      }
-    }
     for (let i = 1; i < posVerticaux.length; i++) {
       const gap = posVerticaux[i] - posVerticaux[i - 1];
       if (gap > ESPACEMENT_BARREAU + 0.5) {

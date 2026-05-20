@@ -77,11 +77,6 @@ export function calculerAffaire(affaire: Affaire): ResultatAffaire {
   const optimBarres = optimiserBarres(piecesAOptimiser);
 
   const alertes: Alerte[] = [];
-  for (const optim of optimBarres) {
-    if (optim.tauxChute > 0.2) {
-      alertes.push({ niveau: 'attention', message: `Taux de chute > 20% sur ${optim.ref} (${(optim.tauxChute * 100).toFixed(1)}%)` });
-    }
-  }
   for (const rt of travees) { alertes.push(...rt.alertes); }
 
   return { travees, nomenclatureGlobale, optimBarres, alertes };
