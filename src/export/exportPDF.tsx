@@ -38,23 +38,25 @@ function SchemaLissePDF({ rt, lisseLabel }: { rt: ResultatTravee; lisseLabel: st
 
   const L = rt.longueurLisse;
   const svgW = 530;
-  const svgH = 36;
+  const svgH = 50;
   const pad = 8;
-  const barY = 10;
+  const barY = 16;
   const barH = 16;
   const scale = (svgW - 2 * pad) / L;
   const toX = (mm: number) => pad + mm * scale;
 
   const raidSet = new Set(rt.posRaidisseurs.map((p) => Math.round(p * 10) / 10));
-  const goupilleG = 68.3;
-  const goupilleD = Math.round((L - 68.3) * 10) / 10;
 
   const barreaux = u.percageLisse.filter(
-    (p) =>
-      !raidSet.has(Math.round(p * 10) / 10) &&
-      Math.abs(p - goupilleG) > 0.05 &&
-      Math.abs(p - goupilleD) > 0.05
+    (p) => !raidSet.has(Math.round(p * 10) / 10)
   );
+
+  const allPos = [...u.percageLisse].sort((a, b) => a - b);
+  const firstHole = allPos.length > 0 ? allPos[0] : 0;
+  const lastHole = allPos.length > 0 ? allPos[allPos.length - 1] : L;
+  const bordG = firstHole;
+  const bordD = L - lastHole;
+  const dimY = barY + barH + 4;
 
   return (
     <View style={{ marginTop: 2, marginBottom: 2 }}>
@@ -65,11 +67,6 @@ function SchemaLissePDF({ rt, lisseLabel }: { rt: ResultatTravee; lisseLabel: st
         {/* Lisse bar */}
         <Rect x={toX(0)} y={barY} width={toX(L) - toX(0)} height={barH} fill="#e8e8e8" stroke="#999" strokeWidth={0.5} />
 
-        {/* Goupilles (green dashed) */}
-        {[goupilleG, goupilleD].map((pos, i) => (
-          <Line key={`g${i}`} x1={toX(pos)} y1={barY - 2} x2={toX(pos)} y2={barY + barH + 2} stroke="#16a34a" strokeWidth={0.7} strokeDasharray="2,1" />
-        ))}
-
         {/* Barreaux (blue) */}
         {barreaux.map((pos, i) => (
           <Line key={`b${i}`} x1={toX(pos)} y1={barY + 1} x2={toX(pos)} y2={barY + barH - 1} stroke="#2563eb" strokeWidth={0.4} />
@@ -79,16 +76,44 @@ function SchemaLissePDF({ rt, lisseLabel }: { rt: ResultatTravee; lisseLabel: st
         {rt.posRaidisseurs.map((pos, i) => (
           <Line key={`r${i}`} x1={toX(pos)} y1={barY - 6} x2={toX(pos)} y2={barY + barH + 6} stroke="#dc2626" strokeWidth={1.2} />
         ))}
+
+        {/* Cote bord gauche */}
+        {allPos.length > 0 && (
+          <>
+            <Line x1={toX(0)} y1={dimY} x2={toX(firstHole)} y2={dimY} stroke="#333" strokeWidth={0.4} />
+            <Line x1={toX(0)} y1={dimY - 2} x2={toX(0)} y2={dimY + 2} stroke="#333" strokeWidth={0.4} />
+            <Line x1={toX(firstHole)} y1={dimY - 2} x2={toX(firstHole)} y2={dimY + 2} stroke="#333" strokeWidth={0.4} />
+          </>
+        )}
+
+        {/* Cote bord droit */}
+        {allPos.length > 0 && (
+          <>
+            <Line x1={toX(lastHole)} y1={dimY} x2={toX(L)} y2={dimY} stroke="#333" strokeWidth={0.4} />
+            <Line x1={toX(lastHole)} y1={dimY - 2} x2={toX(lastHole)} y2={dimY + 2} stroke="#333" strokeWidth={0.4} />
+            <Line x1={toX(L)} y1={dimY - 2} x2={toX(L)} y2={dimY + 2} stroke="#333" strokeWidth={0.4} />
+          </>
+        )}
+
+        {/* Angle de coupe gauche */}
+        <Text x={toX(0) + 1} y={barY - 1} style={{ fontSize: 5, color: '#666' }}>{rt.travee.coupeG}°</Text>
+        {/* Angle de coupe droit */}
+        <Text x={toX(L) - 12} y={barY - 1} style={{ fontSize: 5, color: '#666' }}>{rt.travee.coupeD}°</Text>
       </Svg>
-      {/* Raidisseur position labels below */}
-      <Text style={{ fontSize: 5.5, color: '#dc2626', marginTop: 0 }}>
+      {/* Dimension labels below SVG */}
+      {allPos.length > 0 && (
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: -2 }}>
+          <Text style={{ fontSize: 5.5, color: '#333', marginLeft: pad }}>{bordG.toFixed(1)} mm</Text>
+          <Text style={{ fontSize: 5.5, color: '#333', marginRight: pad }}>{bordD.toFixed(1)} mm</Text>
+        </View>
+      )}
+      <Text style={{ fontSize: 5.5, color: '#dc2626', marginTop: 1 }}>
         Raidisseurs : {rt.posRaidisseurs.map((p) => p.toFixed(1)).join(' | ')} mm
       </Text>
       <View style={{ flexDirection: 'row', gap: 12, marginTop: 1 }}>
         <Text style={{ fontSize: 5, color: '#666' }}>
           <Text style={{ color: '#dc2626' }}>|</Text> Raid.{'  '}
-          <Text style={{ color: '#2563eb' }}>|</Text> Barr.{'  '}
-          <Text style={{ color: '#16a34a' }}>:</Text> Goup.
+          <Text style={{ color: '#2563eb' }}>|</Text> Barr.
         </Text>
       </View>
     </View>
