@@ -78,7 +78,7 @@ function FaceView({ t, rt, gc, svgW, svgH, pad, hoverKey, setHoverKey, onUpdateT
     let newPos: number[];
     if (isR) {
       newPos = raidPos.filter(p => Math.abs(p - slotPos) >= tolerance);
-      if (newPos.length < 2) return;
+      if (newPos.length < 1) return;
     } else {
       newPos = [...raidPos, slotPos].sort((a, b) => a - b);
     }
@@ -243,7 +243,7 @@ function PlanView({ t, rt, retourD, retourG, svgW, svgH, pad, hoverKey, setHover
     let newPos: number[];
     if (isR) {
       newPos = branch.positions.filter(p => Math.abs(p - slotPos) >= tolerance);
-      if (newPos.length < 2) return;
+      if (newPos.length < 1) return;
     } else {
       newPos = [...branch.positions, slotPos].sort((a, b) => a - b);
     }
