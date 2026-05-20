@@ -1,36 +1,5 @@
 import { ACCESSOIRES, LG_BARRE_MM } from '../constants/profils';
-import type { ResultatAffaire, Affaire } from '../types';
-
-/** Prix unitaires estimés — à ajuster avec le tarif Kawneer en vigueur */
-export const PRIX_PROFILS: Record<string, number> = {
-  '180000': 18.50,  // Raidisseur — prix/barre 6400
-  '180005': 8.20,   // Barreau — prix/barre 6400
-  '180010': 22.00,  // Lisse non percée — prix/barre 6400
-  '180020': 9.50,   // Closoir — prix/barre 6400
-  '180030': 28.00,  // MC standard — prix/barre 6400
-  '180032': 42.00,  // MC design — prix/barre 6400
-  '180033': 55.00,  // MC ronde — prix/barre 6400
-  '180040': 14.00,  // U remplissage — prix/barre 6400
-  '140545': 19.00,  // Tube rond — prix/barre 6400
-  '126129': 3.50,   // Joint — prix/ml
-};
-
-export const PRIX_ACCESSOIRES: Record<string, number> = {
-  '6003992': 12.50,  // Sabot dalle
-  '6004105': 14.00,  // Sabot nez de dalle
-  '110306': 8.50,    // Goupille (sachet 5)
-  '110312': 35.00,   // Vis barreau (sachet 200)
-  '110955': 15.00,   // Fixation raidisseur (sac 5)
-  '110956': 4.50,    // Renfort MC
-  '127143': 6.00,    // Bouchon MC std/design (sachet 2)
-  '127144': 5.00,    // Bouchon lisse (sachet 2)
-  '127149': 7.50,    // Patte mur droite (sac 2)
-  '127150': 7.50,    // Patte mur gauche (sac 2)
-  '127158': 8.00,    // Bouchon MC ronde (sachet 2)
-  '110962': 9.00,    // Équerre 90° (par 2)
-  '110966': 7.00,    // Éclisse (par 2)
-  '6003997': 11.00,  // Pince vitrage
-};
+import type { ResultatAffaire, Affaire, TarifKawneer, ClasseColoris } from '../types';
 
 export interface LigneDevis {
   ref: string;
@@ -54,14 +23,20 @@ export interface Devis {
   totalTTC: number;
 }
 
-export function genererDevis(affaire: Affaire, resultat: ResultatAffaire): Devis {
+function getPrix(tarif: TarifKawneer, ref: string, classe: ClasseColoris): number {
+  const item = tarif.prix[ref];
+  if (!item) return 0;
+  return item[`classe${classe}`];
+}
+
+export function genererDevis(affaire: Affaire, resultat: ResultatAffaire, tarif: TarifKawneer): Devis {
   const lignesProfiles: LigneDevis[] = [];
   const lignesAccessoires: LigneDevis[] = [];
   const lignesAutres: LigneDevis[] = [];
+  const classe = affaire.classeColoris ?? 2;
 
-  // Profilés — prix par barre
   for (const opt of resultat.optimBarres) {
-    const prixBarre = PRIX_PROFILS[opt.ref] ?? 0;
+    const prixBarre = getPrix(tarif, opt.ref, classe);
     lignesProfiles.push({
       ref: opt.ref,
       designation: opt.label,
@@ -73,7 +48,6 @@ export function genererDevis(affaire: Affaire, resultat: ResultatAffaire): Devis
     });
   }
 
-  // Accessoires — regrouper par ref
   const accessMap = new Map<string, number>();
   for (const item of resultat.nomenclatureGlobale) {
     if (item.type === 'accessoire') {
@@ -84,7 +58,7 @@ export function genererDevis(affaire: Affaire, resultat: ResultatAffaire): Devis
   for (const [ref, qte] of accessMap.entries()) {
     const cond = ACCESSOIRES[ref]?.cond ?? 1;
     const nbColis = Math.ceil(qte / cond);
-    const prixColis = PRIX_ACCESSOIRES[ref] ?? 0;
+    const prixColis = getPrix(tarif, ref, classe);
     lignesAccessoires.push({
       ref,
       designation: ACCESSOIRES[ref]?.label ?? ref,
@@ -96,10 +70,9 @@ export function genererDevis(affaire: Affaire, resultat: ResultatAffaire): Devis
     });
   }
 
-  // Vitrages si remplissage
   for (const rt of resultat.travees) {
     if (rt.hautVitre > 0 && rt.largVitre > 0) {
-      const surface = (rt.hautVitre * rt.largVitre) / 1e6; // m²
+      const surface = (rt.hautVitre * rt.largVitre) / 1e6;
       const nbVitrages = (rt.nbRaid - 1) * rt.travee.qte;
       lignesAutres.push({
         ref: 'STADIP442',
@@ -107,15 +80,14 @@ export function genererDevis(affaire: Affaire, resultat: ResultatAffaire): Devis
         type: 'vitrage',
         qte: nbVitrages,
         unite: 'pièce',
-        prixUnit: Math.round(surface * 85), // ~85€/m²
+        prixUnit: Math.round(surface * 85),
         montant: Math.round(nbVitrages * surface * 85),
       });
     }
   }
 
-  // Main d'œuvre estimée
   const nbTravees = affaire.travees.reduce((s, t) => s + t.qte, 0);
-  const heuresFab = nbTravees * 1.5; // ~1.5h par travée
+  const heuresFab = nbTravees * 1.5;
   lignesAutres.push({
     ref: 'MO-FAB',
     designation: 'Main d\'œuvre fabrication atelier',
@@ -133,14 +105,8 @@ export function genererDevis(affaire: Affaire, resultat: ResultatAffaire): Devis
   const tva = totalHT * 0.20;
 
   return {
-    lignesProfiles,
-    lignesAccessoires,
-    lignesAutres,
-    totalProfiles,
-    totalAccessoires,
-    totalAutres,
-    totalHT,
-    tva,
-    totalTTC: totalHT + tva,
+    lignesProfiles, lignesAccessoires, lignesAutres,
+    totalProfiles, totalAccessoires, totalAutres,
+    totalHT, tva, totalTTC: totalHT + tva,
   };
 }

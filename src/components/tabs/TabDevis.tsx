@@ -1,10 +1,15 @@
-import type { Affaire, ResultatAffaire } from '../../types';
+import { useState, useMemo } from 'react';
+import { Settings } from 'lucide-react';
+import type { Affaire, ResultatAffaire, TarifKawneer, TarifItem } from '../../types';
 import { genererDevis, type LigneDevis } from '../../engine/devis';
-import { useMemo } from 'react';
+import { CLASSES_LABELS } from '../../store/tarif';
+import { TarifEditor } from '../TarifEditor';
 
 interface TabDevisProps {
   affaire: Affaire;
   resultat: ResultatAffaire;
+  tarif: TarifKawneer;
+  onUpdateTarif: (ref: string, item: Partial<TarifItem>) => void;
 }
 
 function LigneTable({ ligne }: { ligne: LigneDevis }) {
@@ -50,20 +55,31 @@ function SectionDevis({ titre, lignes, total }: { titre: string; lignes: LigneDe
   );
 }
 
-export function TabDevis({ affaire, resultat }: TabDevisProps) {
-  const devis = useMemo(() => genererDevis(affaire, resultat), [affaire, resultat]);
+export function TabDevis({ affaire, resultat, tarif, onUpdateTarif }: TabDevisProps) {
+  const [showTarif, setShowTarif] = useState(false);
+  const devis = useMemo(() => genererDevis(affaire, resultat, tarif), [affaire, resultat, tarif]);
+  const classe = affaire.classeColoris ?? 2;
 
   return (
     <div className="space-y-4">
-      {/* En-tête devis */}
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-sm font-semibold text-gray-200">Devis estimatif</h3>
-          <p className="text-[10px] text-gray-500 mt-0.5">Prix indicatifs — à valider avec le tarif Kawneer en vigueur</p>
+          <p className="text-[10px] text-gray-500 mt-0.5">
+            {CLASSES_LABELS[classe]} — {affaire.coloris}
+            {tarif.dateMAJ && <span className="ml-2 text-gray-600">• Tarif du {tarif.dateMAJ}</span>}
+          </p>
         </div>
-        <div className="text-right">
-          <div className="text-xs text-gray-400">{affaire.ref} — {affaire.chantier}</div>
-          <div className="text-xs text-gray-500">{affaire.date}</div>
+        <div className="flex items-center gap-3">
+          <div className="text-right">
+            <div className="text-xs text-gray-400">{affaire.ref} — {affaire.chantier}</div>
+            <div className="text-xs text-gray-500">{affaire.date}</div>
+          </div>
+          <button onClick={() => setShowTarif(true)}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-amber-400 border border-amber-500/30 rounded hover:bg-amber-600/10 transition-colors">
+            <Settings size={12} />
+            Tarif
+          </button>
         </div>
       </div>
 
@@ -71,7 +87,6 @@ export function TabDevis({ affaire, resultat }: TabDevisProps) {
       <SectionDevis titre="Accessoires" lignes={devis.lignesAccessoires} total={devis.totalAccessoires} />
       <SectionDevis titre="Autres (vitrages, main d'œuvre)" lignes={devis.lignesAutres} total={devis.totalAutres} />
 
-      {/* Totaux */}
       <div className="border-t border-[#353840] pt-3 space-y-1">
         <div className="flex justify-between text-sm">
           <span className="text-gray-400">Total HT</span>
@@ -86,6 +101,8 @@ export function TabDevis({ affaire, resultat }: TabDevisProps) {
           <span className="font-mono text-blue-400">{devis.totalTTC.toFixed(2)} €</span>
         </div>
       </div>
+
+      {showTarif && <TarifEditor tarif={tarif} onUpdate={onUpdateTarif} onClose={() => setShowTarif(false)} />}
     </div>
   );
 }
