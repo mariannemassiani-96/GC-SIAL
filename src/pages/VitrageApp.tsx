@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { Vitrage, Plaque, VitrageStore, AverySettings, WESettings, WEGroupe } from '../vitrage/types';
-import { DEFAULT_AVERY, DEFAULT_WE } from '../vitrage/types';
 import { parseEtiquettesPDF } from '../vitrage/parseEtiquettesPDF';
 import { parsePro2D } from '../vitrage/parsePro2D';
 import { parseVitrageSpec, extractProtoNum } from '../vitrage/parseVitrageSpec';
