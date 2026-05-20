@@ -9,6 +9,7 @@ import { ReceptionMatiere } from './atelier/components/ReceptionMatiere';
 import { PosteCoupe } from './atelier/components/PosteCoupe';
 import { MaintenanceQualite } from './atelier/components/MaintenanceQualite';
 import { WorkshopApp } from './workshop/WorkshopApp';
+import { VitrageApp } from './pages/VitrageApp';
 import { AuthProvider, LoginScreen, useAuth } from './AuthContext';
 import { AdminPanel } from './AdminPanel';
 import type { Affaire } from './types';
@@ -23,7 +24,8 @@ type AppMode =
   | 'workshop_layout'
   | 'reception_matiere'
   | 'poste_coupe'
-  | 'maintenance_qualite';
+  | 'maintenance_qualite'
+  | 'vitrage';
 
 // ── Hub Fabrication (page d'accueil) ─────────────────────────────────
 
@@ -122,6 +124,18 @@ function HubFabrication({ onSelect }: { onSelect: (mode: AppMode) => void }) {
         </svg>
       ),
       color: 'lime',
+    },
+    {
+      id: 'vitrage' as AppMode,
+      label: 'Etiquettes Vitrage & WE',
+      description: 'Etiquettes Avery 70x35mm (assemblees, EXT/INT, ordre de coupe Pro2D), optimisation intercalaires Warm Edge.',
+      icon: (
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-blue-400">
+          <rect x="3" y="3" width="18" height="18" rx="2" /><line x1="3" y1="12" x2="21" y2="12" />
+          <line x1="12" y1="3" x2="12" y2="21" /><rect x="5" y="5" width="5" height="5" rx="0.5" strokeDasharray="2,1" />
+        </svg>
+      ),
+      color: 'blue',
     },
   ];
 
@@ -239,6 +253,7 @@ function AppContent() {
   if (mode === 'stock_accessoires') return <StageInventaire onBack={goHome} />;
   if (mode === 'preparation_livraison') return <PreparationLivraison onBack={goHome} />;
   if (mode === 'workshop_layout') return <WorkshopApp onHome={goHome} />;
+  if (mode === 'vitrage') return <VitrageApp onBack={goHome} />;
 
   // ── Garde-corps ────────────────────────────────────
   if (selectedAffaire) {
