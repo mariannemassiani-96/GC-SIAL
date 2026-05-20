@@ -190,18 +190,9 @@ export function calcTravee(travee: Travee, _affaire: Affaire): ResultatTravee {
     usinages.push(calcPositionsUsinages(posRaidisseurs, longueurLisse));
   }
 
-  // 8. Contrôle NF P01-012
+  // 8. Contrôle NF P01-012 — espacement entre éléments verticaux consécutifs
   if (gc.hasBarreaux && usinages.length > 0) {
     const posVerticaux = [...usinages[0].percageLisse].sort((a, b) => a - b);
-    if (posVerticaux.length > 0 && posVerticaux[0] > ESPACEMENT_BARREAU + 0.5) {
-      alertes.push({ niveau: 'attention', message: `Espace bord gauche → 1er élément = ${posVerticaux[0].toFixed(1)}mm > ${ESPACEMENT_BARREAU}mm` });
-    }
-    if (posVerticaux.length > 0) {
-      const gapDroit = longueurLisse - posVerticaux[posVerticaux.length - 1];
-      if (gapDroit > ESPACEMENT_BARREAU + 0.5) {
-        alertes.push({ niveau: 'attention', message: `Espace dernier élément → bord droit = ${gapDroit.toFixed(1)}mm > ${ESPACEMENT_BARREAU}mm` });
-      }
-    }
     for (let i = 1; i < posVerticaux.length; i++) {
       const gap = posVerticaux[i] - posVerticaux[i - 1];
       if (gap > ESPACEMENT_BARREAU + 0.5) {
