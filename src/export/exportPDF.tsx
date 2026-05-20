@@ -95,89 +95,104 @@ function SchemaLissePDF({ rt, lisseLabel }: { rt: ResultatTravee; lisseLabel: st
   );
 }
 
-function SchemaConfigPDF({ rt }: { rt: ResultatTravee }) {
-  const t = rt.travee;
-  const hasAngleG = t.coupeG === '45';
-  const hasAngleD = t.coupeD === '45';
+function SchemaConfigPDF({ rt, parentTravee }: { rt: ResultatTravee; parentTravee?: Travee }) {
+  // Always draw the full shape from the parent travee
+  const src = parentTravee ?? rt.travee;
+  const hasAngleG = src.coupeG === '45';
+  const hasAngleD = src.coupeD === '45';
   const isU = hasAngleG && hasAngleD;
 
+  // Determine which part is current (for highlighting)
+  const currentId = rt.travee.id;
+  const isRetourD = currentId.endsWith('_retD');
+  const isRetourG = currentId.endsWith('_retG');
+  const isCentre = !isRetourD && !isRetourG;
+
   const svgW = 500;
-  const svgH = 140;
-  const px = 0.07; // mm to px
+  const px = 0.07;
   const barH = 6;
 
-  const centreW = t.largeur * px;
-  const leftH = hasAngleG ? (isU ? (t.largeur3 || 0) : (t.largeur2 || 0)) * px : 0;
-  const rightH = hasAngleD ? (t.largeur2 || 0) * px : 0;
+  const centreW = src.largeur * px;
+  const leftLen = hasAngleG ? (isU ? (src.largeur3 || 0) : (src.largeur2 || 0)) : 0;
+  const rightLen = hasAngleD ? (src.largeur2 || 0) : 0;
+  const leftH = leftLen * px;
+  const rightH = rightLen * px;
   const maxRetour = Math.max(leftH, rightH);
+  const svgH = 50 + maxRetour + 20;
 
   const originX = svgW / 2 - centreW / 2;
-  const originY = 20 + maxRetour;
+  const originY = 20;
 
   const fixLabel = (id: string) => FIXATIONS[id as keyof typeof FIXATIONS]?.label ?? id;
 
+  const centreColor = isCentre ? '#3b82f6' : '#3b82f680';
+  const leftColor = isRetourG ? '#f59e0b' : '#f59e0b80';
+  const rightColor = isRetourD ? '#10b981' : '#10b98180';
+
   return (
     <Svg viewBox={`0 0 ${svgW} ${svgH}`} style={{ width: svgW, height: svgH, marginBottom: 4 }}>
-      {/* Centre bar */}
-      <Rect x={originX} y={originY - barH / 2} width={centreW} height={barH} fill="#3b82f6" opacity={0.5} />
-      <Line x1={originX} y1={originY} x2={originX + centreW} y2={originY} stroke="#3b82f6" strokeWidth={1.5} />
+      {/* EXT / INT */}
+      <Text x={2} y={8} style={{ fontSize: 5, color: '#999' }}>EXT</Text>
+      <Text x={2} y={svgH - 4} style={{ fontSize: 5, color: '#999' }}>INT</Text>
 
-      {/* Left branch */}
+      {/* Centre bar */}
+      <Rect x={originX} y={originY - barH / 2} width={centreW} height={barH} fill={centreColor} opacity={isCentre ? 0.5 : 0.2} />
+      <Line x1={originX} y1={originY} x2={originX + centreW} y2={originY} stroke={centreColor} strokeWidth={1.5} />
+
+      {/* Left branch — goes DOWN (toward INT) */}
       {hasAngleG && leftH > 0 && (
         <>
-          <Rect x={originX - barH / 2} y={originY - leftH} width={barH} height={leftH} fill="#f59e0b" opacity={0.4} />
-          <Line x1={originX} y1={originY} x2={originX} y2={originY - leftH} stroke="#f59e0b" strokeWidth={1.5} />
-          <Text x={originX - 12} y={originY - leftH / 2} style={{ fontSize: 6, color: '#f59e0b' }}>{isU ? t.largeur3 : t.largeur2}</Text>
+          <Rect x={originX - barH / 2} y={originY} width={barH} height={leftH} fill={leftColor} opacity={isRetourG ? 0.4 : 0.15} />
+          <Line x1={originX} y1={originY} x2={originX} y2={originY + leftH} stroke={leftColor} strokeWidth={1.5} />
+          <Text x={originX - 14} y={originY + leftH / 2} style={{ fontSize: 6, color: leftColor }}>{leftLen}</Text>
         </>
       )}
 
-      {/* Right branch */}
+      {/* Right branch — goes DOWN (toward INT) */}
       {hasAngleD && rightH > 0 && (
         <>
-          <Rect x={originX + centreW - barH / 2} y={originY - rightH} width={barH} height={rightH} fill="#10b981" opacity={0.4} />
-          <Line x1={originX + centreW} y1={originY} x2={originX + centreW} y2={originY - rightH} stroke="#10b981" strokeWidth={1.5} />
-          <Text x={originX + centreW + 4} y={originY - rightH / 2} style={{ fontSize: 6, color: '#10b981' }}>{t.largeur2}</Text>
+          <Rect x={originX + centreW - barH / 2} y={originY} width={barH} height={rightH} fill={rightColor} opacity={isRetourD ? 0.4 : 0.15} />
+          <Line x1={originX + centreW} y1={originY} x2={originX + centreW} y2={originY + rightH} stroke={rightColor} strokeWidth={1.5} />
+          <Text x={originX + centreW + 4} y={originY + rightH / 2} style={{ fontSize: 6, color: rightColor }}>{rightLen}</Text>
         </>
       )}
 
       {/* Raidisseurs on centre */}
-      {rt.posRaidisseurs.map((pos, i) => (
+      {isCentre && rt.posRaidisseurs.map((pos, i) => (
         <Rect key={`r-${i}`} x={originX + pos * px - 2} y={originY - 10} width={4} height={20} fill="#ef4444" opacity={0.6} />
       ))}
 
       {/* Centre dimension */}
-      <Line x1={originX} y1={originY + 14} x2={originX + centreW} y2={originY + 14} stroke="#666" strokeWidth={0.3} />
-      <Text x={originX + centreW / 2 - 10} y={originY + 20} style={{ fontSize: 6 }}>{t.largeur} mm</Text>
+      <Line x1={originX} y1={originY - 10} x2={originX + centreW} y2={originY - 10} stroke="#666" strokeWidth={0.3} />
+      <Text x={originX + centreW / 2 - 10} y={originY - 14} style={{ fontSize: 6 }}>{src.largeur} mm</Text>
 
       {/* Fixation labels */}
-      {!hasAngleG && <Text x={originX - 2} y={originY + 28} style={{ fontSize: 5, color: '#999' }}>{fixLabel(t.fixG)}</Text>}
-      {!hasAngleD && <Text x={originX + centreW - 20} y={originY + 28} style={{ fontSize: 5, color: '#999' }}>{fixLabel(t.fixD)}</Text>}
-      {hasAngleG && <Text x={originX - 4} y={originY + 4} style={{ fontSize: 5, color: '#f59e0b' }}>90°</Text>}
-      {hasAngleD && <Text x={originX + centreW + 2} y={originY + 4} style={{ fontSize: 5, color: '#10b981' }}>90°</Text>}
+      {!hasAngleG && <Text x={originX - 2} y={originY + 14} style={{ fontSize: 5, color: '#999' }}>{fixLabel(src.fixG)}</Text>}
+      {!hasAngleD && <Text x={originX + centreW - 20} y={originY + 14} style={{ fontSize: 5, color: '#999' }}>{fixLabel(src.fixD)}</Text>}
+      {hasAngleG && <Text x={originX - 8} y={originY + 10} style={{ fontSize: 5, color: '#f59e0b' }}>90°</Text>}
+      {hasAngleD && <Text x={originX + centreW + 2} y={originY + 10} style={{ fontSize: 5, color: '#10b981' }}>90°</Text>}
 
-      {/* Raidisseur count */}
-      <Text x={2} y={svgH - 6} style={{ fontSize: 6, color: '#ef4444' }}>{rt.nbRaid} raidisseurs — entraxe {rt.entraxeEff.toFixed(0)} mm</Text>
-
-      {/* Labels EXT / INT */}
-      <Text x={2} y={8} style={{ fontSize: 5, color: '#999' }}>EXT</Text>
-      <Text x={2} y={svgH - 16} style={{ fontSize: 5, color: '#999' }}>INT</Text>
+      {/* Raidisseur info */}
+      <Text x={2} y={originY + 14} style={{ fontSize: 6, color: '#ef4444' }}>
+        {rt.travee.repere} — {rt.nbRaid} raidisseurs — entraxe {rt.entraxeEff.toFixed(0)} mm
+      </Text>
 
       {/* Retour end fixations */}
       {hasAngleG && (
-        (t.fixRetourG ?? 'libre') === 'mur'
-          ? <Rect x={originX - 4} y={originY - leftH - 2} width={8} height={3} fill="#999" />
-          : <Circle cx={originX} cy={originY - leftH} r={2.5} fill="none" stroke="#ef4444" strokeWidth={0.7} />
+        (src.fixRetourG ?? 'libre') === 'mur'
+          ? <Rect x={originX - 4} y={originY + leftH - 1} width={8} height={3} fill="#999" />
+          : <Circle cx={originX} cy={originY + leftH} r={2.5} fill="none" stroke="#ef4444" strokeWidth={0.7} />
       )}
       {hasAngleD && (
-        (t.fixRetourD ?? 'libre') === 'mur'
-          ? <Rect x={originX + centreW - 4} y={originY - rightH - 2} width={8} height={3} fill="#999" />
-          : <Circle cx={originX + centreW} cy={originY - rightH} r={2.5} fill="none" stroke="#ef4444" strokeWidth={0.7} />
+        (src.fixRetourD ?? 'libre') === 'mur'
+          ? <Rect x={originX + centreW - 4} y={originY + rightH - 1} width={8} height={3} fill="#999" />
+          : <Circle cx={originX + centreW} cy={originY + rightH} r={2.5} fill="none" stroke="#ef4444" strokeWidth={0.7} />
       )}
     </Svg>
   );
 }
 
-function FicheFabricationPage({ affaire, rt }: { affaire: Affaire; rt: ResultatTravee }) {
+function FicheFabricationPage({ affaire, rt, parentTravee }: { affaire: Affaire; rt: ResultatTravee; parentTravee?: Travee }) {
   const t = rt.travee;
   const gc = TYPES_GC[t.typeGC];
   const mc = TYPES_MC[t.mc];
@@ -223,7 +238,7 @@ function FicheFabricationPage({ affaire, rt }: { affaire: Affaire; rt: ResultatT
       {/* Schema de configuration avec position raidisseurs */}
       <View style={s.section}>
         <Text style={{ fontSize: 9, fontWeight: 'bold', marginBottom: 3 }}>Schéma de configuration</Text>
-        <SchemaConfigPDF rt={rt} />
+        <SchemaConfigPDF rt={rt} parentTravee={parentTravee} />
       </View>
 
       {/* Debits table */}
@@ -421,9 +436,11 @@ function BonCommandePage({ affaire, resultat }: { affaire: Affaire; resultat: Re
 export async function generateFicheFabPDF(affaire: Affaire, resultat: ResultatAffaire): Promise<Blob> {
   const doc = (
     <Document>
-      {resultat.travees.map((rt) => (
-        <FicheFabricationPage key={rt.travee.id} affaire={affaire} rt={rt} />
-      ))}
+      {resultat.travees.map((rt) => {
+        const parentId = rt.travee.id.replace(/_ret[DG]$/, '');
+        const parentTravee = affaire.travees.find(tr => tr.id === parentId);
+        return <FicheFabricationPage key={rt.travee.id} affaire={affaire} rt={rt} parentTravee={parentTravee} />;
+      })}
     </Document>
   );
   return await pdf(doc).toBlob();

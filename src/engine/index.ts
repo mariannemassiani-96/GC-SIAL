@@ -9,14 +9,16 @@ export { calcPositionsUsinages } from './calcTravee';
 
 export function calculerAffaire(affaire: Affaire): ResultatAffaire {
   const travees = affaire.travees.flatMap((t) => {
-    const results = [calcTravee(t, affaire)];
+    const hasRetour = (t.largeur2 > 0 && t.coupeD === '45') || t.coupeG === '45';
+    const mainTravee = hasRetour ? { ...t, repere: t.repere + ' Partie 1' } : t;
+    const results = [calcTravee(mainTravee, affaire)];
 
     // Branche retour droite (L droite ou U)
     if (t.largeur2 > 0 && t.coupeD === '45') {
       const t2: Travee = {
         ...t,
         id: t.id + '_retD',
-        repere: t.repere + ' (retour D)',
+        repere: t.repere + ' Partie 2',
         largeur: t.largeur2,
         largeur2: 0, largeur3: 0,
         fixG: 'raccord90',
@@ -36,7 +38,7 @@ export function calculerAffaire(affaire: Affaire): ResultatAffaire {
         const t3: Travee = {
           ...t,
           id: t.id + '_retG',
-          repere: t.repere + ' (retour G)',
+          repere: t.repere + ' Partie 3',
           largeur: lenG,
           largeur2: 0, largeur3: 0,
           fixG: (t.fixRetourG ?? 'libre') === 'mur' ? 'mur_g' : 'libre',
