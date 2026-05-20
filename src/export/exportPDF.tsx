@@ -1,5 +1,5 @@
 import { Document, Page, Text, View, StyleSheet, pdf, Svg, Rect, Line, Circle } from '@react-pdf/renderer';
-import type { Affaire, ResultatAffaire, ResultatTravee } from '../types';
+import type { Affaire, ResultatAffaire, ResultatTravee, Travee } from '../types';
 import { ACCESSOIRES } from '../constants/profils';
 import { TYPES_GC, TYPES_MC, POSE_DATA } from '../constants/typesGC';
 import { USINAGE_ANGLE } from '../constants/parametres';
