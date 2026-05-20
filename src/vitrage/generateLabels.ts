@@ -91,7 +91,8 @@ export async function generateLabelsA(
     }
   }
 
-  return new Blob([await doc.save()], { type: 'application/pdf' });
+  const bytes = await doc.save();
+  return new Blob([bytes.buffer], { type: 'application/pdf' });
 }
 
 // ── Variant B: Separated EXT/INT labels ──────────────────────────────
@@ -176,7 +177,8 @@ export async function generateLabelsB(
     }
   }
 
-  return new Blob([await doc.save()], { type: 'application/pdf' });
+  const bytes = await doc.save();
+  return new Blob([bytes.buffer], { type: 'application/pdf' });
 }
 
 // ── Variant C: Cutting order with plaque separators ──────────────────
@@ -287,5 +289,6 @@ export async function generateLabelsC(
     }
   }
 
-  return new Blob([await doc.save()], { type: 'application/pdf' });
+  const bytes = await doc.save();
+  return new Blob([bytes.buffer], { type: 'application/pdf' });
 }
