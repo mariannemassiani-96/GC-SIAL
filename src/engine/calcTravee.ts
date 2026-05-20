@@ -159,9 +159,9 @@ export function calcTravee(travee: Travee, _affaire: Affaire): ResultatTravee {
   const debitOffsets = mc.debits[travee.pose];
   const debRaid = travee.debRaidForce ?? (travee.hauteur + debitOffsets.raidisseur);
 
-  // 4. Débit barreau
+  // 4. Débit barreau = raidisseur - 115mm (toujours)
   const debBarreau = gc.hasBarreaux
-    ? (travee.debBarreauForce ?? Math.max(0, travee.hauteur + debitOffsets.barreau))
+    ? (travee.debBarreauForce ?? Math.max(0, debRaid - 115))
     : 0;
 
   // 5. Nombre de barreaux — tous les trous de la grille sauf les raidisseurs
