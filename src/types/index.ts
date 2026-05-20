@@ -53,6 +53,8 @@ export interface Travee extends TraveeConfig {
 }
 
 /** Affaire = enveloppe projet + valeurs par défaut pour nouvelles travées */
+export type ClasseColoris = 1 | 2 | 3 | 4;
+
 export interface Affaire {
   id: string;
   ref: string;
@@ -60,10 +62,22 @@ export interface Affaire {
   chantier: string;
   date: string;
   coloris: string;
-  /** Valeurs par défaut — pré-remplissent les nouvelles travées */
+  classeColoris: ClasseColoris;
   defaults: TraveeConfig;
   travees: Travee[];
   statut: StatutAffaire;
+}
+
+export interface TarifItem {
+  classe1: number;
+  classe2: number;
+  classe3: number;
+  classe4: number;
+}
+
+export interface TarifKawneer {
+  dateMAJ: string;
+  prix: Record<string, TarifItem>;
 }
 
 export interface NomenclatureItem {

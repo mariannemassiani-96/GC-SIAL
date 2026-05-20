@@ -3,6 +3,7 @@ import { ArrowLeft, FileDown, FileText, Wrench, ShoppingCart, Euro, Maximize2, S
 import type { Affaire, Alerte } from '../types';
 import { calculerAffaire } from '../engine';
 import { exportXML } from '../export/exportXML';
+import { useTarif } from '../store/tarif';
 import { generateFicheFabPDF, generateBonCommandePDF } from '../export/exportPDF';
 import { SectionProjet } from '../components/SectionProjet';
 import { SectionTravees } from '../components/SectionTravees';
@@ -44,6 +45,8 @@ export function Configurateur({ affaire, onUpdate, onBack }: ConfigurateurProps)
   const setActiveTab = useCallback((t: TabId) => { sessionStorage.setItem('sial_gc_tab', t); setActiveTabRaw(t); }, []);
   const [selectedTraveeIdx, setSelectedTraveeIdxRaw] = useState(() => Number(sessionStorage.getItem('sial_gc_travee') || '0'));
   const setSelectedTraveeIdx = useCallback((i: number) => { sessionStorage.setItem('sial_gc_travee', String(i)); setSelectedTraveeIdxRaw(i); }, []);
+
+  const { tarif, updatePrix } = useTarif();
 
   const resultat = useMemo(() => {
     if (affaire.travees.length === 0) return null;
@@ -198,7 +201,7 @@ export function Configurateur({ affaire, onUpdate, onBack }: ConfigurateurProps)
 
           {activeTab === 'devis' && resultat && (
             <div className="bg-[#181c25] rounded-lg border border-[#252830] p-4">
-              <TabDevis affaire={affaire} resultat={resultat} />
+              <TabDevis affaire={affaire} resultat={resultat} tarif={tarif} onUpdateTarif={updatePrix} />
             </div>
           )}
         </div>
