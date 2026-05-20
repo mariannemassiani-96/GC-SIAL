@@ -303,12 +303,16 @@ function buildXMLString(affaire: Affaire, resultat: ResultatAffaire): string {
 
   lines.push('  <HEAD>');
   for (const h of headData) {
+    const profil = PROFILS[h.ref];
     lines.push('    <PDAT>');
     lines.push(`      <CODE>${h.ref}</CODE>`);
     lines.push(`      <DESC>${esc(h.desc)}</DESC>`);
     lines.push(`      <DICL>${esc(affaire.coloris)}</DICL>`);
     lines.push(`      <DOCL>${esc(affaire.coloris)}</DOCL>`);
     lines.push(`      <BQTY>${pad(h.qty, 2)}</BQTY>`);
+    lines.push(`      <W>${profil ? ` ${profil.w}` : ' 0'}</W>`);
+    lines.push(`      <H>${profil ? ` ${profil.h}` : ' 0'}</H>`);
+    lines.push(`      <PANG>${profil ? ` ${profil.angle}` : ' 0'}</PANG>`);
     lines.push('    </PDAT>');
   }
   lines.push('  </HEAD>');
@@ -333,6 +337,7 @@ function buildXMLString(affaire: Affaire, resultat: ResultatAffaire): string {
     lines.push(`      <LENR>${padF(bar.chute)}</LENR>`);
     lines.push(`      <W>${profil ? ` ${profil.w}` : ' 0'}</W>`);
     lines.push(`      <H>${profil ? ` ${profil.h}` : ' 0'}</H>`);
+    lines.push(`      <PANG>${profil ? ` ${profil.angle}` : ' 0'}</PANG>`);
     lines.push('      <MLT> 1</MLT>');
 
     for (let ci = 0; ci < bar.cuts.length; ci++) {

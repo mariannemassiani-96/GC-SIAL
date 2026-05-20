@@ -1,16 +1,16 @@
 export const LG_BARRE_MM = 6400;
 
-export const PROFILS: Record<string, { label: string; w: number; h: number }> = {
-  '180000': { label: 'Raidisseur (Montant fort) 40×20', w: 20, h: 40 },
-  '180005': { label: 'Barreau à visser 25×20', w: 20, h: 25 },
-  '180010': { label: 'Lisse non percée 46.5×20', w: 22, h: 46.5 },
-  '180020': { label: 'Closoir de lisse 40.5×8', w: 8, h: 40.5 },
-  '180030': { label: 'Main courante standard plate 52×25', w: 25, h: 52 },
-  '180032': { label: 'Main courante design ogive 90×25', w: 25, h: 90 },
-  '180033': { label: 'Main courante ronde Ø60×48', w: 48, h: 60 },
-  '180040': { label: 'U pour remplissage 20×36', w: 36, h: 20 },
-  '140545': { label: 'Tube rond Ø30', w: 30, h: 30 },
-  '126129': { label: 'Joint remplissage 8-8.8mm (vendu au ml)', w: 0, h: 0 },
+export const PROFILS: Record<string, { label: string; w: number; h: number; angle: number }> = {
+  '180000': { label: 'Raidisseur (Montant fort) 40×20', w: 20, h: 40, angle: 0 },
+  '180005': { label: 'Barreau à visser 25×20', w: 20, h: 25, angle: 0 },
+  '180010': { label: 'Lisse non percée 46.5×20', w: 22, h: 46.5, angle: 270 },
+  '180020': { label: 'Closoir de lisse 40.5×8', w: 8, h: 40.5, angle: 0 },
+  '180030': { label: 'Main courante standard plate 52×25', w: 25, h: 52, angle: 0 },
+  '180032': { label: 'Main courante design ogive 90×25', w: 25, h: 90, angle: 0 },
+  '180033': { label: 'Main courante ronde Ø60×48', w: 48, h: 60, angle: 0 },
+  '180040': { label: 'U pour remplissage 20×36', w: 36, h: 20, angle: 0 },
+  '140545': { label: 'Tube rond Ø30', w: 30, h: 30, angle: 0 },
+  '126129': { label: 'Joint remplissage 8-8.8mm (vendu au ml)', w: 0, h: 0, angle: 0 },
 };
 
 export const ACCESSOIRES: Record<string, { label: string; cond: number }> = {
