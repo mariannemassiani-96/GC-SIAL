@@ -64,49 +64,35 @@ export function calcTravee(travee: Travee, _affaire: Affaire): ResultatTravee {
   const mc = TYPES_MC[travee.mc];
   const alertes: Alerte[] = [];
 
-  // 1. Positions raidisseurs et entraxe
-  const hasAngleG = travee.coupeG === '45';
-  const hasAngleD = travee.coupeD === '45';
+  // 1. Positions raidisseurs — toujours intérieures (jamais à 0 ni à largeur)
   const entraxeMax = ENTRAXE[travee.lieu][travee.angle];
 
-  // Step 1: Generate ALL division points along the largeur (including edges)
-  // Ensure at least 2 raidisseurs remain after filtering angle junctions
-  const anglesFiltered = (hasAngleG ? 1 : 0) + (hasAngleD ? 1 : 0);
-  const nbDivisions = Math.max(1 + anglesFiltered, Math.ceil(travee.largeur / entraxeMax));
-  const stepMM = travee.largeur / nbDivisions;
-  const allDivisionPoints: number[] = [];
-  for (let i = 0; i <= nbDivisions; i++) {
-    allDivisionPoints.push(Math.round(i * stepMM * 10) / 10);
+  // N raidisseurs intérieurs, espacés de largeur/(N+1)
+  // Chaque intervalle (bord→raid, raid→raid, raid→bord) ≤ entraxeMax
+  const nbRaidAuto = Math.max(2, Math.ceil(travee.largeur / entraxeMax));
+  const autoStep = travee.largeur / (nbRaidAuto + 1);
+  const autoPositions: number[] = [];
+  for (let i = 1; i <= nbRaidAuto; i++) {
+    autoPositions.push(Math.round(i * autoStep * 10) / 10);
   }
 
-  // Step 2: Filter out angle junctions — raccord 90° replaces raidisseur there
-  const autoPositions = allDivisionPoints.filter(p => {
-    if (hasAngleG && p < 1) return false;
-    if (hasAngleD && Math.abs(p - travee.largeur) < 1) return false;
-    return true;
-  });
-
-  // Step 3: Use raidCentre override or auto positions
+  // Override: raidCentre.positions or raidCentre.nb
   const override = travee.raidCentre;
   const hasForcePos = override?.positions && override.positions.length >= 2;
   const hasForceNb = !hasForcePos && typeof override?.nb === 'number' && override.nb >= 2;
 
-  const filterAngles = (pts: number[]) => pts.filter(p => {
-    if (hasAngleG && p < 1) return false;
-    if (hasAngleD && Math.abs(p - travee.largeur) < 1) return false;
-    return true;
-  });
-
   let posRaidisseurs: number[];
   if (hasForcePos) {
-    posRaidisseurs = filterAngles(override!.positions!.map(p => Math.round(p * 10) / 10));
+    posRaidisseurs = override!.positions!
+      .map(p => Math.round(p * 10) / 10)
+      .filter(p => p > 1 && Math.abs(p - travee.largeur) > 1);
   } else if (hasForceNb) {
     const forceNb = override!.nb!;
-    const totalPoints = forceNb + (hasAngleG ? 1 : 0) + (hasAngleD ? 1 : 0);
-    const forceStep = travee.largeur / (totalPoints - 1);
-    const forceAll: number[] = [];
-    for (let i = 0; i < totalPoints; i++) forceAll.push(Math.round(i * forceStep * 10) / 10);
-    posRaidisseurs = filterAngles(forceAll);
+    const forceStep = travee.largeur / (forceNb + 1);
+    posRaidisseurs = [];
+    for (let i = 1; i <= forceNb; i++) {
+      posRaidisseurs.push(Math.round(i * forceStep * 10) / 10);
+    }
   } else {
     posRaidisseurs = autoPositions;
   }

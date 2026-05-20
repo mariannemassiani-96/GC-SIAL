@@ -228,18 +228,11 @@ function PlanView({ t, rt, retourD, retourG, svgW, svgH, pad, hoverKey, setHover
     return result;
   }, [segs.length, t, rt, retourD, retourG, hasAngleD, isU]);
 
-  // Clickable slots — filter angle junctions
+  // Clickable slots — never at edges (raidisseurs are always interior)
   const branchSlots = useMemo(() => {
     return branches.map((b, segIdx) => {
       const allSlots = generateSlots(b.longueur);
-      // For centre: junction at 0 if hasAngleG, at longueur if hasAngleD
-      const filtered = allSlots.filter(s => {
-        if (b.key === 'raidCentre' && hasAngleG && s < 1) return false;
-        if (b.key === 'raidCentre' && hasAngleD && Math.abs(s - b.longueur) < 1) return false;
-        if (b.key === 'raidDroite' && s < 1) return false;
-        if (b.key === 'raidGauche' && Math.abs(s - b.longueur) < 1) return false;
-        return true;
-      });
+      const filtered = allSlots.filter(s => s > 1 && Math.abs(s - b.longueur) > 1);
       return { ...b, segIdx, slots: filtered };
     });
   }, [branches, hasAngleG, hasAngleD]);
