@@ -16,6 +16,7 @@ interface BrancheDef {
   color: string;
   longueur: number;
   positions: number[];
+  grid: number[];
 }
 
 function generateSlots(longueur: number): number[] {
@@ -52,8 +53,9 @@ function FaceView({ t, rt, gc, svgW, svgH, pad, hoverKey, setHoverKey, onUpdateT
 }) {
   // Positions from engine — single source of truth
   const raidPos = rt.posRaidisseurs;
-  const slots = useMemo(() => generateSlots(t.largeur), [t.largeur]);
-  const tolerance = t.largeur / Math.max(slots.length - 1, 1) * 0.4;
+  const engineGrid = rt.usinages[0]?.percageLisse ?? [];
+  const slots = useMemo(() => engineGrid.length > 0 ? engineGrid : generateSlots(t.largeur), [engineGrid, t.largeur]);
+  const tolerance = slots.length >= 2 ? (slots[1] - slots[0]) * 0.4 : 50;
   const barW = Math.max(1, 4 * (svgW - 2 * pad) / t.largeur);
 
   const scale = (svgW - 2 * pad) / t.largeur;
@@ -210,31 +212,34 @@ function PlanView({ t, rt, retourD, retourG, svgW, svgH, pad, hoverKey, setHover
   // Map segments → branches, positions come from engine results
   const branches = useMemo((): BrancheDef[] => {
     const result: BrancheDef[] = [];
+    const centreGrid = rt.usinages[0]?.percageLisse ?? [];
+    const retourDGrid = retourD?.usinages[0]?.percageLisse ?? [];
+    const retourGGrid = retourG?.usinages[0]?.percageLisse ?? [];
+
     if (segs.length === 1) {
-      result.push({ key: 'raidCentre', label: 'Travee', color: '#3b82f6', longueur: t.largeur, positions: rt.posRaidisseurs });
+      result.push({ key: 'raidCentre', label: 'Travee', color: '#3b82f6', longueur: t.largeur, positions: rt.posRaidisseurs, grid: centreGrid });
     } else if (segs.length === 2) {
-      result.push({ key: 'raidCentre', label: 'Centre', color: '#3b82f6', longueur: t.largeur, positions: rt.posRaidisseurs });
+      result.push({ key: 'raidCentre', label: 'Centre', color: '#3b82f6', longueur: t.largeur, positions: rt.posRaidisseurs, grid: centreGrid });
       if (hasAngleD) {
-        result.push({ key: 'raidDroite', label: 'Retour D', color: '#10b981', longueur: t.largeur2, positions: retourD?.posRaidisseurs ?? [] });
+        result.push({ key: 'raidDroite', label: 'Retour D', color: '#10b981', longueur: t.largeur2, positions: retourD?.posRaidisseurs ?? [], grid: retourDGrid });
       } else {
-        result.push({ key: 'raidGauche', label: 'Retour G', color: '#f59e0b', longueur: isU ? t.largeur3 : t.largeur2, positions: retourG?.posRaidisseurs ?? [] });
+        result.push({ key: 'raidGauche', label: 'Retour G', color: '#f59e0b', longueur: isU ? t.largeur3 : t.largeur2, positions: retourG?.posRaidisseurs ?? [], grid: retourGGrid });
       }
     } else {
-      result.push({ key: 'raidGauche', label: 'Gauche', color: '#f59e0b', longueur: t.largeur3, positions: retourG?.posRaidisseurs ?? [] });
-      result.push({ key: 'raidCentre', label: 'Centre', color: '#3b82f6', longueur: t.largeur, positions: rt.posRaidisseurs });
-      result.push({ key: 'raidDroite', label: 'Droite', color: '#10b981', longueur: t.largeur2, positions: retourD?.posRaidisseurs ?? [] });
+      result.push({ key: 'raidGauche', label: 'Gauche', color: '#f59e0b', longueur: t.largeur3, positions: retourG?.posRaidisseurs ?? [], grid: retourGGrid });
+      result.push({ key: 'raidCentre', label: 'Centre', color: '#3b82f6', longueur: t.largeur, positions: rt.posRaidisseurs, grid: centreGrid });
+      result.push({ key: 'raidDroite', label: 'Droite', color: '#10b981', longueur: t.largeur2, positions: retourD?.posRaidisseurs ?? [], grid: retourDGrid });
     }
     return result;
   }, [segs.length, t, rt, retourD, retourG, hasAngleD, isU]);
 
-  // Clickable slots — never at edges (raidisseurs are always interior)
+  // Clickable slots = engine grid positions (exact 130mm alignment)
   const branchSlots = useMemo(() => {
     return branches.map((b, segIdx) => {
-      const allSlots = generateSlots(b.longueur);
-      const filtered = allSlots.filter(s => s > 1 && Math.abs(s - b.longueur) > 1);
-      return { ...b, segIdx, slots: filtered };
+      const slots = b.grid.length > 0 ? b.grid : generateSlots(b.longueur).filter(s => s > 1 && Math.abs(s - b.longueur) > 1);
+      return { ...b, segIdx, slots };
     });
-  }, [branches, hasAngleG, hasAngleD]);
+  }, [branches]);
 
   const toggle = (branch: BrancheDef, slotPos: number) => {
     const tolerance = branch.longueur / Math.max(generateSlots(branch.longueur).length - 1, 1) * 0.4;
