@@ -1,5 +1,6 @@
 import type { ResultatTravee } from '../types';
 import { TYPES_GC, TYPES_MC } from '../constants/typesGC';
+import { ESPACEMENT_BARREAU } from '../constants/parametres';
 
 interface PreviewGCProps {
   rt: ResultatTravee;
@@ -55,7 +56,7 @@ export function PreviewGC({ rt }: PreviewGCProps) {
       const left = raidPositions[i];
       const right = raidPositions[i + 1];
       const interval = right - left;
-      const nbBar = Math.ceil(interval / 130) - 1;
+      const nbBar = Math.ceil(interval / ESPACEMENT_BARREAU) - 1;
       if (nbBar > 0) {
         const esp = interval / (nbBar + 1);
         for (let j = 1; j <= nbBar; j++) {

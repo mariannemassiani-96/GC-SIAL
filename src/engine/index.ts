@@ -23,8 +23,8 @@ export function calculerAffaire(affaire: Affaire): ResultatAffaire {
         fixD: (t.fixRetourD ?? 'libre') === 'mur' ? 'mur_d' : 'libre',
         coupeG: '45',
         coupeD: '90',
-        nbRaidForce: t.raidDroite?.nb,
-        posRaidForce: t.raidDroite?.positions,
+        raidCentre: t.raidDroite,
+        raidGauche: undefined, raidDroite: undefined,
       };
       results.push(calcTravee(t2, affaire));
     }
@@ -43,8 +43,8 @@ export function calculerAffaire(affaire: Affaire): ResultatAffaire {
           fixD: 'raccord90',
           coupeG: '90',
           coupeD: '45',
-          nbRaidForce: t.raidGauche?.nb,
-          posRaidForce: t.raidGauche?.positions,
+          raidCentre: t.raidGauche,
+          raidGauche: undefined, raidDroite: undefined,
         };
         results.push(calcTravee(t3, affaire));
       }

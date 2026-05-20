@@ -86,30 +86,27 @@ export function calcTravee(travee: Travee, _affaire: Affaire): ResultatTravee {
     return true;
   });
 
-  // Step 3: Use forced or auto positions
-  const hasForcePos = travee.posRaidForce && Array.isArray(travee.posRaidForce) && travee.posRaidForce.length >= 2;
-  const hasForceNb = !hasForcePos && typeof travee.nbRaidForce === 'number' && travee.nbRaidForce >= 2;
+  // Step 3: Use raidCentre override or auto positions
+  const override = travee.raidCentre;
+  const hasForcePos = override?.positions && override.positions.length >= 2;
+  const hasForceNb = !hasForcePos && typeof override?.nb === 'number' && override.nb >= 2;
+
+  const filterAngles = (pts: number[]) => pts.filter(p => {
+    if (hasAngleG && p < 1) return false;
+    if (hasAngleD && Math.abs(p - travee.largeur) < 1) return false;
+    return true;
+  });
 
   let posRaidisseurs: number[];
   if (hasForcePos) {
-    posRaidisseurs = travee.posRaidForce!
-      .map(p => Math.round(p * 10) / 10)
-      .filter(p => {
-        if (hasAngleG && p < 1) return false;
-        if (hasAngleD && Math.abs(p - travee.largeur) < 1) return false;
-        return true;
-      });
+    posRaidisseurs = filterAngles(override!.positions!.map(p => Math.round(p * 10) / 10));
   } else if (hasForceNb) {
-    const forceNb = travee.nbRaidForce!;
+    const forceNb = override!.nb!;
     const totalPoints = forceNb + (hasAngleG ? 1 : 0) + (hasAngleD ? 1 : 0);
     const forceStep = travee.largeur / (totalPoints - 1);
     const forceAll: number[] = [];
     for (let i = 0; i < totalPoints; i++) forceAll.push(Math.round(i * forceStep * 10) / 10);
-    posRaidisseurs = forceAll.filter(p => {
-      if (hasAngleG && p < 1) return false;
-      if (hasAngleD && Math.abs(p - travee.largeur) < 1) return false;
-      return true;
-    });
+    posRaidisseurs = filterAngles(forceAll);
   } else {
     posRaidisseurs = autoPositions;
   }

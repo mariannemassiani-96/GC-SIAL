@@ -179,9 +179,12 @@ export function Configurateur({ affaire, onUpdate, onBack }: ConfigurateurProps)
                 <>
                   <PreviewGCInteractif
                     rt={selectedRT}
+                    retourD={resultat.travees.find(r => r.travee.id === selectedRT.travee.id + '_retD')}
+                    retourG={resultat.travees.find(r => r.travee.id === selectedRT.travee.id + '_retG')}
                     onUpdateTravee={(patch) => {
+                      const mainId = selectedRT.travee.id.replace(/_ret[DG]$/, '');
                       const travees = affaire.travees.map(tr =>
-                        tr.id === selectedRT.travee.id ? { ...tr, ...patch } : tr
+                        tr.id === mainId ? { ...tr, ...patch } : tr
                       );
                       onUpdate({ travees });
                     }}

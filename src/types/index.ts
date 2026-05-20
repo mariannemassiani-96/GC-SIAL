@@ -41,22 +41,14 @@ export interface Travee extends TraveeConfig {
   qte: number;
   coupeG: '90' | '45';
   coupeD: '90' | '45';
-  /** Forcer le nombre de raidisseurs globalement (legacy, branche centre) */
-  nbRaidForce?: number;
-  posRaidForce?: number[];
   fixRetourG?: 'mur' | 'libre';
   fixRetourD?: 'mur' | 'libre';
-  /** Rotation du schema Paint (0-315, pas de 45°) */
   rotationSchema?: number;
-  /** Raidisseurs par branche (U/L) : gauche, centre, droite */
   raidGauche?: RaidBranche;
   raidCentre?: RaidBranche;
   raidDroite?: RaidBranche;
-  /** Forcer le débit raidisseur (mm) — désactive le calcul auto */
   debRaidForce?: number;
-  /** Forcer le débit barreau (mm) — désactive le calcul auto */
   debBarreauForce?: number;
-  /** Points du dessin CAD (persistés pour garder l'orientation) */
   drawPoints?: { x: number; y: number }[];
 }
 
