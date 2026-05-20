@@ -1,10 +1,12 @@
 import { useState, useMemo } from 'react';
 import type { ResultatTravee, Travee, RaidBranche } from '../types';
 import { TYPES_GC } from '../constants/typesGC';
-import { ESPACEMENT_BARREAU, ENTRAXE } from '../constants/parametres';
+import { ESPACEMENT_BARREAU } from '../constants/parametres';
 
 interface Props {
   rt: ResultatTravee;
+  retourD?: ResultatTravee;
+  retourG?: ResultatTravee;
   onUpdateTravee: (patch: Partial<Travee>) => void;
 }
 
@@ -13,36 +15,7 @@ interface BrancheDef {
   label: string;
   color: string;
   longueur: number;
-}
-
-function getBranches(t: Travee): BrancheDef[] {
-  const isU = t.coupeG === '45' && t.coupeD === '45';
-  const hasAngleD = t.coupeD === '45' && !isU;
-  const hasAngleG = t.coupeG === '45' && !isU;
-  const branches: BrancheDef[] = [];
-  if (isU && t.largeur3 > 0) branches.push({ key: 'raidGauche', label: 'Gauche', color: '#f59e0b', longueur: t.largeur3 });
-  if (hasAngleG && t.largeur2 > 0) branches.push({ key: 'raidGauche', label: 'Retour G', color: '#f59e0b', longueur: t.largeur2 });
-  branches.push({ key: 'raidCentre', label: isU || hasAngleG || hasAngleD ? 'Centre' : 'Travee', color: '#3b82f6', longueur: t.largeur });
-  if ((hasAngleD || isU) && t.largeur2 > 0) branches.push({ key: 'raidDroite', label: isU ? 'Droite' : 'Retour D', color: '#10b981', longueur: t.largeur2 });
-  return branches;
-}
-
-function getRaidPositions(t: Travee, branche: BrancheDef, rt: ResultatTravee): number[] {
-  const rb: RaidBranche | undefined = branche.key === 'raidCentre'
-    ? (t.raidCentre ?? (t.nbRaidForce ? { nb: t.nbRaidForce, positions: t.posRaidForce } : undefined))
-    : t[branche.key];
-  if (rb?.positions && rb.positions.length >= 2) return rb.positions;
-  if (rb?.nb && rb.nb >= 2) {
-    const step = branche.longueur / (rb.nb - 1);
-    return Array.from({ length: rb.nb }, (_, i) => Math.round(i * step));
-  }
-  if (branche.key === 'raidCentre') {
-    return rt.posRaidisseurs;
-  }
-  const entraxeMax = ENTRAXE[t.lieu]?.[t.angle] ?? 1560;
-  const autoNb = Math.max(2, Math.ceil(branche.longueur / entraxeMax) + 1);
-  const step = branche.longueur / (autoNb - 1);
-  return Array.from({ length: autoNb }, (_, i) => Math.round(i * step));
+  positions: number[];
 }
 
 function generateSlots(longueur: number): number[] {
@@ -55,11 +28,10 @@ function isAtPosition(pos: number, targets: number[], tolerance: number): boolea
   return targets.some(t => Math.abs(t - pos) < tolerance);
 }
 
-export function PreviewGCInteractif({ rt, onUpdateTravee }: Props) {
+export function PreviewGCInteractif({ rt, retourD, retourG, onUpdateTravee }: Props) {
   const t = rt.travee;
   const gc = TYPES_GC[t.typeGC];
-  const branches = useMemo(() => getBranches(t), [t]);
-  const isMultiBranch = branches.length > 1;
+  const isMultiBranch = (t.coupeG === '45' || t.coupeD === '45') && (t.largeur2 > 0 || t.largeur3 > 0);
   const [hoverKey, setHoverKey] = useState<string | null>(null);
 
   const svgW = 800;
@@ -67,24 +39,24 @@ export function PreviewGCInteractif({ rt, onUpdateTravee }: Props) {
   const pad = 60;
 
   if (isMultiBranch) {
-    return <PlanView t={t} rt={rt} gc={gc} branches={branches} svgW={svgW} svgH={svgH} pad={pad} hoverKey={hoverKey} setHoverKey={setHoverKey} onUpdateTravee={onUpdateTravee} />;
+    return <PlanView t={t} rt={rt} retourD={retourD} retourG={retourG} gc={gc} svgW={svgW} svgH={svgH} pad={pad} hoverKey={hoverKey} setHoverKey={setHoverKey} onUpdateTravee={onUpdateTravee} />;
   }
-  return <FaceView t={t} rt={rt} gc={gc} branches={branches} svgW={svgW} svgH={svgH} pad={pad} hoverKey={hoverKey} setHoverKey={setHoverKey} onUpdateTravee={onUpdateTravee} />;
+  return <FaceView t={t} rt={rt} gc={gc} svgW={svgW} svgH={svgH} pad={pad} hoverKey={hoverKey} setHoverKey={setHoverKey} onUpdateTravee={onUpdateTravee} />;
 }
 
 // ── Face View (straight travée) ──────────────────────────────────────
 
-function FaceView({ t, rt, gc, branches, svgW, svgH, pad, hoverKey, setHoverKey, onUpdateTravee }: {
-  t: Travee; rt: ResultatTravee; gc: (typeof TYPES_GC)[keyof typeof TYPES_GC]; branches: BrancheDef[];
+function FaceView({ t, rt, gc, svgW, svgH, pad, hoverKey, setHoverKey, onUpdateTravee }: {
+  t: Travee; rt: ResultatTravee; gc: (typeof TYPES_GC)[keyof typeof TYPES_GC];
   svgW: number; svgH: number; pad: number; hoverKey: string | null; setHoverKey: (k: string | null) => void; onUpdateTravee: (p: Partial<Travee>) => void;
 }) {
-  const b = branches[0];
-  const raidPos = useMemo(() => getRaidPositions(t, b, rt), [t, b, rt]);
-  const slots = useMemo(() => generateSlots(b.longueur), [b.longueur]);
-  const tolerance = b.longueur / (slots.length - 1) * 0.4;
-  const barW = Math.max(1, 4 * (svgW - 2 * pad) / b.longueur);
+  // Positions from engine — single source of truth
+  const raidPos = rt.posRaidisseurs;
+  const slots = useMemo(() => generateSlots(t.largeur), [t.largeur]);
+  const tolerance = t.largeur / Math.max(slots.length - 1, 1) * 0.4;
+  const barW = Math.max(1, 4 * (svgW - 2 * pad) / t.largeur);
 
-  const scale = (svgW - 2 * pad) / b.longueur;
+  const scale = (svgW - 2 * pad) / t.largeur;
   const gcH = Math.min(svgH - 160, t.hauteur * scale);
   const topY = 50;
   const toX = (mm: number) => pad + mm * scale;
@@ -110,8 +82,11 @@ function FaceView({ t, rt, gc, branches, svgW, svgH, pad, hoverKey, setHoverKey,
     } else {
       newPos = [...raidPos, slotPos].sort((a, b) => a - b);
     }
-    onUpdateTravee({ nbRaidForce: newPos.length, posRaidForce: newPos, raidCentre: { nb: newPos.length, positions: newPos } });
+    onUpdateTravee({ raidCentre: { positions: newPos } });
   };
+
+  const hasForce = !!(t.raidCentre?.positions || t.raidCentre?.nb);
+  const resetAuto = () => onUpdateTravee({ raidCentre: null } as Partial<Travee>);
 
   const raidW = 20 * scale;
 
@@ -119,6 +94,12 @@ function FaceView({ t, rt, gc, branches, svgW, svgH, pad, hoverKey, setHoverKey,
     <div className="space-y-2">
       <div className="flex items-center gap-3 text-xs text-gray-400">
         Cliquez pour placer/retirer des raidisseurs — <span className="text-white font-mono">{raidPos.length}</span> raidisseurs
+        <span className="flex-1" />
+        {hasForce && (
+          <button onClick={resetAuto} className="px-2 py-0.5 text-[10px] text-amber-400 border border-amber-500/30 rounded hover:bg-amber-600/10">
+            Calcul auto
+          </button>
+        )}
       </div>
       <div className="overflow-x-auto">
         <svg viewBox={`0 0 ${svgW} ${svgH}`} className="w-full cursor-crosshair" style={{ maxHeight: 340 }}>
@@ -126,13 +107,11 @@ function FaceView({ t, rt, gc, branches, svgW, svgH, pad, hoverKey, setHoverKey,
           <text x={svgW / 2} y={18} textAnchor="middle" fill="#d1d5db" fontSize={11} fontFamily="monospace" fontWeight="bold">Vue de face — {t.largeur} x {t.hauteur} mm</text>
 
           {/* Dalle */}
-          <rect x={toX(-20)} y={topY + gcH} width={(b.longueur + 40) * scale} height={8} fill="#4b5563" />
-
+          <rect x={toX(-20)} y={topY + gcH} width={(t.largeur + 40) * scale} height={8} fill="#4b5563" />
           {/* Lisse basse */}
-          <rect x={toX(0)} y={topY + gcH - 15} width={b.longueur * scale} height={15} fill="#94a3b8" opacity={0.7} rx={1} />
-
+          <rect x={toX(0)} y={topY + gcH - 15} width={t.largeur * scale} height={15} fill="#94a3b8" opacity={0.7} rx={1} />
           {/* MC */}
-          <rect x={toX(0) - 3} y={topY} width={b.longueur * scale + 6} height={18} fill="#e2e8f0" stroke="#94a3b8" strokeWidth={0.5} rx={2} />
+          <rect x={toX(0) - 3} y={topY} width={t.largeur * scale + 6} height={18} fill="#e2e8f0" stroke="#94a3b8" strokeWidth={0.5} rx={2} />
 
           {/* Barreaux */}
           {barreauPos.map((pos, i) => <line key={i} x1={toX(pos)} y1={topY + 18} x2={toX(pos)} y2={topY + gcH - 15} stroke="#60a5fa" strokeWidth={barW} opacity={0.4} />)}
@@ -154,15 +133,15 @@ function FaceView({ t, rt, gc, branches, svgW, svgH, pad, hoverKey, setHoverKey,
           })}
 
           {/* Dimensions */}
-          <line x1={toX(0)} y1={topY + gcH + 35} x2={toX(b.longueur)} y2={topY + gcH + 35} stroke="#f59e0b" strokeWidth={0.6} />
-          <text x={toX(b.longueur / 2)} y={topY + gcH + 48} textAnchor="middle" fill="#f59e0b" fontSize={9} fontFamily="monospace">{b.longueur} mm</text>
+          <line x1={toX(0)} y1={topY + gcH + 35} x2={toX(t.largeur)} y2={topY + gcH + 35} stroke="#f59e0b" strokeWidth={0.6} />
+          <text x={toX(t.largeur / 2)} y={topY + gcH + 48} textAnchor="middle" fill="#f59e0b" fontSize={9} fontFamily="monospace">{t.largeur} mm</text>
         </svg>
       </div>
     </div>
   );
 }
 
-// ── Plan View (L/U shapes) — uses actual drawPoints for exact match ──
+// ── Plan View (L/U shapes) — uses drawPoints + engine positions ──────
 
 interface Pt { x: number; y: number }
 
@@ -174,7 +153,6 @@ function buildFallbackShapePoints(t: Travee): Pt[] {
   const hasAngleD = t.coupeD === '45';
   const isU = hasAngleG && hasAngleD;
   const startX = cx - t.largeur * PX / 2;
-
   if (isU && t.largeur3 > 0) {
     pts.push({ x: startX, y: cy + t.largeur3 * PX });
     pts.push({ x: startX, y: cy });
@@ -184,9 +162,9 @@ function buildFallbackShapePoints(t: Travee): Pt[] {
   } else {
     pts.push({ x: startX, y: cy });
   }
-  const endX = startX + t.largeur * PX;
-  pts.push({ x: endX, y: cy });
+  pts.push({ x: startX + t.largeur * PX, y: cy });
   if (hasAngleD && t.largeur2 > 0) {
+    const endX = startX + t.largeur * PX;
     pts.push({ x: endX, y: cy + t.largeur2 * PX });
   }
   return pts;
@@ -202,13 +180,16 @@ function perpOffset(from: Pt, to: Pt, dist: number): Pt {
   return { x: -dy / len * dist, y: dx / len * dist };
 }
 
-function PlanView({ t, rt, branches, svgW, svgH, pad, hoverKey, setHoverKey, onUpdateTravee }: {
-  t: Travee; rt: ResultatTravee; gc: (typeof TYPES_GC)[keyof typeof TYPES_GC]; branches: BrancheDef[];
+function PlanView({ t, rt, retourD, retourG, gc, svgW, svgH, pad, hoverKey, setHoverKey, onUpdateTravee }: {
+  t: Travee; rt: ResultatTravee; retourD?: ResultatTravee; retourG?: ResultatTravee;
+  gc: (typeof TYPES_GC)[keyof typeof TYPES_GC];
   svgW: number; svgH: number; pad: number; hoverKey: string | null; setHoverKey: (k: string | null) => void; onUpdateTravee: (p: Partial<Travee>) => void;
 }) {
   const hasAngleG = t.coupeG === '45';
   const hasAngleD = t.coupeD === '45';
+  const isU = hasAngleG && hasAngleD;
 
+  // Shape from drawPoints
   const rawPts = useMemo(() => {
     if (t.drawPoints && t.drawPoints.length >= 2) return t.drawPoints as Pt[];
     return buildFallbackShapePoints(t);
@@ -228,54 +209,60 @@ function PlanView({ t, rt, branches, svgW, svgH, pad, hoverKey, setHoverKey, onU
     return { pts: scaled, segs: segments };
   }, [rawPts, svgW, svgH, pad]);
 
-  const segBranchKeys: ('raidGauche' | 'raidCentre' | 'raidDroite')[] = useMemo(() => {
-    if (segs.length === 1) return ['raidCentre'];
-    if (segs.length === 2) return ['raidCentre', 'raidDroite'];
-    return ['raidGauche', 'raidCentre', 'raidDroite'];
-  }, [segs.length]);
+  // Map segments → branches, positions come from engine results
+  const branches = useMemo((): BrancheDef[] => {
+    const result: BrancheDef[] = [];
+    if (segs.length === 1) {
+      result.push({ key: 'raidCentre', label: 'Travee', color: '#3b82f6', longueur: t.largeur, positions: rt.posRaidisseurs });
+    } else if (segs.length === 2) {
+      result.push({ key: 'raidCentre', label: 'Centre', color: '#3b82f6', longueur: t.largeur, positions: rt.posRaidisseurs });
+      if (hasAngleD) {
+        result.push({ key: 'raidDroite', label: 'Retour D', color: '#10b981', longueur: t.largeur2, positions: retourD?.posRaidisseurs ?? [] });
+      } else {
+        result.push({ key: 'raidGauche', label: 'Retour G', color: '#f59e0b', longueur: isU ? t.largeur3 : t.largeur2, positions: retourG?.posRaidisseurs ?? [] });
+      }
+    } else {
+      result.push({ key: 'raidGauche', label: 'Gauche', color: '#f59e0b', longueur: t.largeur3, positions: retourG?.posRaidisseurs ?? [] });
+      result.push({ key: 'raidCentre', label: 'Centre', color: '#3b82f6', longueur: t.largeur, positions: rt.posRaidisseurs });
+      result.push({ key: 'raidDroite', label: 'Droite', color: '#10b981', longueur: t.largeur2, positions: retourD?.posRaidisseurs ?? [] });
+    }
+    return result;
+  }, [segs.length, t, rt, retourD, retourG, hasAngleD, isU]);
 
-  const allBranchData = useMemo(() => {
-    return segBranchKeys.map((branchKey, segIdx) => {
-      const branch = branches.find(b => b.key === branchKey);
-      if (!branch) return null;
-      const allSlots = generateSlots(branch.longueur);
-      const isAngleAtStart = (branchKey === 'raidCentre' && hasAngleG) || branchKey === 'raidDroite' || branchKey === 'raidGauche';
-      const isAngleAtEnd = (branchKey === 'raidCentre' && hasAngleD);
-      const slots = allSlots.filter(s => {
-        if (isAngleAtStart && s < 1) return false;
-        if (isAngleAtEnd && Math.abs(s - branch.longueur) < 1) return false;
+  // Clickable slots — filter angle junctions
+  const branchSlots = useMemo(() => {
+    return branches.map((b, segIdx) => {
+      const allSlots = generateSlots(b.longueur);
+      const isRetour = b.key === 'raidDroite' || b.key === 'raidGauche';
+      // For retour branches: junction is at position 0 for retourD, at longueur for retourG
+      // For centre: junction at 0 if hasAngleG, at longueur if hasAngleD
+      const filtered = allSlots.filter(s => {
+        if (b.key === 'raidCentre' && hasAngleG && s < 1) return false;
+        if (b.key === 'raidCentre' && hasAngleD && Math.abs(s - b.longueur) < 1) return false;
+        if (b.key === 'raidDroite' && s < 1) return false;
+        if (b.key === 'raidGauche' && Math.abs(s - b.longueur) < 1) return false;
         return true;
       });
-      return { segIdx, branch, raidPos: getRaidPositions(t, branch, rt), slots };
-    }).filter((d): d is NonNullable<typeof d> => d !== null);
-  }, [segBranchKeys, branches, t, rt, hasAngleG, hasAngleD]);
+      return { ...b, segIdx, slots: filtered };
+    });
+  }, [branches, hasAngleG, hasAngleD]);
 
-  const toggle = (branche: BrancheDef, slotPos: number, currentPos: number[]) => {
-    const tolerance = branche.longueur / Math.max(generateSlots(branche.longueur).length - 1, 1) * 0.4;
-    const isR = isAtPosition(slotPos, currentPos, tolerance);
+  const toggle = (branch: BrancheDef, slotPos: number) => {
+    const tolerance = branch.longueur / Math.max(generateSlots(branch.longueur).length - 1, 1) * 0.4;
+    const isR = isAtPosition(slotPos, branch.positions, tolerance);
     let newPos: number[];
     if (isR) {
-      newPos = currentPos.filter(p => Math.abs(p - slotPos) >= tolerance);
+      newPos = branch.positions.filter(p => Math.abs(p - slotPos) >= tolerance);
       if (newPos.length < 2) return;
     } else {
-      newPos = [...currentPos, slotPos].sort((a, b) => a - b);
+      newPos = [...branch.positions, slotPos].sort((a, b) => a - b);
     }
-    const rb: RaidBranche = { nb: newPos.length, positions: newPos };
-    if (branche.key === 'raidCentre') {
-      onUpdateTravee({ raidCentre: rb, nbRaidForce: newPos.length, posRaidForce: newPos });
-    } else {
-      onUpdateTravee({ [branche.key]: rb });
-    }
+    const rb: RaidBranche = { positions: newPos };
+    onUpdateTravee({ [branch.key]: rb });
   };
 
-  const hasAnyForce = !!(t.raidCentre?.positions || t.raidDroite?.positions || t.raidGauche?.positions || t.posRaidForce);
-
-  const resetAuto = () => {
-    onUpdateTravee({
-      raidCentre: null, raidDroite: null, raidGauche: null,
-      nbRaidForce: null, posRaidForce: null,
-    } as Partial<Travee>);
-  };
+  const hasAnyForce = !!(t.raidCentre?.positions || t.raidDroite?.positions || t.raidGauche?.positions);
+  const resetAuto = () => onUpdateTravee({ raidCentre: null, raidDroite: null, raidGauche: null } as Partial<Travee>);
 
   const slotR = 6;
 
@@ -283,10 +270,10 @@ function PlanView({ t, rt, branches, svgW, svgH, pad, hoverKey, setHoverKey, onU
     <div className="space-y-2">
       <div className="flex items-center gap-4 text-xs text-gray-400">
         Vue en plan — cliquez pour placer/retirer des raidisseurs
-        {allBranchData.map(b => (
-          <span key={b.branch.key} className="flex items-center gap-1">
-            <span className="w-3 h-1.5 rounded" style={{ backgroundColor: b.branch.color }} />
-            {b.branch.label}: <span className="text-white font-mono">{b.raidPos.length}</span>
+        {branchSlots.map(b => (
+          <span key={b.key} className="flex items-center gap-1">
+            <span className="w-3 h-1.5 rounded" style={{ backgroundColor: b.color }} />
+            {b.label}: <span className="text-white font-mono">{b.positions.length}</span>
           </span>
         ))}
         <span className="flex-1" />
@@ -300,39 +287,32 @@ function PlanView({ t, rt, branches, svgW, svgH, pad, hoverKey, setHoverKey, onU
         <svg viewBox={`0 0 ${svgW} ${svgH}`} className="w-full cursor-crosshair" style={{ maxHeight: 380 }}>
           <rect width={svgW} height={svgH} fill="#14161d" rx={4} />
 
-          {/* EXT / INT labels */}
           <text x={15} y={18} fill="#4b5563" fontSize={9} fontFamily="monospace">EXT</text>
           <text x={15} y={svgH - 8} fill="#6b7280" fontSize={9} fontFamily="monospace">INT</text>
 
-          {/* Render each branch along its actual segment direction */}
-          {allBranchData.map(bd => {
+          {/* Render each branch along its actual segment */}
+          {branchSlots.map(bd => {
             const seg = segs[bd.segIdx];
             if (!seg) return null;
             const { from, to } = seg;
-            const tolerance = bd.branch.longueur / Math.max(bd.slots.length - 1, 1) * 0.4;
+            const tolerance = bd.longueur / Math.max(bd.slots.length - 1, 1) * 0.4;
             const perp = perpOffset(from, to, 1);
             const mid = posOnSeg(from, to, 0.5);
 
             return (
-              <g key={bd.branch.key}>
-                {/* Bar */}
-                <line x1={from.x} y1={from.y} x2={to.x} y2={to.y} stroke={bd.branch.color} strokeWidth={12} strokeLinecap="round" opacity={0.3} />
+              <g key={bd.key}>
+                <line x1={from.x} y1={from.y} x2={to.x} y2={to.y} stroke={bd.color} strokeWidth={12} strokeLinecap="round" opacity={0.3} />
+                <text x={mid.x + perp.x * 18} y={mid.y + perp.y * 18} textAnchor="middle" dominantBaseline="middle" fill={bd.color} fontSize={8} fontFamily="monospace" fontWeight="bold">{bd.label}</text>
+                <text x={mid.x - perp.x * 14} y={mid.y - perp.y * 14} textAnchor="middle" dominantBaseline="middle" fill="#f59e0b" fontSize={8} fontFamily="monospace">{bd.longueur} mm</text>
 
-                {/* Branch label */}
-                <text x={mid.x + perp.x * 18} y={mid.y + perp.y * 18} textAnchor="middle" dominantBaseline="middle" fill={bd.branch.color} fontSize={8} fontFamily="monospace" fontWeight="bold">{bd.branch.label}</text>
-
-                {/* Dimension */}
-                <text x={mid.x - perp.x * 14} y={mid.y - perp.y * 14} textAnchor="middle" dominantBaseline="middle" fill="#f59e0b" fontSize={8} fontFamily="monospace">{bd.branch.longueur} mm</text>
-
-                {/* Raidisseur slots */}
                 {bd.slots.map((slotPos, si) => {
-                  const frac = slotPos / bd.branch.longueur;
+                  const frac = slotPos / bd.longueur;
                   const pos = posOnSeg(from, to, frac);
-                  const isR = isAtPosition(slotPos, bd.raidPos, tolerance);
-                  const key = `${bd.branch.key}-${si}`;
+                  const isR = isAtPosition(slotPos, bd.positions, tolerance);
+                  const key = `${bd.key}-${si}`;
                   const isH = hoverKey === key;
                   return (
-                    <g key={key} onMouseEnter={() => setHoverKey(key)} onMouseLeave={() => setHoverKey(null)} onClick={() => toggle(bd.branch, slotPos, bd.raidPos)} className="cursor-pointer">
+                    <g key={key} onMouseEnter={() => setHoverKey(key)} onMouseLeave={() => setHoverKey(null)} onClick={() => toggle(bd, slotPos)} className="cursor-pointer">
                       <circle cx={pos.x} cy={pos.y} r={slotR + 4} fill="transparent" />
                       <circle cx={pos.x} cy={pos.y} r={slotR} fill={isR ? '#ef4444' : isH ? '#22c55e' : '#1e2028'} stroke={isR ? '#ef4444' : isH ? '#22c55e' : '#353840'} strokeWidth={isR ? 2 : 1} strokeDasharray={isR ? '' : '2,2'} opacity={isR ? 0.8 : isH ? 0.6 : 0.3} />
                       {isR && <circle cx={pos.x} cy={pos.y} r={2.5} fill="#ef4444" />}
@@ -346,7 +326,7 @@ function PlanView({ t, rt, branches, svgW, svgH, pad, hoverKey, setHoverKey, onU
             );
           })}
 
-          {/* Junction angle markers */}
+          {/* Junction markers */}
           {pts.slice(1, -1).map((pt, i) => (
             <rect key={`junc-${i}`} x={pt.x - 7} y={pt.y - 7} width={14} height={14} fill="#f59e0b" opacity={0.15} rx={3} />
           ))}
@@ -356,36 +336,23 @@ function PlanView({ t, rt, branches, svgW, svgH, pad, hoverKey, setHoverKey, onU
             const startPt = pts[0];
             const endPt = pts[pts.length - 1];
             const markers: React.ReactNode[] = [];
-
             if (hasAngleG) {
-              if ((t.fixRetourG ?? 'libre') === 'mur') {
-                const perp2 = perpOffset(segs[0].from, segs[0].to, 1);
-                markers.push(<rect key="fixG" x={startPt.x - 5 + perp2.x * 4} y={startPt.y - 2 + perp2.y * 4} width={10} height={4} fill="#9ca3af" rx={1} />);
-              } else {
-                markers.push(<circle key="fixG" cx={startPt.x} cy={startPt.y} r={4} fill="none" stroke="#ef4444" strokeWidth={1.5} />);
-              }
+              markers.push((t.fixRetourG ?? 'libre') === 'mur'
+                ? <circle key="fixG" cx={startPt.x} cy={startPt.y} r={5} fill="#9ca3af" opacity={0.6} />
+                : <circle key="fixG" cx={startPt.x} cy={startPt.y} r={4} fill="none" stroke="#ef4444" strokeWidth={1.5} />);
             } else {
-              if (t.fixG === 'mur_g' || t.fixG === 'mur_d') {
-                markers.push(<circle key="fixG" cx={startPt.x} cy={startPt.y} r={5} fill="#9ca3af" opacity={0.6} />);
-              } else {
-                markers.push(<circle key="fixG" cx={startPt.x} cy={startPt.y} r={4} fill="none" stroke="#ef4444" strokeWidth={1.5} />);
-              }
+              markers.push((t.fixG === 'mur_g' || t.fixG === 'mur_d')
+                ? <circle key="fixG" cx={startPt.x} cy={startPt.y} r={5} fill="#9ca3af" opacity={0.6} />
+                : <circle key="fixG" cx={startPt.x} cy={startPt.y} r={4} fill="none" stroke="#ef4444" strokeWidth={1.5} />);
             }
-
             if (hasAngleD) {
-              if ((t.fixRetourD ?? 'libre') === 'mur') {
-                const lastSeg = segs[segs.length - 1];
-                const perp2 = perpOffset(lastSeg.from, lastSeg.to, 1);
-                markers.push(<rect key="fixD" x={endPt.x - 5 + perp2.x * 4} y={endPt.y - 2 + perp2.y * 4} width={10} height={4} fill="#9ca3af" rx={1} />);
-              } else {
-                markers.push(<circle key="fixD" cx={endPt.x} cy={endPt.y} r={4} fill="none" stroke="#ef4444" strokeWidth={1.5} />);
-              }
+              markers.push((t.fixRetourD ?? 'libre') === 'mur'
+                ? <circle key="fixD" cx={endPt.x} cy={endPt.y} r={5} fill="#9ca3af" opacity={0.6} />
+                : <circle key="fixD" cx={endPt.x} cy={endPt.y} r={4} fill="none" stroke="#ef4444" strokeWidth={1.5} />);
             } else {
-              if (t.fixD === 'mur_d' || t.fixD === 'mur_g') {
-                markers.push(<circle key="fixD" cx={endPt.x} cy={endPt.y} r={5} fill="#9ca3af" opacity={0.6} />);
-              } else {
-                markers.push(<circle key="fixD" cx={endPt.x} cy={endPt.y} r={4} fill="none" stroke="#ef4444" strokeWidth={1.5} />);
-              }
+              markers.push((t.fixD === 'mur_d' || t.fixD === 'mur_g')
+                ? <circle key="fixD" cx={endPt.x} cy={endPt.y} r={5} fill="#9ca3af" opacity={0.6} />
+                : <circle key="fixD" cx={endPt.x} cy={endPt.y} r={4} fill="none" stroke="#ef4444" strokeWidth={1.5} />);
             }
             return markers;
           })()}

@@ -393,7 +393,7 @@ function RaidisseursEditor({ travee: t, onUpdate }: { travee: Travee; onUpdate: 
   branches.push({ key: 'raidCentre', label: isU || hasAngleG || hasAngleD ? 'Centre' : 'Travee', color: 'text-blue-400', longueur: t.largeur });
   if ((hasAngleD || isU) && t.largeur2 > 0) branches.push({ key: 'raidDroite', label: isU ? 'Droite' : 'Retour', color: 'text-emerald-400', longueur: t.largeur2 });
 
-  const hasAnyForce = t.raidGauche?.nb || t.raidCentre?.nb || t.raidDroite?.nb || t.nbRaidForce;
+  const hasAnyForce = !!(t.raidGauche?.nb || t.raidGauche?.positions || t.raidCentre?.nb || t.raidCentre?.positions || t.raidDroite?.nb || t.raidDroite?.positions);
 
   return (
     <div className="bg-[#14161d] border border-[#252830] rounded-lg p-3 space-y-2">
@@ -408,13 +408,9 @@ function RaidisseursEditor({ travee: t, onUpdate }: { travee: Travee; onUpdate: 
           color={b.color}
           longueur={b.longueur}
           entraxeMax={ENTRAXE[t.lieu]?.[t.angle] ?? 1560}
-          branche={b.key === 'raidCentre' ? (t.raidCentre ?? (t.nbRaidForce ? { nb: t.nbRaidForce, positions: t.posRaidForce } : undefined)) : t[b.key]}
+          branche={t[b.key]}
           onChange={(v) => {
-            if (b.key === 'raidCentre') {
-              onUpdate({ raidCentre: v || null, nbRaidForce: v?.nb || null, posRaidForce: v?.positions || null } as Partial<Travee>);
-            } else {
-              onUpdate({ [b.key]: v || null } as Partial<Travee>);
-            }
+            onUpdate({ [b.key]: v || null } as Partial<Travee>);
           }}
         />
       ))}

@@ -17,8 +17,24 @@ const DEFAULT_CONFIG: TraveeConfig = {
   hauteur: 1050,
 };
 
+function migrateTraveeRaid(t: any): any {
+  if (t.nbRaidForce != null || t.posRaidForce != null) {
+    if (!t.raidCentre) {
+      t.raidCentre = {};
+      if (t.nbRaidForce) t.raidCentre.nb = t.nbRaidForce;
+      if (t.posRaidForce) t.raidCentre.positions = t.posRaidForce;
+    }
+    delete t.nbRaidForce;
+    delete t.posRaidForce;
+  }
+  return t;
+}
+
 /** Migrate old format (config on Affaire) to new format (config on Travee) */
 function migrateAffaire(a: any): Affaire {
+  if (a.travees) {
+    a.travees = a.travees.map(migrateTraveeRaid);
+  }
   // Already new format
   if (a.defaults) return a;
 
