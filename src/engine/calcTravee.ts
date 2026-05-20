@@ -122,8 +122,8 @@ export function calcTravee(travee: Travee, _affaire: Affaire): ResultatTravee {
   // 2. Raidisseurs — grille uniforme 130mm, raidisseur = trou spécial
   const entraxeMax = ENTRAXE[travee.lieu][travee.angle];
   const override = travee.raidCentre;
-  const hasForcePos = override?.positions && override.positions.length >= 2;
-  const hasForceNb = !hasForcePos && typeof override?.nb === 'number' && override.nb >= 2;
+  const hasForcePos = Array.isArray(override?.positions);
+  const hasForceNb = !hasForcePos && typeof override?.nb === 'number' && override.nb >= 1;
 
   let posRaidisseurs: number[];
 
