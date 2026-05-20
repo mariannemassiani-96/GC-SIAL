@@ -59,10 +59,6 @@ function hasMachinings(posType: CutInfo['posType']): boolean {
   return posType === 'lisse_inf' || posType === 'lisse_sup' || posType === 'lisse_med';
 }
 
-function isHorizontal(posType: CutInfo['posType']): boolean {
-  return posType !== 'raidisseur' && posType !== 'barreau';
-}
-
 /**
  * Split a long horizontal piece into segments at raidisseur positions.
  * Returns the original piece if it fits in one bar.
@@ -147,7 +143,7 @@ function splitAtRaidisseurs(
   return segments;
 }
 
-function collectCuts(affaire: Affaire, resultat: ResultatAffaire): CutInfo[] {
+function collectCuts(_affaire: Affaire, resultat: ResultatAffaire): CutInfo[] {
   const cuts: CutInfo[] = [];
 
   for (let ti = 0; ti < resultat.travees.length; ti++) {

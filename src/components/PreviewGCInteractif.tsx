@@ -39,7 +39,7 @@ export function PreviewGCInteractif({ rt, retourD, retourG, onUpdateTravee }: Pr
   const pad = 60;
 
   if (isMultiBranch) {
-    return <PlanView t={t} rt={rt} retourD={retourD} retourG={retourG} gc={gc} svgW={svgW} svgH={svgH} pad={pad} hoverKey={hoverKey} setHoverKey={setHoverKey} onUpdateTravee={onUpdateTravee} />;
+    return <PlanView t={t} rt={rt} retourD={retourD} retourG={retourG} svgW={svgW} svgH={svgH} pad={pad} hoverKey={hoverKey} setHoverKey={setHoverKey} onUpdateTravee={onUpdateTravee} />;
   }
   return <FaceView t={t} rt={rt} gc={gc} svgW={svgW} svgH={svgH} pad={pad} hoverKey={hoverKey} setHoverKey={setHoverKey} onUpdateTravee={onUpdateTravee} />;
 }
@@ -86,7 +86,7 @@ function FaceView({ t, rt, gc, svgW, svgH, pad, hoverKey, setHoverKey, onUpdateT
   };
 
   const hasForce = !!(t.raidCentre?.positions || t.raidCentre?.nb);
-  const resetAuto = () => onUpdateTravee({ raidCentre: null } as Partial<Travee>);
+  const resetAuto = () => onUpdateTravee({ raidCentre: undefined });
 
   const raidW = 20 * scale;
 
@@ -180,9 +180,8 @@ function perpOffset(from: Pt, to: Pt, dist: number): Pt {
   return { x: -dy / len * dist, y: dx / len * dist };
 }
 
-function PlanView({ t, rt, retourD, retourG, gc, svgW, svgH, pad, hoverKey, setHoverKey, onUpdateTravee }: {
+function PlanView({ t, rt, retourD, retourG, svgW, svgH, pad, hoverKey, setHoverKey, onUpdateTravee }: {
   t: Travee; rt: ResultatTravee; retourD?: ResultatTravee; retourG?: ResultatTravee;
-  gc: (typeof TYPES_GC)[keyof typeof TYPES_GC];
   svgW: number; svgH: number; pad: number; hoverKey: string | null; setHoverKey: (k: string | null) => void; onUpdateTravee: (p: Partial<Travee>) => void;
 }) {
   const hasAngleG = t.coupeG === '45';
@@ -233,8 +232,6 @@ function PlanView({ t, rt, retourD, retourG, gc, svgW, svgH, pad, hoverKey, setH
   const branchSlots = useMemo(() => {
     return branches.map((b, segIdx) => {
       const allSlots = generateSlots(b.longueur);
-      const isRetour = b.key === 'raidDroite' || b.key === 'raidGauche';
-      // For retour branches: junction is at position 0 for retourD, at longueur for retourG
       // For centre: junction at 0 if hasAngleG, at longueur if hasAngleD
       const filtered = allSlots.filter(s => {
         if (b.key === 'raidCentre' && hasAngleG && s < 1) return false;
@@ -262,7 +259,7 @@ function PlanView({ t, rt, retourD, retourG, gc, svgW, svgH, pad, hoverKey, setH
   };
 
   const hasAnyForce = !!(t.raidCentre?.positions || t.raidDroite?.positions || t.raidGauche?.positions);
-  const resetAuto = () => onUpdateTravee({ raidCentre: null, raidDroite: null, raidGauche: null } as Partial<Travee>);
+  const resetAuto = () => onUpdateTravee({ raidCentre: undefined, raidDroite: undefined, raidGauche: undefined });
 
   const slotR = 6;
 
