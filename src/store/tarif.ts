@@ -25,7 +25,7 @@ function defaultTarif(): TarifKawneer {
 }
 
 export function useTarif() {
-  const [tarif, setTarif] = useApiState<TarifKawneer>(STORAGE_KEY, defaultTarif());
+  const [tarif, setTarif] = useApiState<TarifKawneer>('gc', 'tarif', STORAGE_KEY, defaultTarif());
 
   const updatePrix = (ref: string, item: Partial<TarifItem>) => {
     setTarif({

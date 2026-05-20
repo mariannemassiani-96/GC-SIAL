@@ -410,7 +410,7 @@ function RaidisseursEditor({ travee: t, onUpdate }: { travee: Travee; onUpdate: 
           entraxeMax={ENTRAXE[t.lieu]?.[t.angle] ?? 1560}
           branche={t[b.key]}
           onChange={(v) => {
-            onUpdate({ [b.key]: v || null } as Partial<Travee>);
+            onUpdate({ [b.key]: v || undefined });
           }}
         />
       ))}
