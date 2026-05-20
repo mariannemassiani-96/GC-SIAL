@@ -18,14 +18,13 @@ const DEFAULT_CONFIG: TraveeConfig = {
 };
 
 function migrateTraveeRaid(t: any): any {
-  if (t.nbRaidForce != null || t.posRaidForce != null) {
-    if (!t.raidCentre) {
-      t.raidCentre = {};
-      if (t.nbRaidForce) t.raidCentre.nb = t.nbRaidForce;
-      if (t.posRaidForce) t.raidCentre.positions = t.posRaidForce;
-    }
-    delete t.nbRaidForce;
-    delete t.posRaidForce;
+  delete t.nbRaidForce;
+  delete t.posRaidForce;
+  if (!t._raidV2) {
+    delete t.raidCentre;
+    delete t.raidDroite;
+    delete t.raidGauche;
+    t._raidV2 = true;
   }
   return t;
 }
