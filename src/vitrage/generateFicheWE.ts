@@ -145,5 +145,5 @@ export async function generateFicheWE(
   }
 
   const bytes = await doc.save();
-  return new Blob([bytes.buffer], { type: 'application/pdf' });
+  return new Blob([bytes.buffer as ArrayBuffer], { type: 'application/pdf' });
 }
