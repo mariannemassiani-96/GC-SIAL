@@ -1,6 +1,7 @@
 import type { Travee, NomenclatureItem } from '../types';
 import { PROFILS, ACCESSOIRES } from '../constants/profils';
 import { TYPES_GC, TYPES_MC, POSE_DATA } from '../constants/typesGC';
+import { MAX_PIECE_MM } from '../constants/parametres';
 
 interface CalcResult {
   nbRaid: number;
@@ -109,8 +110,15 @@ export function calcNomenclature(
 
   if (travee.fixG === 'raccord_droit' || travee.fixD === 'raccord_droit') addAccess('110966', 1);
 
+  // Éclisses d'aboutage pour les GC longs (profilés > 6300mm)
+  if (calc.debMC > MAX_PIECE_MM) {
+    const nbSplices = Math.ceil(calc.debMC / MAX_PIECE_MM) - 1;
+    const nbLisses = (gc.hasBarreaux || gc.hasRemplissage) ? (gc.hasLisseInter ? 3 : gc.hasBarreaux ? 2 : 1) : 0;
+    const nbProfilsAboutés = 1 + nbLisses + 1; // MC + lisses + closoir
+    addAccess('110966', nbSplices * nbProfilsAboutés);
+  }
+
   // Bouts des retours (L/U) — bouchon ou fixation murale
-  // Bouts des retours (L/U)
   if (travee.coupeG === '45') {
     if ((travee.fixRetourG ?? 'libre') === 'libre') {
       addAccess(mc.bouchon, 1);
