@@ -1,9 +1,8 @@
-import type { Affaire, ResultatAffaire, ResultatTravee } from '../types';
+import type { Affaire, ResultatAffaire } from '../types';
 import { PROFILS, LG_BARRE_MM } from '../constants/profils';
 import { TYPES_GC, TYPES_MC } from '../constants/typesGC';
+import { MAX_PIECE_MM } from '../constants/parametres';
 import { calcPositionsUsinages } from '../engine/calcTravee';
-
-const MAX_PIECE_MM = 6300;
 
 function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');

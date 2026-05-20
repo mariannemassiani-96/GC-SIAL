@@ -1,5 +1,6 @@
 export const ESPACEMENT_BARREAU = 130; // mm axe/axe (espace libre 105mm ≤ 110mm NF P01-012)
 export const DEPASSEMENT_LISSE = 130; // mm de chaque côté
+export const MAX_PIECE_MM = 6300; // longueur max usinable (barre 6400 - trait de scie)
 
 export const ENTRAXE: Record<string, Record<number, number>> = {
   prive: {
