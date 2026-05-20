@@ -13,15 +13,22 @@ function calcGrille(longueurLisse: number, entraxeMax: number) {
   const E = ESPACEMENT_BARREAU;
   const K_max = Math.floor(entraxeMax / E);
 
+  // 1 raidisseur suffit si le bord↔raidisseur ≤ entraxeMax (longueur ≤ 2×entraxeMax)
+  if (longueurLisse <= 2 * entraxeMax) {
+    const offset = Math.round(longueurLisse / 2 * 10) / 10;
+    if (offset >= MIN_BORD_BARREAU) {
+      return buildGrid(longueurLisse, 1, 1, offset);
+    }
+  }
+
+  // Sinon, chercher nbRaid ≥ 2 avec K intervalles de 130mm entre raidisseurs
   let nbRaid = 2;
   let K = K_max;
-
-  // Trouver K tel que les raidisseurs tiennent dans la lisse avec offset ≥ MIN_BORD
   while (nbRaid <= 50) {
     while (K >= 1) {
       const span = (nbRaid - 1) * K * E;
       const offset = (longueurLisse - span) / 2;
-      if (offset >= MIN_BORD_BARREAU) {
+      if (offset >= MIN_BORD_BARREAU && offset <= entraxeMax) {
         return buildGrid(longueurLisse, nbRaid, K, offset);
       }
       K--;
@@ -30,8 +37,7 @@ function calcGrille(longueurLisse: number, entraxeMax: number) {
     K = K_max;
   }
 
-  // Fallback
-  return buildGrid(longueurLisse, 2, 1, (longueurLisse - E) / 2);
+  return buildGrid(longueurLisse, 1, 1, longueurLisse / 2);
 }
 
 function buildGrid(longueurLisse: number, nbRaid: number, K: number, offset: number) {
