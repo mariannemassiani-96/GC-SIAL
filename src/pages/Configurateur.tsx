@@ -1,20 +1,18 @@
 import { useState, useMemo, useCallback } from 'react';
-import { ArrowLeft, FileDown, FileText, Ruler, Wrench, ShoppingCart, Euro, Maximize2, Scissors } from 'lucide-react';
+import { ArrowLeft, FileDown, FileText, Wrench, ShoppingCart, Euro, Maximize2, Scissors } from 'lucide-react';
 import type { Affaire, Alerte } from '../types';
 import { calculerAffaire } from '../engine';
 import { exportXML } from '../export/exportXML';
 import { generateFicheFabPDF, generateBonCommandePDF } from '../export/exportPDF';
 import { SectionProjet } from '../components/SectionProjet';
 import { SectionTravees } from '../components/SectionTravees';
-import { TabDebits } from '../components/tabs/TabDebits';
-import { TabUsinages } from '../components/tabs/TabUsinages';
+import { TabFabrication } from '../components/tabs/TabFabrication';
 import { TabBonCommande } from '../components/tabs/TabBonCommande';
 import { TabDevis } from '../components/tabs/TabDevis';
 import { AlertBanner } from '../components/ui/Alert';
 import { Button } from '../components/ui/Button';
 import { PreviewGC } from '../components/PreviewGC';
 import { PreviewGCInteractif } from '../components/PreviewGCInteractif';
-import { OptimBarresVisu } from '../components/OptimBarresVisu';
 import { SchemaCotes } from '../components/SchemaCotes';
 
 interface ConfigurateurProps {
@@ -23,7 +21,14 @@ interface ConfigurateurProps {
   onBack: () => void;
 }
 
-type TabId = 'config' | 'preview' | 'cotes' | 'debits' | 'usinages' | 'optim' | 'bc' | 'devis';
+type TabId = 'config' | 'preview' | 'fabrication' | 'bc' | 'devis';
+
+function migrateTab(t: string): TabId {
+  if (t === 'cotes' || t === 'preview') return 'preview';
+  if (t === 'debits' || t === 'usinages' || t === 'optim') return 'fabrication';
+  if (t === 'bc' || t === 'devis' || t === 'config') return t as TabId;
+  return 'config';
+}
 
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
@@ -35,7 +40,7 @@ function downloadBlob(blob: Blob, filename: string) {
 }
 
 export function Configurateur({ affaire, onUpdate, onBack }: ConfigurateurProps) {
-  const [activeTab, setActiveTabRaw] = useState<TabId>(() => (sessionStorage.getItem('sial_gc_tab') as TabId) || 'config');
+  const [activeTab, setActiveTabRaw] = useState<TabId>(() => migrateTab(sessionStorage.getItem('sial_gc_tab') || 'config'));
   const setActiveTab = useCallback((t: TabId) => { sessionStorage.setItem('sial_gc_tab', t); setActiveTabRaw(t); }, []);
   const [selectedTraveeIdx, setSelectedTraveeIdxRaw] = useState(() => Number(sessionStorage.getItem('sial_gc_travee') || '0'));
   const setSelectedTraveeIdx = useCallback((i: number) => { sessionStorage.setItem('sial_gc_travee', String(i)); setSelectedTraveeIdxRaw(i); }, []);
@@ -76,10 +81,7 @@ export function Configurateur({ affaire, onUpdate, onBack }: ConfigurateurProps)
   const tabs: { id: TabId; label: string; icon: React.ReactNode; needsResult?: boolean }[] = [
     { id: 'config', label: 'Configuration', icon: <Wrench size={14} /> },
     { id: 'preview', label: 'Aperçu', icon: <Maximize2 size={14} />, needsResult: true },
-    { id: 'cotes', label: 'Prise de cotes', icon: <Ruler size={14} /> },
-    { id: 'debits', label: 'Débits', icon: <Scissors size={14} />, needsResult: true },
-    { id: 'usinages', label: 'Usinages', icon: <Wrench size={14} />, needsResult: true },
-    { id: 'optim', label: 'Optimisation', icon: <Ruler size={14} />, needsResult: true },
+    { id: 'fabrication', label: 'Fabrication', icon: <Scissors size={14} />, needsResult: true },
     { id: 'bc', label: 'Commande', icon: <ShoppingCart size={14} />, needsResult: true },
     { id: 'devis', label: 'Devis', icon: <Euro size={14} />, needsResult: true },
   ];
@@ -102,16 +104,15 @@ export function Configurateur({ affaire, onUpdate, onBack }: ConfigurateurProps)
           <p className="text-[10px] text-gray-500">{affaire.client || 'Client non défini'} • {affaire.coloris}</p>
         </div>
 
-        {/* Export buttons */}
         <div className="flex items-center gap-1.5">
           <Button variant="secondary" size="sm" onClick={handleExportPDF} icon={<FileText size={13} />} disabled={!resultat}>
             PDF Fab
           </Button>
           <Button variant="secondary" size="sm" onClick={handleExportXML} icon={<FileDown size={13} />} disabled={!resultat}>
-            XML Machine
+            XML
           </Button>
           <Button variant="secondary" size="sm" onClick={handleExportBC} icon={<FileText size={13} />} disabled={!resultat}>
-            PDF Commande
+            Commande
           </Button>
         </div>
       </div>
@@ -143,10 +144,8 @@ export function Configurateur({ affaire, onUpdate, onBack }: ConfigurateurProps)
       {/* Main content */}
       <main className="flex-1 overflow-y-auto">
         <div className="max-w-[1400px] mx-auto p-4 space-y-4">
-          {/* Alertes */}
           {resultat && resultat.alertes.length > 0 && <AlertBanner alertes={resultat.alertes} />}
 
-          {/* TAB: Config */}
           {activeTab === 'config' && (
             <>
               <SectionProjet affaire={affaire} onChange={onUpdate} />
@@ -154,22 +153,13 @@ export function Configurateur({ affaire, onUpdate, onBack }: ConfigurateurProps)
             </>
           )}
 
-          {/* TAB: Aperçu / Preview */}
           {activeTab === 'preview' && resultat && (
             <div className="space-y-4">
-              {/* Travee selector */}
               {resultat.travees.length > 1 && (
                 <div className="flex gap-1.5">
                   {resultat.travees.map((rt, i) => (
-                    <button
-                      key={rt.travee.id}
-                      onClick={() => setSelectedTraveeIdx(i)}
-                      className={`px-3 py-1.5 text-xs rounded font-mono transition-colors ${
-                        i === selectedTraveeIdx
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-[#1e2028] text-gray-400 hover:text-gray-200'
-                      }`}
-                    >
+                    <button key={rt.travee.id} onClick={() => setSelectedTraveeIdx(i)}
+                      className={`px-3 py-1.5 text-xs rounded font-mono transition-colors ${i === selectedTraveeIdx ? 'bg-blue-600 text-white' : 'bg-[#1e2028] text-gray-400 hover:text-gray-200'}`}>
                       {rt.travee.repere}
                     </button>
                   ))}
@@ -177,62 +167,35 @@ export function Configurateur({ affaire, onUpdate, onBack }: ConfigurateurProps)
               )}
               {selectedRT && (
                 <>
-                  <PreviewGCInteractif
-                    rt={selectedRT}
+                  <PreviewGCInteractif rt={selectedRT}
                     retourD={resultat.travees.find(r => r.travee.id === selectedRT.travee.id + '_retD')}
                     retourG={resultat.travees.find(r => r.travee.id === selectedRT.travee.id + '_retG')}
                     onUpdateTravee={(patch) => {
                       const mainId = selectedRT.travee.id.replace(/_ret[DG]$/, '');
-                      const travees = affaire.travees.map(tr =>
-                        tr.id === mainId ? { ...tr, ...patch } : tr
-                      );
+                      const travees = affaire.travees.map(tr => tr.id === mainId ? { ...tr, ...patch } : tr);
                       onUpdate({ travees });
                     }}
                   />
                   <PreviewGC rt={selectedRT} />
                 </>
               )}
+              <SchemaCotes affaire={affaire} />
             </div>
           )}
 
-          {/* TAB: Prise de cotes */}
-          {activeTab === 'cotes' && (
-            <SchemaCotes affaire={affaire} />
+          {activeTab === 'fabrication' && resultat && (
+            <TabFabrication resultat={resultat} onUpdateTravee={(traveeId, patch) => {
+              const travees = affaire.travees.map(tr => tr.id === traveeId ? { ...tr, ...patch } : tr);
+              onUpdate({ travees });
+            }} />
           )}
 
-          {/* TAB: Débits */}
-          {activeTab === 'debits' && resultat && (
-            <div className="bg-[#181c25] rounded-lg border border-[#252830] p-4">
-              <TabDebits resultat={resultat} onUpdateTravee={(traveeId, patch) => {
-                const travees = affaire.travees.map(tr => tr.id === traveeId ? { ...tr, ...patch } : tr);
-                onUpdate({ travees });
-              }} />
-            </div>
-          )}
-
-          {/* TAB: Usinages */}
-          {activeTab === 'usinages' && resultat && (
-            <div className="bg-[#181c25] rounded-lg border border-[#252830] p-4">
-              <TabUsinages resultat={resultat} />
-            </div>
-          )}
-
-          {/* TAB: Optimisation coupes */}
-          {activeTab === 'optim' && resultat && (
-            <div className="bg-[#181c25] rounded-lg border border-[#252830] p-4">
-              <h3 className="text-sm font-semibold text-gray-300 mb-4">Optimisation de coupe — barres 6 400 mm</h3>
-              <OptimBarresVisu optimBarres={resultat.optimBarres} />
-            </div>
-          )}
-
-          {/* TAB: Bon de commande */}
           {activeTab === 'bc' && resultat && (
             <div className="bg-[#181c25] rounded-lg border border-[#252830] p-4">
               <TabBonCommande resultat={resultat} />
             </div>
           )}
 
-          {/* TAB: Devis */}
           {activeTab === 'devis' && resultat && (
             <div className="bg-[#181c25] rounded-lg border border-[#252830] p-4">
               <TabDevis affaire={affaire} resultat={resultat} />
