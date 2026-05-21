@@ -13,6 +13,15 @@ export function calculerAffaire(affaire: Affaire): ResultatAffaire {
     const mainTravee = hasRetour ? { ...t, repere: t.repere + ' Partie 1' } : t;
     const results = [calcTravee(mainTravee, affaire)];
 
+    // Extraire les offsets de bord de la grille du centre pour aligner les retours
+    const centreGrid = results[0].usinages[0]?.percageLisse ?? [];
+    const centreBordG = centreGrid.length > 0
+      ? Math.round(centreGrid[0] * 10) / 10
+      : undefined;
+    const centreBordD = centreGrid.length > 0
+      ? Math.round((results[0].longueurLisse - centreGrid[centreGrid.length - 1]) * 10) / 10
+      : undefined;
+
     // Branche retour droite (L droite ou U)
     if (t.largeur2 > 0 && t.coupeD === '45') {
       const t2: Travee = {
@@ -28,7 +37,7 @@ export function calculerAffaire(affaire: Affaire): ResultatAffaire {
         raidCentre: t.raidDroite,
         raidGauche: undefined, raidDroite: undefined,
       };
-      results.push(calcTravee(t2, affaire));
+      results.push(calcTravee(t2, affaire, { forcedBordG: centreBordD }));
     }
 
     // Branche retour gauche (L gauche ou U)
@@ -48,7 +57,7 @@ export function calculerAffaire(affaire: Affaire): ResultatAffaire {
           raidCentre: t.raidGauche,
           raidGauche: undefined, raidDroite: undefined,
         };
-        results.push(calcTravee(t3, affaire));
+        results.push(calcTravee(t3, affaire, { forcedBordD: centreBordG }));
       }
     }
 
