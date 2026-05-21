@@ -167,12 +167,16 @@ function TabImport({ vitrages, onUpdate }: { vitrages: Vitrage[]; onUpdate: (v: 
       ? cols.map(([f, h]) => `${f}="${h}"`).join(', ')
       : 'Aucune colonne reconnue';
 
+    const headersInfo = result.allHeaders.length > 0
+      ? `\nColonnes dans le fichier : ${result.allHeaders.join(' | ')}`
+      : '';
+
     if (result.vitrages.length > 0) {
       onUpdate([...vitrages, ...result.vitrages]);
       setInfo(`${fileName} : ${result.vitrages.length} vitrages importes (${result.totalRows} lignes, ${result.skippedRows} ignorees). Colonnes : ${colInfo}`);
       setError('');
     } else {
-      setError(`${fileName} : aucun vitrage detecte sur ${result.totalRows} lignes. Colonnes detectees : ${colInfo}. Verifiez que votre fichier contient des colonnes reconnues (Reference/Proto/Repere, Largeur/L, Hauteur/H, Dimensions, Composition/Vitrage, etc.)`);
+      setError(`${fileName} : aucun vitrage detecte sur ${result.totalRows} lignes.\nColonnes reconnues : ${colInfo}${headersInfo}\n\nLe parser cherche des colonnes comme : Reference/Proto/Repere, Largeur/L, Hauteur/H, Dimensions (LxH), Composition/Vitrage, Couleur/Intercalaire, Qte`);
       setInfo('');
     }
   };

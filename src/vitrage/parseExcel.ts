@@ -32,6 +32,7 @@ function matchField(header: string): Field | null {
 export interface ParseResult {
   vitrages: Vitrage[];
   columnsDetected: Record<string, string>;
+  allHeaders: string[];
   totalRows: number;
   skippedRows: number;
 }
@@ -98,10 +99,10 @@ export async function parseExcelFile(file: File): Promise<ParseResult> {
   const buffer = await file.arrayBuffer();
   const wb = XLSX.read(buffer, { type: 'array' });
   const sheetName = wb.SheetNames[0];
-  if (!sheetName) return { vitrages: [], columnsDetected: {}, totalRows: 0, skippedRows: 0 };
+  if (!sheetName) return { vitrages: [], columnsDetected: {}, allHeaders: [], totalRows: 0, skippedRows: 0 };
 
   const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(wb.Sheets[sheetName]);
-  if (rows.length === 0) return { vitrages: [], columnsDetected: {}, totalRows: 0, skippedRows: 0 };
+  if (rows.length === 0) return { vitrages: [], columnsDetected: {}, allHeaders: [], totalRows: 0, skippedRows: 0 };
 
   const headers = Object.keys(rows[0]);
   const col = buildColumnMap(headers);
@@ -118,12 +119,12 @@ export async function parseExcelFile(file: File): Promise<ParseResult> {
     else skipped++;
   }
 
-  return { vitrages, columnsDetected, totalRows: rows.length, skippedRows: skipped };
+  return { vitrages, columnsDetected, allHeaders: headers, totalRows: rows.length, skippedRows: skipped };
 }
 
 export function parseCSVText(text: string): ParseResult {
   const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n').filter(l => l.trim().length > 0);
-  if (lines.length < 2) return { vitrages: [], columnsDetected: {}, totalRows: 0, skippedRows: 0 };
+  if (lines.length < 2) return { vitrages: [], columnsDetected: {}, allHeaders: [], totalRows: 0, skippedRows: 0 };
 
   const sep = lines[0].includes('\t') ? '\t' : lines[0].includes(';') ? ';' : ',';
   const headers = lines[0].split(sep).map(h => h.trim().replace(/^"|"$/g, ''));
@@ -144,5 +145,5 @@ export function parseCSVText(text: string): ParseResult {
     else skipped++;
   }
 
-  return { vitrages, columnsDetected, totalRows: lines.length - 1, skippedRows: skipped };
+  return { vitrages, columnsDetected, allHeaders: headers, totalRows: lines.length - 1, skippedRows: skipped };
 }
