@@ -188,7 +188,7 @@ function collectCuts(_affaire: Affaire, resultat: ResultatAffaire): CutInfo[] {
       // Lisses (with usinages)
       if (gc.hasBarreaux || gc.hasRemplissage) {
         const nbLisses = gc.hasLisseInter ? 3 : gc.hasBarreaux ? 2 : 1;
-        const lisseUsinages = calcPositionsUsinages(rt.posRaidisseurs, rt.longueurLisse);
+        const lisseUsinages = rt.usinages[0] ?? calcPositionsUsinages(rt.posRaidisseurs, rt.longueurLisse);
 
         for (let li = 0; li < nbLisses; li++) {
           const posType: CutInfo['posType'] = li === 0 ? 'lisse_inf' : li === 1 ? 'lisse_sup' : 'lisse_med';

@@ -6,9 +6,35 @@ import { calcNomenclature } from './calcNomenclature';
 /**
  * Grille canonique : offset symétrique ∈ [MIN_BORD, ESPACEMENT] puis 130mm fixe.
  * Le bord fait toujours ≤ 130mm — on « saute un trou » pour ça.
+ * forcedBordG/D : forcer l'offset d'un côté (alignement raccord 90°).
  */
-function computeGridPositions(longueurLisse: number): number[] {
+function computeGridPositions(
+  longueurLisse: number,
+  forcedBordG?: number,
+  forcedBordD?: number,
+): number[] {
   const E = ESPACEMENT_BARREAU;
+
+  if (forcedBordG !== undefined) {
+    const positions: number[] = [];
+    let pos = forcedBordG;
+    while (pos <= longueurLisse - MIN_BORD_BARREAU + 0.05) {
+      positions.push(Math.round(pos * 10) / 10);
+      pos += E;
+    }
+    return positions;
+  }
+
+  if (forcedBordD !== undefined) {
+    const positions: number[] = [];
+    let pos = longueurLisse - forcedBordD;
+    while (pos >= MIN_BORD_BARREAU - 0.05) {
+      positions.unshift(Math.round(pos * 10) / 10);
+      pos -= E;
+    }
+    return positions;
+  }
+
   const intervals = Math.floor((longueurLisse - 2 * MIN_BORD_BARREAU) / E);
   if (intervals < 0) return [];
   const count = intervals + 1;
@@ -32,9 +58,9 @@ function snapToGrid(positions: number[], grid: number[]): number[] {
   return [...new Set(snapped)].sort((a, b) => a - b);
 }
 
-function calcGrille(longueurLisse: number, entraxeMax: number) {
+function calcGrille(longueurLisse: number, entraxeMax: number, forcedBordG?: number, forcedBordD?: number) {
   const E = ESPACEMENT_BARREAU;
-  const gridPositions = computeGridPositions(longueurLisse);
+  const gridPositions = computeGridPositions(longueurLisse, forcedBordG, forcedBordD);
   const count = gridPositions.length;
 
   if (count === 0) {
@@ -98,8 +124,10 @@ function calcGrille(longueurLisse: number, entraxeMax: number) {
 export function calcPositionsUsinages(
   raidPositions: number[],
   longueurLisse: number,
+  forcedBordG?: number,
+  forcedBordD?: number,
 ): UsinageLisse {
-  const gridPositions = computeGridPositions(longueurLisse);
+  const gridPositions = computeGridPositions(longueurLisse, forcedBordG, forcedBordD);
   const finalRaid = raidPositions.length > 0
     ? snapToGrid(raidPositions, gridPositions)
     : [];
@@ -110,7 +138,11 @@ export function calcPositionsUsinages(
   };
 }
 
-export function calcTravee(travee: Travee, _affaire: Affaire): ResultatTravee {
+export function calcTravee(
+  travee: Travee,
+  _affaire: Affaire,
+  gridConstraint?: { forcedBordG?: number; forcedBordD?: number },
+): ResultatTravee {
   const gc = TYPES_GC[travee.typeGC];
   const mc = TYPES_MC[travee.mc];
   const alertes: Alerte[] = [];
@@ -131,7 +163,8 @@ export function calcTravee(travee: Travee, _affaire: Affaire): ResultatTravee {
 
   let posRaidisseurs: number[];
 
-  const canonicalGrid = computeGridPositions(longueurLisse);
+  const { forcedBordG, forcedBordD } = gridConstraint ?? {};
+  const canonicalGrid = computeGridPositions(longueurLisse, forcedBordG, forcedBordD);
 
   if (hasForcePos) {
     const raw = override!.positions!
@@ -139,10 +172,8 @@ export function calcTravee(travee: Travee, _affaire: Affaire): ResultatTravee {
       .filter(p => p > 1 && Math.abs(p - travee.largeur) > 1);
     posRaidisseurs = snapToGrid(raw, canonicalGrid);
   } else if (hasForceNb) {
-    // Forcer N raidisseurs sur la grille 130mm
-    const grille = calcGrille(longueurLisse, entraxeMax);
+    const grille = calcGrille(longueurLisse, entraxeMax, forcedBordG, forcedBordD);
     const desired = override!.nb!;
-    // Choisir 'desired' positions parmi la grille
     if (desired >= grille.allPositions.length) {
       posRaidisseurs = grille.allPositions;
     } else {
@@ -153,7 +184,7 @@ export function calcTravee(travee: Travee, _affaire: Affaire): ResultatTravee {
       }
     }
   } else {
-    const grille = calcGrille(longueurLisse, entraxeMax);
+    const grille = calcGrille(longueurLisse, entraxeMax, forcedBordG, forcedBordD);
     posRaidisseurs = grille.raidPositions;
   }
 
@@ -174,7 +205,7 @@ export function calcTravee(travee: Travee, _affaire: Affaire): ResultatTravee {
   // 5. Nombre de barreaux — tous les trous de la grille sauf les raidisseurs
   let nbBarreaux = 0;
   if (gc.hasBarreaux) {
-    const usinageTest = calcPositionsUsinages(posRaidisseurs, longueurLisse);
+    const usinageTest = calcPositionsUsinages(posRaidisseurs, longueurLisse, forcedBordG, forcedBordD);
     nbBarreaux = usinageTest.percageLisse.length - usinageTest.percageLisseRaidisseur.length;
   }
 
@@ -194,7 +225,7 @@ export function calcTravee(travee: Travee, _affaire: Affaire): ResultatTravee {
       : 0;
   const usinages: UsinageLisse[] = [];
   for (let i = 0; i < nbLisses; i++) {
-    usinages.push(calcPositionsUsinages(posRaidisseurs, longueurLisse));
+    usinages.push(calcPositionsUsinages(posRaidisseurs, longueurLisse, forcedBordG, forcedBordD));
   }
 
   // 8. Contrôle NF P01-012 — espacement entre éléments verticaux consécutifs
