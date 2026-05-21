@@ -5,7 +5,7 @@ import type {
 } from '../vitrage/types';
 import { STATUT_LABELS, STATUT_COLORS } from '../vitrage/types';
 import { parseVitrageSpec } from '../vitrage/parseVitrageSpec';
-import { parseExcelFile, parseCSVText } from '../vitrage/parseExcel';
+import { parseExcelFile, parseCSVText, type ParseResult } from '../vitrage/parseExcel';
 import { optimizeWE } from '../vitrage/optimizeWE';
 import { optimizeGlass } from '../vitrage/optimize2D';
 import { generateLabelsA, generateLabelsB, generateLabelsC } from '../vitrage/generateLabels';
@@ -158,25 +158,44 @@ function OrderDetail({ commande, onUpdate, onBack, avery, we, glass, onAvery, on
 
 function TabImport({ vitrages, onUpdate }: { vitrages: Vitrage[]; onUpdate: (v: Vitrage[]) => void }) {
   const [error, setError] = useState('');
+  const [info, setInfo] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const handleResult = (result: ParseResult, fileName: string) => {
+    const cols = Object.entries(result.columnsDetected);
+    const colInfo = cols.length > 0
+      ? cols.map(([f, h]) => `${f}="${h}"`).join(', ')
+      : 'Aucune colonne reconnue';
+
+    if (result.vitrages.length > 0) {
+      onUpdate([...vitrages, ...result.vitrages]);
+      setInfo(`${fileName} : ${result.vitrages.length} vitrages importes (${result.totalRows} lignes, ${result.skippedRows} ignorees). Colonnes : ${colInfo}`);
+      setError('');
+    } else {
+      setError(`${fileName} : aucun vitrage detecte sur ${result.totalRows} lignes. Colonnes detectees : ${colInfo}. Verifiez que votre fichier contient des colonnes reconnues (Reference/Proto/Repere, Largeur/L, Hauteur/H, Dimensions, Composition/Vitrage, etc.)`);
+      setInfo('');
+    }
+  };
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setLoading(true); setError('');
+    setLoading(true); setError(''); setInfo('');
     try {
       const ext = file.name.split('.').pop()?.toLowerCase();
-      let parsed: Vitrage[];
+      let result: ParseResult;
       if (ext === 'csv' || ext === 'tsv' || ext === 'txt') {
         const text = await file.text();
-        parsed = parseCSVText(text);
+        result = parseCSVText(text);
       } else {
-        parsed = await parseExcelFile(file);
+        result = await parseExcelFile(file);
       }
-      if (parsed.length === 0) setError('Aucun vitrage detecte');
-      else onUpdate([...vitrages, ...parsed]);
-    } catch (err) { setError(`Erreur : ${err}`); }
+      handleResult(result, file.name);
+    } catch (err) {
+      setError(`Erreur lecture ${file.name} : ${err}`);
+    }
     setLoading(false);
+    e.target.value = '';
   };
 
   const addEmpty = () => {
@@ -201,8 +220,12 @@ function TabImport({ vitrages, onUpdate }: { vitrages: Vitrage[]; onUpdate: (v: 
         </button>
       </div>
       {loading && <div className="text-blue-400 text-sm">Import en cours...</div>}
-      {error && <div className="text-red-400 text-sm">{error}</div>}
-      <div className="text-sm text-gray-400">{vitrages.length} vitrage(s)</div>
+      {error && <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-red-400 text-xs whitespace-pre-wrap">{error}</div>}
+      {info && <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3 text-green-400 text-xs">{info}</div>}
+      <div className="text-sm text-gray-400">{vitrages.length} vitrage(s) charges</div>
+      {vitrages.length > 0 && (
+        <button onClick={() => onUpdate([])} className="text-xs text-red-400 hover:text-red-300">Tout effacer</button>
+      )}
     </div>
   );
 }
