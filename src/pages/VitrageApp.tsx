@@ -1,11 +1,9 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import type {
   Commande, Vitrage, IsulaStore, AverySettings, WESettings, GlassSettings,
   CommandeStatut, WEGroupe, GlassOptimResult, OptimizedPlate,
 } from '../vitrage/types';
-import {
-  DEFAULT_AVERY, DEFAULT_WE, DEFAULT_GLASS, STATUT_LABELS, STATUT_COLORS,
-} from '../vitrage/types';
+import { STATUT_LABELS, STATUT_COLORS } from '../vitrage/types';
 import { parseVitrageSpec } from '../vitrage/parseVitrageSpec';
 import { parseExcelFile, parseCSVText } from '../vitrage/parseExcel';
 import { optimizeWE } from '../vitrage/optimizeWE';
