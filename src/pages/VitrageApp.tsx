@@ -22,25 +22,51 @@ function download(blob: Blob, name: string) {
 
 // ── Dashboard ────────────────────────────────────────────────────────
 
-function Dashboard({ commandes, onSelect, onNew, onDelete }: {
+function Dashboard({ commandes, onSelect, onNew, onDelete, onBatch }: {
   commandes: Commande[];
   onSelect: (id: string) => void;
   onNew: () => void;
   onDelete: (id: string) => void;
+  onBatch: (ids: string[]) => void;
 }) {
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const stats = useMemo(() => {
     const s = { total: commandes.length, en_attente: 0, en_cours: 0, terminee: 0, livree: 0, totalVitrages: 0 };
     for (const c of commandes) { s[c.statut]++; s.totalVitrages += c.vitrages.length; }
     return s;
   }, [commandes]);
 
+  const toggleSelect = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    if (selected.size === commandes.length) setSelected(new Set());
+    else setSelected(new Set(commandes.map(c => c.id)));
+  };
+
+  const selectedVitrages = commandes.filter(c => selected.has(c.id)).reduce((s, c) => s + c.vitrages.length, 0);
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-bold text-white">Commandes</h2>
-        <button onClick={onNew} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-lg transition-colors">
-          + Nouvelle commande
-        </button>
+        <div className="flex items-center gap-3">
+          {selected.size >= 1 && (
+            <button onClick={() => onBatch([...selected])}
+              className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white text-sm rounded-lg transition-colors">
+              Envoyer en coupe ({selected.size} cmd — {selectedVitrages} vitrages)
+            </button>
+          )}
+          <button onClick={onNew} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-lg transition-colors">
+            + Nouvelle commande
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
@@ -65,6 +91,10 @@ function Dashboard({ commandes, onSelect, onNew, onDelete }: {
           <table className="w-full text-sm">
             <thead>
               <tr className="text-gray-400 border-b border-[#2a2d35] text-xs">
+                <th className="text-left py-2 px-2 w-8">
+                  <input type="checkbox" checked={selected.size === commandes.length && commandes.length > 0}
+                    onChange={toggleAll} className="accent-amber-500" />
+                </th>
                 <th className="text-left py-2 px-3">Reference</th>
                 <th className="text-left py-2 px-3">Client</th>
                 <th className="text-left py-2 px-3">Date</th>
@@ -75,7 +105,11 @@ function Dashboard({ commandes, onSelect, onNew, onDelete }: {
             </thead>
             <tbody>
               {[...commandes].sort((a, b) => b.dateCreation.localeCompare(a.dateCreation)).map(c => (
-                <tr key={c.id} className="border-b border-[#1e2028] hover:bg-[#1e2028] cursor-pointer" onClick={() => onSelect(c.id)}>
+                <tr key={c.id} className={`border-b border-[#1e2028] hover:bg-[#1e2028] cursor-pointer ${selected.has(c.id) ? 'bg-amber-600/10' : ''}`}
+                  onClick={() => onSelect(c.id)}>
+                  <td className="py-2.5 px-2" onClick={e => toggleSelect(c.id, e)}>
+                    <input type="checkbox" checked={selected.has(c.id)} readOnly className="accent-amber-500" />
+                  </td>
                   <td className="py-2.5 px-3 text-white font-mono">{c.reference}</td>
                   <td className="py-2.5 px-3 text-gray-300">{c.client}</td>
                   <td className="py-2.5 px-3 text-gray-400">{c.dateCreation}</td>
@@ -479,17 +513,96 @@ function TabSettings({ avery, we, glass, onAvery, onWE, onGlass }: {
   );
 }
 
+// ── Batch View (multi-order) ─────────────────────────────────────────
+
+const BATCH_TABS = ['Vitrages', 'Optim Verre', 'Warm Edge', 'Etiquettes'] as const;
+
+function BatchView({ commandes, onBack, avery, we, glass }: {
+  commandes: Commande[];
+  onBack: () => void;
+  avery: AverySettings; we: WESettings; glass: GlassSettings;
+}) {
+  const [tab, setTab] = useState(0);
+  const allVitrages = useMemo(() => commandes.flatMap(c => c.vitrages), [commandes]);
+  const batchLabel = commandes.map(c => c.reference).join(' + ');
+  const weResult = useMemo(() => allVitrages.length > 0 ? optimizeWE(allVitrages, we) : [], [allVitrages, we]);
+  const glassResult = useMemo(() => allVitrages.length > 0 ? optimizeGlass(allVitrages, glass) : [], [allVitrages, glass]);
+  const allPlates = useMemo(() => glassResult.flatMap(g => g.plates), [glassResult]);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-4">
+        <button onClick={onBack} className="text-gray-500 hover:text-white text-sm">&larr; Retour</button>
+        <h2 className="text-xl font-bold text-amber-400">Lot de coupe</h2>
+        <span className="text-xs text-gray-400">{commandes.length} commandes — {allVitrages.length} vitrages</span>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {commandes.map(c => (
+          <span key={c.id} className="text-xs px-2 py-1 rounded bg-[#181a20] border border-[#2a2d35] text-gray-300">
+            {c.reference} <span className="text-gray-500">({c.vitrages.length})</span>
+          </span>
+        ))}
+      </div>
+
+      <div className="flex gap-1 border-b border-[#2a2d35]">
+        {BATCH_TABS.map((label, i) => (
+          <button key={label} onClick={() => setTab(i)}
+            className={`px-4 py-2 text-sm transition-colors border-b-2 ${i === tab
+              ? 'border-amber-500 text-amber-400 font-semibold'
+              : 'border-transparent text-gray-500 hover:text-gray-300'}`}>{label}</button>
+        ))}
+      </div>
+
+      {tab === 0 && (
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead><tr className="text-gray-400 border-b border-[#2a2d35]">
+              <th className="text-left py-2 px-1">Commande</th>
+              <th className="text-left py-2 px-1">Reference</th>
+              <th className="text-left py-2 px-1 w-12">V</th>
+              <th className="text-right py-2 px-1 w-16">L</th>
+              <th className="text-right py-2 px-1 w-16">H</th>
+              <th className="text-left py-2 px-1">Composition</th>
+              <th className="text-left py-2 px-1 w-20">EXT</th>
+              <th className="text-left py-2 px-1 w-20">INT</th>
+            </tr></thead>
+            <tbody>
+              {commandes.flatMap(c => c.vitrages.map(v => (
+                <tr key={v.id} className="border-b border-[#1e2028]">
+                  <td className="py-1 px-1 text-gray-500">{c.reference}</td>
+                  <td className="py-1 px-1 text-white">{v.reference}</td>
+                  <td className="py-1 px-1 text-gray-300">{v.variante}</td>
+                  <td className="py-1 px-1 text-white text-right">{v.largeur}</td>
+                  <td className="py-1 px-1 text-white text-right">{v.hauteur}</td>
+                  <td className="py-1 px-1 text-gray-300">{v.composition}</td>
+                  <td className="py-1 px-1 text-red-400 text-[11px]">{v.outerGlass}</td>
+                  <td className="py-1 px-1 text-blue-400 text-[11px]">{v.innerGlass}</td>
+                </tr>
+              )))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {tab === 1 && <TabGlass results={glassResult} />}
+      {tab === 2 && <TabWE results={weResult} />}
+      {tab === 3 && <TabExport vitrages={allVitrages} allPlates={allPlates} weResult={weResult}
+        commandeLabel={batchLabel} avery={avery} we={we} />}
+    </div>
+  );
+}
+
 // ── Main App ─────────────────────────────────────────────────────────
+
+type ViewMode = { type: 'dashboard' } | { type: 'order'; id: string } | { type: 'batch'; ids: string[] };
 
 export function VitrageApp({ onBack }: { onBack: () => void }) {
   const [store, setStoreRaw] = useState<IsulaStore>(loadStore);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [view, setView] = useState<ViewMode>({ type: 'dashboard' });
 
   const setStore = useCallback((fn: (prev: IsulaStore) => IsulaStore) => {
     setStoreRaw(prev => { const next = fn(prev); saveStore(next); return next; });
   }, []);
-
-  const selected = store.commandes.find(c => c.id === selectedId) ?? null;
 
   const handleNew = () => {
     const cmd: Commande = {
@@ -502,17 +615,57 @@ export function VitrageApp({ onBack }: { onBack: () => void }) {
       notes: '',
     };
     setStore(s => addCommande(s, cmd));
-    setSelectedId(cmd.id);
+    setView({ type: 'order', id: cmd.id });
   };
 
   const handleDelete = (id: string) => {
     if (!confirm('Supprimer cette commande ?')) return;
     setStore(s => deleteCommande(s, id));
-    if (selectedId === id) setSelectedId(null);
+    if (view.type === 'order' && view.id === id) setView({ type: 'dashboard' });
   };
 
-  const handleUpdate = (patch: Partial<Commande>) => {
-    if (selectedId) setStore(s => updateCommande(s, selectedId, patch));
+  const handleUpdate = (id: string, patch: Partial<Commande>) => {
+    setStore(s => updateCommande(s, id, patch));
+  };
+
+  const goHome = () => setView({ type: 'dashboard' });
+
+  const renderContent = () => {
+    if (view.type === 'order') {
+      const selected = store.commandes.find(c => c.id === view.id);
+      if (!selected) return null;
+      return (
+        <OrderDetail
+          commande={selected}
+          onUpdate={patch => handleUpdate(view.id, patch)}
+          onBack={goHome}
+          avery={store.averySettings} we={store.weSettings} glass={store.glassSettings}
+          onAvery={a => setStore(s => ({ ...s, averySettings: a }))}
+          onWE={w => setStore(s => ({ ...s, weSettings: w }))}
+          onGlass={g => setStore(s => ({ ...s, glassSettings: g }))}
+        />
+      );
+    }
+    if (view.type === 'batch') {
+      const batchCmds = store.commandes.filter(c => view.ids.includes(c.id));
+      if (batchCmds.length === 0) return null;
+      return (
+        <BatchView
+          commandes={batchCmds}
+          onBack={goHome}
+          avery={store.averySettings} we={store.weSettings} glass={store.glassSettings}
+        />
+      );
+    }
+    return (
+      <Dashboard
+        commandes={store.commandes}
+        onSelect={id => setView({ type: 'order', id })}
+        onNew={handleNew}
+        onDelete={handleDelete}
+        onBatch={ids => setView({ type: 'batch', ids })}
+      />
+    );
   };
 
   return (
@@ -527,19 +680,7 @@ export function VitrageApp({ onBack }: { onBack: () => void }) {
         </div>
       </header>
       <main className="max-w-6xl mx-auto px-6 py-6">
-        {selected ? (
-          <OrderDetail
-            commande={selected}
-            onUpdate={handleUpdate}
-            onBack={() => setSelectedId(null)}
-            avery={store.averySettings} we={store.weSettings} glass={store.glassSettings}
-            onAvery={a => setStore(s => ({ ...s, averySettings: a }))}
-            onWE={w => setStore(s => ({ ...s, weSettings: w }))}
-            onGlass={g => setStore(s => ({ ...s, glassSettings: g }))}
-          />
-        ) : (
-          <Dashboard commandes={store.commandes} onSelect={setSelectedId} onNew={handleNew} onDelete={handleDelete} />
-        )}
+        {renderContent()}
       </main>
     </div>
   );
