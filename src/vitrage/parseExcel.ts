@@ -54,50 +54,6 @@ function parseDimensions(raw: string): { largeur: number; hauteur: number } | nu
   return null;
 }
 
-function rowToVitrage(
-  row: Record<string, unknown>,
-  col: Record<Field, string | null>,
-): Vitrage | null {
-  const get = (f: Field): string => col[f] != null ? String(row[col[f]!] ?? '').trim() : '';
-
-  let reference = get('reference');
-  const compositionRaw = get('composition');
-  let largeur = parseFloat(get('largeur')) || 0;
-  let hauteur = parseFloat(get('hauteur')) || 0;
-
-  if (largeur === 0 && hauteur === 0) {
-    const dimStr = get('dimensions');
-    if (dimStr) {
-      const parsed = parseDimensions(dimStr);
-      if (parsed) { largeur = parsed.largeur; hauteur = parsed.hauteur; }
-    }
-  }
-
-  if (largeur === 0 && hauteur === 0 && !reference) return null;
-
-  if (!reference) {
-    reference = `${largeur}x${hauteur}`;
-  }
-
-  const varianteRaw = get('variante').toUpperCase();
-  const variante: 'V1' | 'V2' = varianteRaw === 'V2' ? 'V2' : 'V1';
-  const couleur = get('couleur') || '012 (Noir)';
-  const { outer, inner, epaisseur } = compositionRaw ? parseVitrageSpec(compositionRaw) : { outer: '', inner: '', epaisseur: 10 };
-
-  const qteStr = get('qte');
-  const qte = parseInt(qteStr) || 1;
-
-  const vitrages: Vitrage[] = [];
-  for (let i = 0; i < qte; i++) {
-    vitrages.push({
-      id: uuid(), reference, variante, largeur, hauteur,
-      composition: compositionRaw, intercalaireEpaisseur: epaisseur,
-      intercalaireCouleur: couleur, outerGlass: outer, innerGlass: inner,
-    });
-  }
-  return vitrages.length > 0 ? vitrages[0] : null;
-}
-
 function rowToVitrages(
   row: Record<string, unknown>,
   col: Record<Field, string | null>,
