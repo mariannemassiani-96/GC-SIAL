@@ -12,7 +12,7 @@ export function generateWEPieces(vitrages: Vitrage[]): WEPiece[] {
   for (const v of vitrages) {
     const court = Math.min(v.largeur, v.hauteur);
     const long = Math.max(v.largeur, v.hauteur);
-    const ref = `${v.protoNum} ${v.variante}`;
+    const ref = `${v.reference} ${v.variante}`;
     for (let i = 0; i < 2; i++) {
       pieces.push({ longueur: court - calcDeduction(court), origDim: court, cote: 'court', vitrageRef: ref });
     }

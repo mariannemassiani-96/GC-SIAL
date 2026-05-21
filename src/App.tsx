@@ -127,8 +127,8 @@ function HubFabrication({ onSelect }: { onSelect: (mode: AppMode) => void }) {
     },
     {
       id: 'vitrage' as AppMode,
-      label: 'Etiquettes Vitrage & WE',
-      description: 'Etiquettes Avery 70x35mm (assemblees, EXT/INT, ordre de coupe Pro2D), optimisation intercalaires Warm Edge.',
+      label: 'ISULA VITRAGE',
+      description: 'Suivi commandes vitrage, optimisation coupe 2D, etiquettes Avery, fiche Warm Edge.',
       icon: (
         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-blue-400">
           <rect x="3" y="3" width="18" height="18" rx="2" /><line x1="3" y1="12" x2="21" y2="12" />

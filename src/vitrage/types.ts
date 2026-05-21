@@ -1,8 +1,18 @@
+export type CommandeStatut = 'en_attente' | 'en_cours' | 'terminee' | 'livree';
+
+export interface Commande {
+  id: string;
+  reference: string;
+  client: string;
+  dateCreation: string;
+  statut: CommandeStatut;
+  vitrages: Vitrage[];
+  notes: string;
+}
+
 export interface Vitrage {
   id: string;
-  commande: string;
-  proto: string;
-  protoNum: string;
+  reference: string;
   variante: 'V1' | 'V2';
   largeur: number;
   hauteur: number;
@@ -13,21 +23,36 @@ export interface Vitrage {
   innerGlass: string;
 }
 
-export interface Plaque {
-  numero: number;
-  qte: number;
-  materiau: string;
-  largeur: number;
-  hauteur: number;
-  pieces: PlaquePiece[];
+export interface GlassPiece {
+  vitrageId: string;
+  vitrageRef: string;
+  width: number;
+  height: number;
+  material: string;
+  face: 'EXT' | 'INT';
 }
 
-export interface PlaquePiece {
+export interface PlacedPiece extends GlassPiece {
+  x: number;
+  y: number;
+  rotated: boolean;
+}
+
+export interface OptimizedPlate {
   numero: number;
-  reference: string;
-  largeur: number;
-  hauteur: number;
-  qte: number;
+  material: string;
+  plateWidth: number;
+  plateHeight: number;
+  pieces: PlacedPiece[];
+  utilisation: number;
+}
+
+export interface GlassOptimResult {
+  material: string;
+  plates: OptimizedPlate[];
+  totalPlates: number;
+  totalPieces: number;
+  tauxUtilisation: number;
 }
 
 export interface WEPiece {
@@ -68,12 +93,17 @@ export interface WESettings {
   kerf: number;
 }
 
-export interface VitrageStore {
-  vitrages: Vitrage[];
-  plaques: Plaque[];
-  commandeLabel: string;
+export interface GlassSettings {
+  plateWidth: number;
+  plateHeight: number;
+  cuttingGap: number;
+}
+
+export interface IsulaStore {
+  commandes: Commande[];
   averySettings: AverySettings;
   weSettings: WESettings;
+  glassSettings: GlassSettings;
 }
 
 export const DEFAULT_AVERY: AverySettings = {
@@ -87,4 +117,24 @@ export const DEFAULT_WE: WESettings = {
   barreLength: 6000,
   marge: 20,
   kerf: 5,
+};
+
+export const DEFAULT_GLASS: GlassSettings = {
+  plateWidth: 3210,
+  plateHeight: 2550,
+  cuttingGap: 5,
+};
+
+export const STATUT_LABELS: Record<CommandeStatut, string> = {
+  en_attente: 'En attente',
+  en_cours: 'En cours',
+  terminee: 'Terminee',
+  livree: 'Livree',
+};
+
+export const STATUT_COLORS: Record<CommandeStatut, string> = {
+  en_attente: 'text-gray-400 bg-gray-500/20 border-gray-500/30',
+  en_cours: 'text-blue-400 bg-blue-500/20 border-blue-500/30',
+  terminee: 'text-green-400 bg-green-500/20 border-green-500/30',
+  livree: 'text-purple-400 bg-purple-500/20 border-purple-500/30',
 };
