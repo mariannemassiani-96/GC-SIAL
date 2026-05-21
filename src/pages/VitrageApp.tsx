@@ -143,7 +143,7 @@ function OrderDetail({ commande, onUpdate, onBack, avery, we, glass, onAvery, on
         ))}
       </div>
 
-      {tab === 0 && <TabImport vitrages={c.vitrages} onUpdate={v => onUpdate({ vitrages: v })} />}
+      {tab === 0 && <TabImport vitrages={c.vitrages} onUpdate={v => onUpdate({ vitrages: v })} onSetRef={ref => onUpdate({ reference: ref })} />}
       {tab === 1 && <TabVitrages vitrages={c.vitrages} onUpdate={v => onUpdate({ vitrages: v })} />}
       {tab === 2 && <TabGlass results={glassResult} />}
       {tab === 3 && <TabWE results={weResult} />}
@@ -156,7 +156,7 @@ function OrderDetail({ commande, onUpdate, onBack, avery, we, glass, onAvery, on
 
 // ── Tab: Import ──────────────────────────────────────────────────────
 
-function TabImport({ vitrages, onUpdate }: { vitrages: Vitrage[]; onUpdate: (v: Vitrage[]) => void }) {
+function TabImport({ vitrages, onUpdate, onSetRef }: { vitrages: Vitrage[]; onUpdate: (v: Vitrage[]) => void; onSetRef?: (ref: string) => void }) {
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
   const [loading, setLoading] = useState(false);
@@ -173,7 +173,8 @@ function TabImport({ vitrages, onUpdate }: { vitrages: Vitrage[]; onUpdate: (v: 
 
     if (result.vitrages.length > 0) {
       onUpdate([...vitrages, ...result.vitrages]);
-      setInfo(`${fileName} : ${result.vitrages.length} vitrages importes (${result.totalRows} lignes, ${result.skippedRows} ignorees). Colonnes : ${colInfo}`);
+      if (result.lotInfo && onSetRef) onSetRef(result.lotInfo);
+      setInfo(`${fileName} : ${result.vitrages.length} vitrages importes (${result.totalRows} lignes, ${result.skippedRows} ignorees). Colonnes : ${colInfo}${result.lotInfo ? `\nLot : ${result.lotInfo}` : ''}`);
       setError('');
     } else {
       setError(`${fileName} : aucun vitrage detecte sur ${result.totalRows} lignes.\nColonnes reconnues : ${colInfo}${headersInfo}\n\nLe parser cherche des colonnes comme : Reference/Proto/Repere, Largeur/L, Hauteur/H, Dimensions (LxH), Composition/Vitrage, Couleur/Intercalaire, Qte`);
