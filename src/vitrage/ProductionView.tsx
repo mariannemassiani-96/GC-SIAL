@@ -37,7 +37,7 @@ interface OptimPlate {
 }
 interface OptimResult { material: string; plates: OptimPlate[]; totalPlates: number; totalPieces: number; tauxUtilisation: number }
 
-interface PrepItem { needed: number; ready: boolean; nc_qty: number; nc_notes: string }
+interface PrepItem { needed: number; ready: boolean; found?: number; nc_qty: number; nc_notes: string }
 
 interface Lot {
   id: string; reference: string; semaine: string; date_creation: string;
@@ -535,23 +535,47 @@ function AtelierView({ lots, semaine, poste, onSelectPoste, onBack, loadLotDetai
           {materials.map(m => {
             const prep = savedPrep[m.material];
             const isReady = prep?.ready ?? false;
+            const found = prep?.found ?? m.count;
+            const isPartial = found < m.count;
             return (
-              <div key={m.material} className={`flex items-center gap-4 p-5 rounded-2xl border mb-3 transition-colors ${
-                isReady ? 'bg-green-900/20 border-green-500/30' : 'bg-[#181a20] border-[#2a2d35]'}`}>
-                <button onClick={async () => {
-                  const newPrep = { ...savedPrep, [m.material]: { needed: m.count, ready: !isReady, nc_qty: prep?.nc_qty ?? 0, nc_notes: prep?.nc_notes ?? '' } };
-                  await patchJSON(`/api/production/lots/${selectedLot.id}/preparation`, { preparation: newPrep });
-                  onReload();
-                }} className={`w-12 h-12 rounded-xl border-2 flex items-center justify-center text-2xl transition-colors active:scale-90 ${
-                  isReady ? 'bg-green-600 border-green-400 text-white' : 'bg-[#14161d] border-gray-600 text-gray-600'}`}>
-                  {isReady ? '✓' : ''}
-                </button>
-                <div className="flex-1">
-                  <div className="text-xl font-bold text-white">{m.count} plaque{m.count > 1 ? 's' : ''}</div>
-                  <div className="text-lg text-amber-400">{m.material}</div>
-                  <div className="text-sm text-gray-500">3210 x 2550</div>
+              <div key={m.material} className={`p-5 rounded-2xl border mb-3 transition-colors ${
+                isReady ? 'bg-green-900/20 border-green-500/30' : isPartial ? 'bg-amber-900/20 border-amber-500/30' : 'bg-[#181a20] border-[#2a2d35]'}`}>
+                <div className="flex items-center gap-4">
+                  <button onClick={async () => {
+                    const newPrep = { ...savedPrep, [m.material]: { ...prep, needed: m.count, ready: !isReady, found: prep?.found ?? m.count, nc_qty: prep?.nc_qty ?? 0, nc_notes: prep?.nc_notes ?? '' } };
+                    await patchJSON(`/api/production/lots/${selectedLot.id}/preparation`, { preparation: newPrep });
+                    onReload();
+                  }} className={`w-12 h-12 rounded-xl border-2 flex items-center justify-center text-2xl transition-colors active:scale-90 shrink-0 ${
+                    isReady ? 'bg-green-600 border-green-400 text-white' : 'bg-[#14161d] border-gray-600 text-gray-600'}`}>
+                    {isReady ? '✓' : ''}
+                  </button>
+                  <div className="flex-1">
+                    <div className="text-xl font-bold text-white">{m.material}</div>
+                    <div className="text-sm text-gray-500">3210 x 2550</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="flex items-center gap-2">
+                      <span className="text-gray-400 text-sm">Trouvees:</span>
+                      <button onClick={async () => {
+                        const newFound = Math.max(0, (prep?.found ?? m.count) - 1);
+                        const newPrep = { ...savedPrep, [m.material]: { ...prep, needed: m.count, found: newFound, ready: prep?.ready ?? false, nc_qty: prep?.nc_qty ?? 0, nc_notes: prep?.nc_notes ?? '' } };
+                        await patchJSON(`/api/production/lots/${selectedLot.id}/preparation`, { preparation: newPrep });
+                        onReload();
+                      }} className="w-10 h-10 bg-[#14161d] border border-gray-600 rounded-lg text-white text-xl font-bold active:scale-90">−</button>
+                      <span className={`text-2xl font-black min-w-[60px] text-center ${isPartial ? 'text-amber-400' : 'text-green-400'}`}>
+                        {found}/{m.count}
+                      </span>
+                      <button onClick={async () => {
+                        const newFound = Math.min(m.count, (prep?.found ?? m.count) + 1);
+                        const newPrep = { ...savedPrep, [m.material]: { ...prep, needed: m.count, found: newFound, ready: prep?.ready ?? false, nc_qty: prep?.nc_qty ?? 0, nc_notes: prep?.nc_notes ?? '' } };
+                        await patchJSON(`/api/production/lots/${selectedLot.id}/preparation`, { preparation: newPrep });
+                        onReload();
+                      }} className="w-10 h-10 bg-[#14161d] border border-gray-600 rounded-lg text-white text-xl font-bold active:scale-90">+</button>
+                    </div>
+                    {isPartial && <div className="text-amber-400 text-sm font-bold mt-1">INCOMPLET</div>}
+                    {isReady && !isPartial && <div className="text-green-400 text-sm font-bold mt-1">PRET</div>}
+                  </div>
                 </div>
-                {isReady && <span className="text-green-400 text-2xl font-bold">PRET</span>}
               </div>
             );
           })}

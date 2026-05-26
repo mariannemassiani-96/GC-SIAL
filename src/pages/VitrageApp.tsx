@@ -550,7 +550,7 @@ function TabTracabilite({ commandeRef }: { commandeRef: string }) {
             </tr>
           </thead>
           <tbody>
-            {[...vitrageMap.entries()].map(([key, pcs]) =>
+            {[...vitrageMap.entries()].map(([, pcs]) =>
               pcs.map((p, i) => (
                 <tr key={p.id} className={`border-b border-[#1e2028] ${i === 0 && pcs.length > 1 ? '' : ''}`}>
                   {i === 0 && (
