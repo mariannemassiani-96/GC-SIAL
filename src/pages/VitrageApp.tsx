@@ -168,6 +168,40 @@ function Dashboard({ commandes, onSelect, onNew, onDelete, onBatch }: {
 
 // ── Backend-aware optimization hook ──────────────────────────────────
 
+function mapBackendResults(raw: Record<string, unknown>[]): GlassOptimResult[] {
+  return raw.map((r: Record<string, unknown>) => ({
+    material: r.material as string,
+    plates: ((r.plates as Record<string, unknown>[]) ?? []).map((p: Record<string, unknown>, i: number) => ({
+      numero: (p.numero as number) ?? i + 1,
+      material: (p.material as string) ?? '',
+      plateWidth: (p.plateWidth ?? p.plate_width ?? 3210) as number,
+      plateHeight: (p.plateHeight ?? p.plate_height ?? 2550) as number,
+      pieces: ((p.pieces as Record<string, unknown>[]) ?? []).map((pc: Record<string, unknown>) => ({
+        vitrageId: (pc.vitrageId ?? pc.vitrage_id ?? pc.id ?? '') as string,
+        vitrageRef: (pc.vitrageRef ?? pc.vitrage_ref ?? '') as string,
+        width: (pc.width ?? 0) as number,
+        height: (pc.height ?? 0) as number,
+        material: (pc.material ?? '') as string,
+        face: (pc.face ?? 'EXT') as 'EXT' | 'INT',
+        noRotation: (pc.noRotation ?? pc.no_rotation ?? false) as boolean,
+        x: (pc.x ?? 0) as number,
+        y: (pc.y ?? 0) as number,
+        rotated: (pc.rotated ?? false) as boolean,
+      })),
+      utilisation: (p.utilisation ?? 0) as number,
+      remnants: ((p.remnants as Record<string, unknown>[]) ?? []).map((rem: Record<string, unknown>) => ({
+        x: (rem.x ?? 0) as number, y: (rem.y ?? 0) as number,
+        w: (rem.w ?? 0) as number, h: (rem.h ?? 0) as number,
+        classe: (rem.classe ?? 'poussiere') as 'poussiere' | 'interdit' | 'surveiller' | 'stockable',
+      })),
+      hasInterdit: (p.hasInterdit ?? p.has_interdit ?? p.has_forbidden ?? false) as boolean,
+    })),
+    totalPlates: (r.totalPlates ?? r.total_plates ?? 0) as number,
+    totalPieces: (r.totalPieces ?? r.total_pieces ?? 0) as number,
+    tauxUtilisation: (r.tauxUtilisation ?? r.utilisation ?? 0) as number,
+  }));
+}
+
 function useOptimization(vitrages: Vitrage[], glass: GlassSettings) {
   const [glassResult, setGlassResult] = useState<GlassOptimResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -198,7 +232,7 @@ function useOptimization(vitrages: Vitrage[], glass: GlassSettings) {
             cutting_gap: glass.cuttingGap,
           });
           if (!cancelled) {
-            setGlassResult(resp.results as GlassOptimResult[]);
+            setGlassResult(mapBackendResults(resp.results as Record<string, unknown>[]));
             setBackend(true);
           }
           setLoading(false);
