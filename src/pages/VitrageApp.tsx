@@ -1,9 +1,10 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import type {
-  Commande, Vitrage, AverySettings, WESettings, GlassSettings,
-  CommandeStatut, WEGroupe, GlassOptimResult, OptimizedPlate, LotFabrication, EMPTY_LOT,
-  DEFAULT_AVERY, DEFAULT_WE, DEFAULT_GLASS,
-  STATUT_LABELS, STATUT_COLORS,
+  type Commande, type Vitrage, type AverySettings, type WESettings, type GlassSettings,
+  type CommandeStatut, type WEGroupe, type GlassOptimResult, type OptimizedPlate, type LotFabrication,
+} from '../vitrage/types';
+import {
+  EMPTY_LOT, DEFAULT_AVERY, DEFAULT_WE, DEFAULT_GLASS, STATUT_LABELS, STATUT_COLORS,
 } from '../vitrage/types';
 import { parseVitrageSpec } from '../vitrage/parseVitrageSpec';
 import { parseExcelFile, parseCSVText, type ParseResult } from '../vitrage/parseExcel';
