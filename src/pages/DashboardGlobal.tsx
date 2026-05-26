@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { ArrowLeft, Search, X, AlertTriangle, ChevronDown, ChevronUp, Plus, Save, Upload, CheckCircle, Send, FileText } from 'lucide-react';
-import { listCommandesGlobales, upsertCommandeGlobale, type CommandeGlobale, type ModuleStatus } from '../api';
+import { listCommandesGlobales, upsertCommandeGlobale, getProductionStatsByCommande, type CommandeGlobale, type ModuleStatus } from '../api';
 import { parseExcelFile, parseCSVText } from '../vitrage/parseExcel';
 import { parseFstlineFile, type FstJob } from '../atelier/fstlineParser';
 import type { Vitrage } from '../vitrage/types';
@@ -408,8 +408,10 @@ function ImportSlotCoupe({
 
 // ── Production Stats Section ────────────────────────────────────────
 
+type ProdStat = { poste: string; action: string; user_nom: string; count: number; first_at: string; last_at: string };
+
 function ProductionStatsSection({ cmdRef }: { cmdRef: string }) {
-  const [stats, setStats] = useState<{ poste: string; action: string; user_nom: string; count: number; first_at: string; last_at: string }[]>([]);
+  const [stats, setStats] = useState<ProdStat[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
