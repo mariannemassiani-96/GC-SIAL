@@ -49,6 +49,7 @@ export interface GlassPiece {
   height: number;
   material: string;
   face: 'EXT' | 'INT';
+  noRotation: boolean;
 }
 
 export interface PlacedPiece extends GlassPiece {
@@ -154,7 +155,7 @@ export const DEFAULT_WE: WESettings = {
 export const DEFAULT_GLASS: GlassSettings = {
   plateWidth: 3210,
   plateHeight: 2550,
-  cuttingGap: 5,
+  cuttingGap: 0,
   edgeTrimMargin: 15,
 };
 
