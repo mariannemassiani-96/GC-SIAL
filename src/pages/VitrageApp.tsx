@@ -43,12 +43,14 @@ function download(blob: Blob, name: string) {
 }
 
 function syncVitrageToGlobal(commande: Commande) {
-  patchCommandeModule(commande.reference, 'vitrage', {
+  const ref = commande.reference.trim();
+  if (!ref) return;
+  patchCommandeModule(ref, 'vitrage', {
     statut: commande.statut === 'terminee' ? 'termine' : commande.statut === 'en_cours' ? 'en_cours' : 'attente',
     total: commande.vitrages.length, fait: 0, nc: 0,
   }).catch(() => {});
-  upsertCommandeGlobale(commande.reference, {
-    client: commande.client || '', chantier: commande.client || '',
+  upsertCommandeGlobale(ref, {
+    client: (commande.client || '').trim(), chantier: (commande.client || '').trim(),
     semaine_fab: commande.semaineFabrication || '', semaine_liv: commande.semaineLivraison || '',
   }).catch(() => {});
 }
