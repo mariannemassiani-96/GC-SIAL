@@ -524,7 +524,7 @@ function WorkflowBar({ lot, pieces, onReload }: { lot: Lot; pieces: Piece[]; onR
               FORCER VALIDATION (superviseur)
             </button>
           )}
-          {canAdvance && statut !== 'termine' && (
+          {canAdvance && String(statut) !== 'termine' && (
             <button onClick={advance}
               className="px-3 py-1.5 bg-green-600 hover:bg-green-500 text-white text-xs font-bold rounded transition-colors">
               PASSER A L'ETAPE SUIVANTE →
