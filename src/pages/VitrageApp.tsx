@@ -270,7 +270,7 @@ function useOptimization(vitrages: Vitrage[], glass: GlassSettings) {
 
 // ── Order Detail ─────────────────────────────────────────────────────
 
-const TABS = ['Import', 'Vitrages'] as const;
+const TABS = ['Import', 'Vitrages', 'Tracabilite'] as const;
 
 function OrderDetail({ commande, onUpdate, onBack }: {
   commande: Commande;
@@ -320,6 +320,7 @@ function OrderDetail({ commande, onUpdate, onBack }: {
 
       {tab === 0 && <TabImport vitrages={c.vitrages} onUpdate={v => onUpdate({ vitrages: v })} onSetRef={ref => onUpdate({ reference: ref })} chantier={c.client} />}
       {tab === 1 && <TabVitrages vitrages={c.vitrages} onUpdate={v => onUpdate({ vitrages: v })} />}
+      {tab === 2 && <TabTracabilite commandeRef={c.reference} />}
     </div>
   );
 }
@@ -458,6 +459,124 @@ function TabVitrages({ vitrages, onUpdate }: { vitrages: Vitrage[]; onUpdate: (v
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+// ── Tab: Tracabilite ────────────────────────────────────────────────
+
+interface TracaPiece {
+  id: string;
+  commande_ref: string;
+  vitrage_ref: string;
+  vitrage_id: string;
+  face: string;
+  material: string;
+  largeur: number;
+  hauteur: number;
+  lot_verre: string;
+  date_coupe: string | null;
+  date_assemblage: string | null;
+  lot_reference: string;
+  lot_matieres: Record<string, string> | null;
+}
+
+function TabTracabilite({ commandeRef }: { commandeRef: string }) {
+  const [pieces, setPieces] = useState<TracaPiece[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!commandeRef) return;
+    setLoading(true);
+    setError('');
+    const API_URL = import.meta.env.VITE_ISULA_API_URL as string || '';
+    fetch(`${API_URL}/api/production/pieces/by-commande/${encodeURIComponent(commandeRef)}`)
+      .then(res => {
+        if (!res.ok) throw new Error(`${res.status}`);
+        return res.json();
+      })
+      .then((data: TracaPiece[]) => setPieces(data))
+      .catch(err => setError(`Erreur: ${err.message}`))
+      .finally(() => setLoading(false));
+  }, [commandeRef]);
+
+  if (loading) return <p className="text-blue-400 text-sm">Chargement de la tracabilite...</p>;
+  if (error) return <p className="text-red-400 text-sm">{error}</p>;
+  if (pieces.length === 0) return <p className="text-gray-500 text-sm">Aucune donnee de production pour cette commande. La commande doit etre dans un lot de production.</p>;
+
+  // Group by vitrage
+  const vitrageMap = new Map<string, TracaPiece[]>();
+  for (const p of pieces) {
+    const key = p.vitrage_id || p.vitrage_ref;
+    const arr = vitrageMap.get(key) || [];
+    arr.push(p);
+    vitrageMap.set(key, arr);
+  }
+
+  // Get lot_matieres from first piece that has it
+  const lotMatieres = pieces.find(p => p.lot_matieres)?.lot_matieres || null;
+
+  return (
+    <div className="space-y-4">
+      <h4 className="text-sm font-semibold text-gray-300">Tracabilite - {commandeRef}</h4>
+
+      {lotMatieres && Object.keys(lotMatieres).length > 0 && (
+        <div className="bg-[#181a20] rounded-lg p-4 border border-[#2a2d35]">
+          <div className="text-xs font-semibold text-gray-400 mb-2">Matieres du lot</div>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+            {Object.entries(lotMatieres).map(([key, val]) => (
+              <div key={key} className="text-xs">
+                <span className="text-gray-500">{key}: </span>
+                <span className="text-white">{val || '-'}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="text-gray-400 border-b border-[#2a2d35]">
+              <th className="text-left py-2 px-2">Vitrage</th>
+              <th className="text-left py-2 px-2">Face</th>
+              <th className="text-left py-2 px-2">Materiau</th>
+              <th className="text-right py-2 px-2">Dimensions</th>
+              <th className="text-left py-2 px-2">Lot verre</th>
+              <th className="text-left py-2 px-2">Date coupe</th>
+              <th className="text-left py-2 px-2">Date assemblage</th>
+              <th className="text-left py-2 px-2">Lot production</th>
+            </tr>
+          </thead>
+          <tbody>
+            {[...vitrageMap.entries()].map(([key, pcs]) =>
+              pcs.map((p, i) => (
+                <tr key={p.id} className={`border-b border-[#1e2028] ${i === 0 && pcs.length > 1 ? '' : ''}`}>
+                  {i === 0 && (
+                    <td rowSpan={pcs.length} className="py-1.5 px-2 text-white font-semibold align-top">
+                      {p.vitrage_ref}
+                    </td>
+                  )}
+                  <td className={`py-1.5 px-2 ${p.face === 'EXT' ? 'text-red-400' : 'text-blue-400'}`}>{p.face}</td>
+                  <td className="py-1.5 px-2 text-gray-300">{p.material}</td>
+                  <td className="py-1.5 px-2 text-white text-right">{p.largeur}x{p.hauteur}</td>
+                  <td className="py-1.5 px-2 text-green-400">{p.lot_verre || '-'}</td>
+                  <td className="py-1.5 px-2 text-gray-300">
+                    {p.date_coupe ? new Date(p.date_coupe).toLocaleDateString('fr-FR') : '-'}
+                  </td>
+                  <td className="py-1.5 px-2 text-gray-300">
+                    {p.date_assemblage ? new Date(p.date_assemblage).toLocaleDateString('fr-FR') : '-'}
+                  </td>
+                  {i === 0 && (
+                    <td rowSpan={pcs.length} className="py-1.5 px-2 text-gray-400 align-top">{p.lot_reference}</td>
+                  )}
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

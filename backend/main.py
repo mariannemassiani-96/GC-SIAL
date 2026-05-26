@@ -289,6 +289,16 @@ def api_update_preparation(lot_id: str, data: dict = Body(...)):
     return {"ok": True}
 
 
+@app.get("/api/production/pieces/by-commande/{commande_ref}")
+def api_pieces_by_commande(commande_ref: str):
+    rows = dbp.get_pieces_by_commande(commande_ref)
+    for r in rows:
+        for k in list(r.keys()):
+            if hasattr(r[k], 'isoformat'):
+                r[k] = r[k].isoformat()
+    return rows
+
+
 @app.get("/api/production/stats")
 def api_production_stats(lot_id: str | None = None, semaine: str | None = None):
     return dbp.get_stats(lot_id, semaine)
