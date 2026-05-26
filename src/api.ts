@@ -126,6 +126,20 @@ export async function updateUser(id: number, data: Partial<{ nom: string; role: 
   await request('PUT', `/api/users/${id}`, data);
 }
 
+// ── Production Events (time tracking) ─────────────────────────────
+
+export async function logProductionEvent(data: { commande_ref: string; poste: string; action: string; piece_ref?: string; detail?: string }): Promise<void> {
+  await request('POST', '/api/production-events', data);
+}
+
+export async function getProductionEvents(ref: string): Promise<{ poste: string; action: string; user_nom: string; piece_ref: string; created_at: string }[]> {
+  return request('GET', `/api/production-events/${encodeURIComponent(ref)}`);
+}
+
+export async function getProductionStatsByCommande(ref: string): Promise<{ poste: string; action: string; user_nom: string; count: number; first_at: string; last_at: string }[]> {
+  return request('GET', `/api/production-stats/by-commande/${encodeURIComponent(ref)}`);
+}
+
 // ── Profile Images Library ─────────────────────────────────────────
 
 export async function getProfileImages(codes: string[]): Promise<Record<string, string>> {

@@ -259,6 +259,52 @@ app.patch('/api/commandes-globales/:ref/:module', authMiddleware, (req, res) => 
 });
 
 // ══════════════════════════════════════════════════════════════
+// PRODUCTION EVENTS (time tracking)
+// ══════════════════════════════════════════════════════════════
+
+app.post('/api/production-events', authMiddleware, (req, res) => {
+  const { commande_ref, poste, action, piece_ref, detail } = req.body;
+  if (!commande_ref || !poste || !action) return res.status(400).json({ error: 'commande_ref, poste, action requis' });
+  db.prepare('INSERT INTO production_events (commande_ref, poste, user_id, user_nom, action, piece_ref, detail) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    .run(commande_ref, poste, req.user.id, req.user.nom || '', action, piece_ref || '', detail || '');
+  res.json({ ok: true });
+});
+
+app.get('/api/production-events/:ref', authMiddleware, (req, res) => {
+  const rows = db.prepare('SELECT * FROM production_events WHERE commande_ref = ? ORDER BY created_at').all(req.params.ref);
+  res.json(rows);
+});
+
+app.get('/api/production-events/:ref/:poste', authMiddleware, (req, res) => {
+  const rows = db.prepare('SELECT * FROM production_events WHERE commande_ref = ? AND poste = ? ORDER BY created_at').all(req.params.ref, req.params.poste);
+  res.json(rows);
+});
+
+app.get('/api/production-stats/by-user', authMiddleware, (req, res) => {
+  const days = parseInt(req.query.days) || 30;
+  const rows = db.prepare(`
+    SELECT user_id, user_nom, poste, action, COUNT(*) as count,
+      MIN(created_at) as first_at, MAX(created_at) as last_at
+    FROM production_events
+    WHERE created_at >= datetime('now', '-' || ? || ' days')
+    GROUP BY user_id, poste, action
+    ORDER BY count DESC
+  `).all(days);
+  res.json(rows);
+});
+
+app.get('/api/production-stats/by-commande/:ref', authMiddleware, (req, res) => {
+  const rows = db.prepare(`
+    SELECT poste, action, user_nom, COUNT(*) as count,
+      MIN(created_at) as first_at, MAX(created_at) as last_at
+    FROM production_events WHERE commande_ref = ?
+    GROUP BY poste, action, user_nom
+    ORDER BY poste, first_at
+  `).all(req.params.ref);
+  res.json(rows);
+});
+
+// ══════════════════════════════════════════════════════════════
 // PROFILE IMAGES LIBRARY (auto-cache)
 // ══════════════════════════════════════════════════════════════
 
