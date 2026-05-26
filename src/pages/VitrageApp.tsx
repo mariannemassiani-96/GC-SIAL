@@ -539,17 +539,21 @@ function PlatePreview({ plate }: { plate: OptimizedPlate }) {
           const effW = p.rotated ? p.height : p.width;
           const effH = p.rotated ? p.width : p.height;
           const fs = Math.min(5, pw / 12, ph / 4);
-          const blues = ['#0000CC', '#0033AA', '#1144BB', '#0022DD', '#2255AA', '#0044CC', '#1133BB', '#0055AA'];
+          const fills = ['#0000CC', '#2244AA', '#0033BB', '#1155CC', '#003399', '#2266BB', '#004488', '#1144AA'];
           return (
             <g key={i}>
               <rect x={rx} y={ry} width={pw} height={ph}
-                fill={blues[i % blues.length]} stroke="#fff" strokeWidth={1} />
-              {fs > 1.8 && <text x={rx + pw / 2} y={ry + ph / 2 - fs * 0.3}
-                textAnchor="middle" dominantBaseline="middle" fill="white" fontSize={fs} fontWeight="bold">
+                fill={fills[i % fills.length]} stroke="#FFD700" strokeWidth={1.5} />
+              <text x={rx + pw / 2} y={ry + ph / 2 - (fs > 2 ? fs * 0.5 : 0)}
+                textAnchor="middle" dominantBaseline="middle" fill="#FFD700" fontSize={Math.max(fs, 4)} fontWeight="bold">
+                {i + 1}
+              </text>
+              {fs > 2 && <text x={rx + pw / 2} y={ry + ph / 2 + fs * 0.3}
+                textAnchor="middle" dominantBaseline="middle" fill="white" fontSize={fs * 0.8}>
                 {p.vitrageRef}
               </text>}
-              {fs > 1.5 && <text x={rx + pw / 2} y={ry + ph / 2 + fs * 0.7}
-                textAnchor="middle" dominantBaseline="middle" fill="#cce" fontSize={fs * 0.7}>
+              {fs > 2.5 && <text x={rx + pw / 2} y={ry + ph / 2 + fs * 1.1}
+                textAnchor="middle" dominantBaseline="middle" fill="#aac" fontSize={fs * 0.65}>
                 {effW}x{effH}
               </text>}
             </g>
