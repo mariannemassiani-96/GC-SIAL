@@ -22,6 +22,7 @@ import {
   fetchGlassProducts, upsertGlassProduct, deleteGlassProduct,
   fetchStockPlates, upsertStockPlate, deleteStockPlate,
 } from '../vitrage/store';
+import { patchCommandeModule, upsertCommandeGlobale } from '../api';
 import type { GlassProduct, StockPlate } from '../vitrage/types';
 import { v4 as uuid } from 'uuid';
 
@@ -39,6 +40,17 @@ function download(blob: Blob, name: string) {
   const a = document.createElement('a');
   a.href = url; a.download = name; a.click();
   URL.revokeObjectURL(url);
+}
+
+function syncVitrageToGlobal(commande: Commande) {
+  patchCommandeModule(commande.reference, 'vitrage', {
+    statut: commande.statut === 'terminee' ? 'termine' : commande.statut === 'en_cours' ? 'en_cours' : 'attente',
+    total: commande.vitrages.length, fait: 0, nc: 0,
+  }).catch(() => {});
+  upsertCommandeGlobale(commande.reference, {
+    client: commande.client || '', chantier: commande.client || '',
+    semaine_fab: commande.semaineFabrication || '', semaine_liv: commande.semaineLivraison || '',
+  }).catch(() => {});
 }
 
 // ── Dashboard ────────────────────────────────────────────────────────
@@ -884,6 +896,16 @@ function BatchView({ commandes, onBack, avery, we, glass }: {
           glass_optim: glassResult, we_optim: weResult,
         }),
       });
+      // Sync each commande to global dashboard (fire-and-forget)
+      for (const c of commandes) {
+        syncVitrageToGlobal(c);
+        patchCommandeModule(c.reference, 'vitrage', {
+          statut: 'en_cours',
+          total: c.vitrages.length,
+          fait: 0,
+          nc: 0,
+        }).catch(() => {});
+      }
       alert(`Lot ${ref} cree avec ${prodPieces.length} pieces verre + ${weProd.length} WE`);
     } catch (err) { alert(`Erreur : ${err}`); }
     setSending(false);
@@ -1214,6 +1236,7 @@ export function VitrageApp({ onBack }: { onBack: () => void }) {
       await insertCommande(cmd);
       setCommandes(prev => [cmd, ...prev]);
       setView({ type: 'order', id: cmd.id });
+      syncVitrageToGlobal(cmd);
     } catch (err) { setError(`Erreur creation : ${err}`); }
   };
 
@@ -1234,7 +1257,19 @@ export function VitrageApp({ onBack }: { onBack: () => void }) {
     saveTimer.current = setTimeout(async () => {
       const toSave = { ...pendingPatch.current };
       pendingPatch.current = {};
-      try { await patchCommande(id, toSave as Partial<Commande>); } catch (err) { console.error('Save error:', err); }
+      try {
+        await patchCommande(id, toSave as Partial<Commande>);
+        // Sync to global dashboard when relevant fields change
+        if ('vitrages' in toSave || 'statut' in toSave || 'client' in toSave || 'reference' in toSave || 'semaineFabrication' in toSave || 'semaineLivraison' in toSave) {
+          setCommandes(prev => {
+            const cmd = prev.find(c => c.id === id);
+            if (cmd) {
+              syncVitrageToGlobal(cmd);
+            }
+            return prev;
+          });
+        }
+      } catch (err) { console.error('Save error:', err); }
     }, 800);
   }, []);
 
