@@ -1,6 +1,7 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
-import { ArrowLeft, Upload, FileText, FileCode2, Trash2, X, Search, ChevronRight, Scissors, Plus, RefreshCw, Send, History, Layers, AlertCircle, Check, AlertTriangle, RotateCcw, Calendar, BarChart3, Users } from 'lucide-react';
+import { ArrowLeft, Upload, FileText, FileCode2, Trash2, X, Search, ChevronRight, Scissors, Plus, RefreshCw, Send, History, Layers, AlertCircle, Check, AlertTriangle, RotateCcw, Calendar, BarChart3, Users, Download } from 'lucide-react';
 import { v4 as uid } from 'uuid';
+import * as XLSX from 'xlsx';
 import { useApiState } from '../../useApiState';
 import { useAuth } from '../../AuthContext';
 import {
@@ -1579,6 +1580,108 @@ function TaskRow({
   );
 }
 
+// ── Exports Excel ────────────────────────────────────────────────────
+
+function downloadXlsx(rows: (string | number)[][], sheetName: string, filename: string) {
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  XLSX.writeFile(wb, filename);
+}
+
+function exportCommandesXlsx(commandes: Commande[]) {
+  const rows: (string | number)[][] = [
+    ['Réf', 'Nom chantier', 'Date', 'Machine', 'Statut', 'Envoyée atelier',
+      'Envoyée par', 'Envoyée le', 'Date assignée',
+      'PDF', 'XML', 'Total pièces', 'Pièces coupées', 'Pourcentage',
+      'Notes', 'Importé le'],
+  ];
+  for (const c of commandes) {
+    for (const m of MACHINES) {
+      const opt = c.optimisations[m.id];
+      if (!opt) continue;
+      const total = opt.parsedOptim?.totalPieces ?? 0;
+      const coupes = opt.coupePieces ? Object.keys(opt.coupePieces).length : 0;
+      const pct = total > 0 ? `${Math.round((coupes / total) * 100)}%` : '';
+      rows.push([
+        c.ref, c.nom, c.date, m.label, STATUT_LABEL[opt.statut],
+        opt.envoyeeAtelier ? 'oui' : 'non',
+        opt.envoyeePar ?? '',
+        opt.envoyeeLe ? fmtDateTime(opt.envoyeeLe) : '',
+        opt.dateAssignee ?? '',
+        opt.pdfFilename ?? '',
+        opt.xmlFilename ?? '',
+        total, coupes, pct,
+        opt.notes,
+        fmtDateTime(opt.importedAt),
+      ]);
+    }
+  }
+  const today = new Date().toISOString().slice(0, 10);
+  downloadXlsx(rows, 'Commandes', `poste-coupe-commandes-${today}.xlsx`);
+}
+
+function exportJournalXlsx(commandes: Commande[], periode: Periode) {
+  const rows: (string | number)[][] = [
+    ['Réf', 'Nom chantier', 'Machine', 'Date/heure', 'Type', 'Utilisateur', 'Détails'],
+  ];
+  for (const c of commandes) {
+    for (const m of MACHINES) {
+      const opt = c.optimisations[m.id];
+      if (!opt) continue;
+      for (const ev of getEvents(opt)) {
+        if (!isoInPeriode(ev.date, periode)) continue;
+        rows.push([
+          c.ref, c.nom, m.label,
+          fmtDateTime(ev.date),
+          EVENT_LABEL[ev.type] ?? ev.type,
+          ev.userNom,
+          ev.details ?? '',
+        ]);
+      }
+    }
+  }
+  const today = new Date().toISOString().slice(0, 10);
+  downloadXlsx(rows, 'Journal', `poste-coupe-journal-${periode}-${today}.xlsx`);
+}
+
+function exportPiecesXlsx(commandes: Commande[], periode: Periode) {
+  const rows: (string | number)[][] = [
+    ['Réf', 'Nom chantier', 'Machine', 'Profilé', 'Désignation profilé',
+      'Barre #', 'Long. barre', 'Code-barre', 'Long. pièce',
+      'Angle G', 'Angle D', 'Typologie', 'Rôle', 'Dim. menuiserie',
+      'Nb usinages', 'Coupée', 'Coupée par', 'Coupée le'],
+  ];
+  for (const c of commandes) {
+    for (const m of MACHINES) {
+      const opt = c.optimisations[m.id];
+      if (!opt?.parsedOptim) continue;
+      const coupePieces = opt.coupePieces ?? {};
+      for (const b of opt.parsedOptim.barres) {
+        for (const p of b.pieces) {
+          const info = coupePieces[p.barcode];
+          // Si on filtre par période, ne garder que les pièces coupées dans la période
+          if (periode !== 'tout' && info && !isoInPeriode(info.coupeLe, periode)) continue;
+          rows.push([
+            c.ref, c.nom, m.label,
+            b.profilCode, b.profilDesc,
+            b.index, b.longueurBrute,
+            p.barcode, p.longueurInt,
+            p.angleG, p.angleD,
+            p.typologie, p.role, p.dimensionsMenuiserie ?? '',
+            p.machinings.length,
+            info ? 'oui' : 'non',
+            info?.coupePar ?? '',
+            info ? fmtDateTime(info.coupeLe) : '',
+          ]);
+        }
+      }
+    }
+  }
+  const today = new Date().toISOString().slice(0, 10);
+  downloadXlsx(rows, 'Pieces', `poste-coupe-pieces-${periode}-${today}.xlsx`);
+}
+
 // ── Tableau de bord manager ─────────────────────────────────────────
 
 type Periode = 'jour' | 'semaine' | 'mois' | 'tout';
@@ -1708,17 +1811,35 @@ function DashboardView({ commandes, onOpenCommande }: {
 
   return (
     <main className="flex-1 overflow-y-auto px-4 py-6 max-w-6xl mx-auto w-full space-y-5">
-      {/* Sélecteur période */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-[10px] text-gray-500 uppercase tracking-wide mr-1">Période :</span>
-        {(['jour', 'semaine', 'mois', 'tout'] as Periode[]).map(p => (
-          <button key={p} onClick={() => setPeriode(p)}
-            className={`px-3 py-1 rounded text-[11px] font-medium border transition-all ${
-              periode === p ? 'bg-blue-600/20 text-blue-300 border-blue-500/40' : 'text-gray-400 border-[#2a2d35] hover:border-[#404550]'
-            }`}>
-            {PERIODE_LABEL[p]}
+      {/* Sélecteur période + exports */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-[10px] text-gray-500 uppercase tracking-wide mr-1">Période :</span>
+          {(['jour', 'semaine', 'mois', 'tout'] as Periode[]).map(p => (
+            <button key={p} onClick={() => setPeriode(p)}
+              className={`px-3 py-1 rounded text-[11px] font-medium border transition-all ${
+                periode === p ? 'bg-blue-600/20 text-blue-300 border-blue-500/40' : 'text-gray-400 border-[#2a2d35] hover:border-[#404550]'
+              }`}>
+              {PERIODE_LABEL[p]}
+            </button>
+          ))}
+        </div>
+        <div className="flex-1" />
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-[10px] text-gray-500 uppercase tracking-wide mr-1">Export Excel :</span>
+          <button onClick={() => exportCommandesXlsx(commandes)}
+            className="flex items-center gap-1 px-2.5 py-1 bg-[#1c1e24] hover:bg-[#252830] border border-[#2a2d35] text-gray-300 text-[10px] font-medium rounded">
+            <Download size={11} /> Commandes
           </button>
-        ))}
+          <button onClick={() => exportJournalXlsx(commandes, periode)}
+            className="flex items-center gap-1 px-2.5 py-1 bg-[#1c1e24] hover:bg-[#252830] border border-[#2a2d35] text-gray-300 text-[10px] font-medium rounded">
+            <Download size={11} /> Journal ({PERIODE_LABEL[periode].toLowerCase()})
+          </button>
+          <button onClick={() => exportPiecesXlsx(commandes, periode)}
+            className="flex items-center gap-1 px-2.5 py-1 bg-[#1c1e24] hover:bg-[#252830] border border-[#2a2d35] text-gray-300 text-[10px] font-medium rounded">
+            <Download size={11} /> Pièces ({PERIODE_LABEL[periode].toLowerCase()})
+          </button>
+        </div>
       </div>
 
       {/* KPIs activité période */}
