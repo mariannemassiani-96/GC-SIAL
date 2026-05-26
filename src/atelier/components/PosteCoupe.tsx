@@ -400,7 +400,7 @@ export function PosteCoupe({ onBack, startAtelier }: Props) {
   }
 
   // ── Admin/Manager: List of Commandes ──
-  const filtered = allCommandes.filter(c => {
+  const filtered = commandes.filter(c => {
     if (!search) return true;
     const q = search.toLowerCase();
     return c.ref.toLowerCase().includes(q) || c.chantier.toLowerCase().includes(q);
@@ -549,7 +549,7 @@ function AtelierView({
 
   // ── Step: Preparation ──
   if (step === 'preparation') {
-    const activeCmds = allCommandes.filter(c => c.statut === 'envoyee' || c.statut === 'en_cours');
+    const activeCmds = commandes.filter(c => c.statut === 'envoyee' || c.statut === 'en_cours');
     const allBars: { commande: Commande; machine: MachineName; bar: FstBar }[] = [];
     for (const c of activeCmds) {
       for (const m of ['lmt65', 'dt', 'renfort'] as MachineName[]) {
@@ -582,7 +582,7 @@ function AtelierView({
             [...byProfile.entries()].map(([profileCode, items]) => {
               const desc = items[0]?.bar.description || profileCode;
               const total = items.length;
-              const prepared = items.filter(it => it.bar.cuts.every(c => c.statut !== 'a_couper' || c.coupePar !== '')).length;
+              const colorCode = items[0]?.bar.innerColor || items[0]?.bar.outerColor || '';
               const img = profileImgs[profileCode];
               return (
                 <div key={profileCode} className="mb-4 bg-[#181a20] rounded-xl border border-[#2a2d35] p-4">
@@ -594,6 +594,7 @@ function AtelierView({
                     <div className="flex-1">
                       <div className="text-lg font-bold text-white">{profileCode}</div>
                       <div className="text-sm text-gray-400">{desc}</div>
+                      {colorCode && <div className="text-xs text-amber-400 mt-0.5">Coloris: {colorCode}</div>}
                     </div>
                     <div className="text-right">
                       <div className="text-2xl font-black text-cyan-400">{total}</div>
@@ -605,11 +606,13 @@ function AtelierView({
                       const totalCuts = it.bar.cuts.length;
                       const barLen = it.bar.length;
                       const chantier = it.commande.chantier || it.commande.ref;
+                      const barColor = it.bar.innerColor || it.bar.outerColor || '';
                       return (
                         <div key={`${it.commande.id}_${it.bar.id}_${idx}`}
                           className="flex items-center gap-3 p-2 rounded-lg bg-[#14161d] border border-[#1e2028]">
                           <span className="text-xs text-gray-500 w-16 shrink-0">{MACHINE_LABELS[it.machine]}</span>
                           <span className="text-sm text-white font-mono">{barLen}mm</span>
+                          {barColor && <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-600/20 text-amber-400 border border-amber-500/30">{barColor}</span>}
                           <span className="text-xs text-gray-400 flex-1">{chantier} — {totalCuts} pcs</span>
                           <span className="text-xs text-green-400 font-bold">OK</span>
                         </div>
@@ -642,7 +645,7 @@ function AtelierView({
             <span className="block text-base opacity-80 mt-1">Preparer les profiles pour toutes les machines</span>
           </button>
           {(['lmt65', 'dt', 'renfort'] as MachineName[]).map(m => {
-            const count = allCommandes.filter(c =>
+            const count = commandes.filter(c =>
               (c.statut === 'envoyee' || c.statut === 'en_cours') && c.machines[m]?.fstlineJob
             ).length;
             return (

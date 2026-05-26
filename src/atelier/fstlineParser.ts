@@ -37,6 +37,8 @@ export interface FstBar {
   position: number;
   width: number;
   height: number;
+  innerColor: string;
+  outerColor: string;
   cuts: FstCut[];
   used: number;
   waste: number;
@@ -161,6 +163,8 @@ export function parseFstlineXML(content: string): FstJob {
       position: numOf(barEl, 'POS'),
       width: numOf(barEl, 'W'),
       height: numOf(barEl, 'H'),
+      innerColor: textOf(barEl, 'DICL'),
+      outerColor: textOf(barEl, 'DOCL'),
       cuts,
       used,
       waste: barLength - used,
