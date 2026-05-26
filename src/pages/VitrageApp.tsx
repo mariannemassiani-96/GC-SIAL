@@ -19,7 +19,10 @@ import { generateOptimVerrePDF } from '../vitrage/generateOptimPDF';
 import {
   fetchCommandes, insertCommande, patchCommande, removeCommande,
   fetchSettings, saveSettings, type Settings,
+  fetchGlassProducts, upsertGlassProduct, deleteGlassProduct,
+  fetchStockPlates, upsertStockPlate, deleteStockPlate,
 } from '../vitrage/store';
+import type { GlassProduct, StockPlate } from '../vitrage/types';
 import { v4 as uuid } from 'uuid';
 
 function getISOWeek(date: Date): string {
@@ -40,12 +43,13 @@ function download(blob: Blob, name: string) {
 
 // ── Dashboard ────────────────────────────────────────────────────────
 
-function Dashboard({ commandes, onSelect, onNew, onDelete, onBatch, onProduction }: {
+function Dashboard({ commandes, onSelect, onNew, onDelete, onBatch, onProduction, onStock }: {
   commandes: Commande[];
   onSelect: (id: string) => void;
   onNew: () => void;
   onDelete: (id: string) => void;
   onBatch: (ids: string[]) => void;
+  onStock: () => void;
   onProduction: () => void;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -83,6 +87,9 @@ function Dashboard({ commandes, onSelect, onNew, onDelete, onBatch, onProduction
               Envoyer en coupe ({selected.size} cmd — {selectedVitrages} vitrages)
             </button>
           )}
+          <button onClick={onStock} className="px-4 py-2 bg-purple-700 hover:bg-purple-600 text-white text-sm rounded-lg transition-colors">
+            Catalogue & Stock
+          </button>
           <button onClick={onProduction} className="px-4 py-2 bg-green-700 hover:bg-green-600 text-white text-sm rounded-lg transition-colors">
             Production
           </button>
@@ -936,9 +943,216 @@ function BatchView({ commandes, onBack, avery, we, glass }: {
   );
 }
 
+// ── Stock & Catalogue ────────────────────────────────────────────────
+
+function StockView({ onBack }: { onBack: () => void }) {
+  const [tab, setTab] = useState(0);
+  const [products, setProducts] = useState<GlassProduct[]>([]);
+  const [plates, setPlates] = useState<StockPlate[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      const [p, s] = await Promise.all([fetchGlassProducts(), fetchStockPlates()]);
+      setProducts(p); setPlates(s); setLoading(false);
+    })();
+  }, []);
+
+  const [editProduct, setEditProduct] = useState<Partial<GlassProduct> | null>(null);
+  const [editPlate, setEditPlate] = useState<Partial<StockPlate> | null>(null);
+
+  const saveProduct = async () => {
+    if (!editProduct?.code) return;
+    await upsertGlassProduct(editProduct as GlassProduct);
+    setProducts(await fetchGlassProducts());
+    setEditProduct(null);
+  };
+
+  const savePlate = async () => {
+    if (!editPlate?.glass_code) return;
+    await upsertStockPlate(editPlate as StockPlate);
+    setPlates(await fetchStockPlates());
+    setEditPlate(null);
+  };
+
+  const delProduct = async (id: string) => {
+    if (!confirm('Supprimer ce verre ?')) return;
+    await deleteGlassProduct(id);
+    setProducts(await fetchGlassProducts());
+  };
+
+  const delPlate = async (id: string) => {
+    if (!confirm('Supprimer cette plaque ?')) return;
+    await deleteStockPlate(id);
+    setPlates(await fetchStockPlates());
+  };
+
+  const tabs = ['Catalogue verres', 'Stock plaques'];
+
+  if (loading) return <p className="text-gray-500 text-center py-12">Chargement...</p>;
+
+  return (
+    <div className="max-w-6xl mx-auto px-6 py-6">
+      <div className="flex items-center gap-4 mb-6">
+        <button onClick={onBack} className="text-sm text-gray-500 hover:text-white">← Retour</button>
+        <h2 className="text-xl font-bold text-white">Catalogue & Stock</h2>
+      </div>
+
+      <div className="flex gap-1 mb-6 border-b border-[#2a2d35]">
+        {tabs.map((t, i) => (
+          <button key={i} onClick={() => setTab(i)}
+            className={`px-4 py-2 text-sm transition-colors ${tab === i ? 'text-purple-400 border-b-2 border-purple-400' : 'text-gray-500 hover:text-white'}`}>
+            {t}
+          </button>
+        ))}
+      </div>
+
+      {tab === 0 && (
+        <div>
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-sm font-semibold text-gray-300">{products.length} verres</h3>
+            <button onClick={() => setEditProduct({ code: '', label: '', type: 'clair', epaisseur: 4, has_coating: false, coating_face: '', ug_default: 0, fournisseur: '', notes: '' })}
+              className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white text-sm rounded">+ Ajouter</button>
+          </div>
+
+          {editProduct && (
+            <div className="bg-[#181a20] rounded-lg p-4 border border-purple-500/30 mb-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                <input placeholder="Code *" value={editProduct.code ?? ''} onChange={e => setEditProduct({ ...editProduct, code: e.target.value })}
+                  className="bg-[#14161d] rounded px-2 py-1.5 text-white border border-[#2a2d35]" />
+                <input placeholder="Label" value={editProduct.label ?? ''} onChange={e => setEditProduct({ ...editProduct, label: e.target.value })}
+                  className="bg-[#14161d] rounded px-2 py-1.5 text-white border border-[#2a2d35]" />
+                <select value={editProduct.type ?? 'clair'} onChange={e => setEditProduct({ ...editProduct, type: e.target.value as GlassProduct['type'] })}
+                  className="bg-[#14161d] rounded px-2 py-1.5 text-white border border-[#2a2d35]">
+                  <option value="clair">Clair</option><option value="float">Float</option>
+                  <option value="couche">Couche</option><option value="trempe">Trempe</option>
+                  <option value="feuillete">Feuillete</option>
+                </select>
+                <input type="number" placeholder="Epaisseur" value={editProduct.epaisseur ?? 4} onChange={e => setEditProduct({ ...editProduct, epaisseur: +e.target.value })}
+                  className="bg-[#14161d] rounded px-2 py-1.5 text-white border border-[#2a2d35]" />
+                <label className="flex items-center gap-2 text-gray-300 col-span-2">
+                  <input type="checkbox" checked={editProduct.has_coating ?? false} onChange={e => setEditProduct({ ...editProduct, has_coating: e.target.checked })} />
+                  Couche (pas de rotation)
+                </label>
+                <input placeholder="Fournisseur" value={editProduct.fournisseur ?? ''} onChange={e => setEditProduct({ ...editProduct, fournisseur: e.target.value })}
+                  className="bg-[#14161d] rounded px-2 py-1.5 text-white border border-[#2a2d35]" />
+                <input type="number" step="0.1" placeholder="Ug" value={editProduct.ug_default ?? 0} onChange={e => setEditProduct({ ...editProduct, ug_default: +e.target.value })}
+                  className="bg-[#14161d] rounded px-2 py-1.5 text-white border border-[#2a2d35]" />
+              </div>
+              <div className="flex gap-2 mt-3">
+                <button onClick={saveProduct} className="px-3 py-1 bg-green-600 hover:bg-green-500 text-white text-sm rounded">Enregistrer</button>
+                <button onClick={() => setEditProduct(null)} className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded">Annuler</button>
+              </div>
+            </div>
+          )}
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead><tr className="text-gray-400 border-b border-[#2a2d35]">
+                <th className="text-left py-2 px-2">Code</th>
+                <th className="text-left py-2 px-2">Label</th>
+                <th className="text-left py-2 px-2">Type</th>
+                <th className="text-right py-2 px-2">Ep.</th>
+                <th className="text-center py-2 px-2">Couche</th>
+                <th className="text-left py-2 px-2">Fournisseur</th>
+                <th className="text-right py-2 px-2">Ug</th>
+                <th className="py-2 px-2 w-20"></th>
+              </tr></thead>
+              <tbody>
+                {products.map(p => (
+                  <tr key={p.id} className="border-b border-[#1e2028] hover:bg-[#1a1c24]">
+                    <td className="py-1.5 px-2 text-white font-medium">{p.code}</td>
+                    <td className="py-1.5 px-2 text-gray-300">{p.label}</td>
+                    <td className="py-1.5 px-2 text-gray-400">{p.type}</td>
+                    <td className="py-1.5 px-2 text-white text-right">{p.epaisseur}mm</td>
+                    <td className="py-1.5 px-2 text-center">{p.has_coating ? '●' : '—'}</td>
+                    <td className="py-1.5 px-2 text-gray-400">{p.fournisseur}</td>
+                    <td className="py-1.5 px-2 text-white text-right">{p.ug_default || '—'}</td>
+                    <td className="py-1.5 px-2 text-right">
+                      <button onClick={() => setEditProduct(p)} className="text-blue-400 hover:text-blue-300 text-xs mr-2">Modifier</button>
+                      <button onClick={() => delProduct(p.id)} className="text-red-400 hover:text-red-300 text-xs">Suppr.</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {tab === 1 && (
+        <div>
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-sm font-semibold text-gray-300">{plates.length} references en stock</h3>
+            <button onClick={() => setEditPlate({ glass_code: products[0]?.code ?? '', width: 3210, height: 2550, quantity: 1, emplacement: '', fournisseur: '', lot_fournisseur: '' })}
+              className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white text-sm rounded">+ Ajouter</button>
+          </div>
+
+          {editPlate && (
+            <div className="bg-[#181a20] rounded-lg p-4 border border-purple-500/30 mb-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                <select value={editPlate.glass_code ?? ''} onChange={e => setEditPlate({ ...editPlate, glass_code: e.target.value })}
+                  className="bg-[#14161d] rounded px-2 py-1.5 text-white border border-[#2a2d35]">
+                  {products.map(p => <option key={p.code} value={p.code}>{p.code}</option>)}
+                </select>
+                <input type="number" placeholder="Largeur" value={editPlate.width ?? 3210} onChange={e => setEditPlate({ ...editPlate, width: +e.target.value })}
+                  className="bg-[#14161d] rounded px-2 py-1.5 text-white border border-[#2a2d35]" />
+                <input type="number" placeholder="Hauteur" value={editPlate.height ?? 2550} onChange={e => setEditPlate({ ...editPlate, height: +e.target.value })}
+                  className="bg-[#14161d] rounded px-2 py-1.5 text-white border border-[#2a2d35]" />
+                <input type="number" placeholder="Quantite" value={editPlate.quantity ?? 1} onChange={e => setEditPlate({ ...editPlate, quantity: +e.target.value })}
+                  className="bg-[#14161d] rounded px-2 py-1.5 text-white border border-[#2a2d35]" />
+                <input placeholder="Emplacement" value={editPlate.emplacement ?? ''} onChange={e => setEditPlate({ ...editPlate, emplacement: e.target.value })}
+                  className="bg-[#14161d] rounded px-2 py-1.5 text-white border border-[#2a2d35]" />
+                <input placeholder="Fournisseur" value={editPlate.fournisseur ?? ''} onChange={e => setEditPlate({ ...editPlate, fournisseur: e.target.value })}
+                  className="bg-[#14161d] rounded px-2 py-1.5 text-white border border-[#2a2d35]" />
+                <input placeholder="Lot fournisseur" value={editPlate.lot_fournisseur ?? ''} onChange={e => setEditPlate({ ...editPlate, lot_fournisseur: e.target.value })}
+                  className="bg-[#14161d] rounded px-2 py-1.5 text-white border border-[#2a2d35]" />
+              </div>
+              <div className="flex gap-2 mt-3">
+                <button onClick={savePlate} className="px-3 py-1 bg-green-600 hover:bg-green-500 text-white text-sm rounded">Enregistrer</button>
+                <button onClick={() => setEditPlate(null)} className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded">Annuler</button>
+              </div>
+            </div>
+          )}
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead><tr className="text-gray-400 border-b border-[#2a2d35]">
+                <th className="text-left py-2 px-2">Verre</th>
+                <th className="text-right py-2 px-2">Dimensions</th>
+                <th className="text-right py-2 px-2">Quantite</th>
+                <th className="text-left py-2 px-2">Emplacement</th>
+                <th className="text-left py-2 px-2">Fournisseur</th>
+                <th className="text-left py-2 px-2">Lot</th>
+                <th className="py-2 px-2 w-20"></th>
+              </tr></thead>
+              <tbody>
+                {plates.map(p => (
+                  <tr key={p.id} className="border-b border-[#1e2028] hover:bg-[#1a1c24]">
+                    <td className="py-1.5 px-2 text-white font-medium">{p.glass_code}</td>
+                    <td className="py-1.5 px-2 text-white text-right">{p.width} x {p.height}</td>
+                    <td className="py-1.5 px-2 text-right"><span className={`font-bold ${p.quantity > 0 ? 'text-green-400' : 'text-red-400'}`}>{p.quantity}</span></td>
+                    <td className="py-1.5 px-2 text-gray-400">{p.emplacement}</td>
+                    <td className="py-1.5 px-2 text-gray-400">{p.fournisseur}</td>
+                    <td className="py-1.5 px-2 text-gray-400">{p.lot_fournisseur}</td>
+                    <td className="py-1.5 px-2 text-right">
+                      <button onClick={() => setEditPlate(p)} className="text-blue-400 hover:text-blue-300 text-xs mr-2">Modifier</button>
+                      <button onClick={() => delPlate(p.id)} className="text-red-400 hover:text-red-300 text-xs">Suppr.</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main App ─────────────────────────────────────────────────────────
 
-type ViewMode = { type: 'dashboard' } | { type: 'order'; id: string } | { type: 'batch'; ids: string[] } | { type: 'production' };
+type ViewMode = { type: 'dashboard' } | { type: 'order'; id: string } | { type: 'batch'; ids: string[] } | { type: 'production' } | { type: 'stock' };
 
 export function VitrageApp({ onBack }: { onBack: () => void }) {
   const [commandes, setCommandes] = useState<Commande[]>([]);
@@ -1055,6 +1269,9 @@ export function VitrageApp({ onBack }: { onBack: () => void }) {
     if (view.type === 'production') {
       return <ProductionView onBack={goHome} />;
     }
+    if (view.type === 'stock') {
+      return <StockView onBack={goHome} />;
+    }
     return (
       <Dashboard
         commandes={commandes}
@@ -1063,6 +1280,7 @@ export function VitrageApp({ onBack }: { onBack: () => void }) {
         onDelete={handleDelete}
         onBatch={ids => setView({ type: 'batch', ids })}
         onProduction={() => setView({ type: 'production' })}
+        onStock={() => setView({ type: 'stock' })}
       />
     );
   };
