@@ -535,12 +535,12 @@ function AtelierView({ lots, semaine, poste, onSelectPoste, onBack, loadLotDetai
       return (
         <div className="fixed inset-0 bg-[#0a0c10] flex flex-col items-center justify-center z-50">
           <p className="text-gray-400 text-2xl mb-2">Aucune coupe intercalaire dans ce lot</p>
-          <p className="text-gray-600 text-base mb-8">{selectedLot.reference} — {selectedLot.total_we} WE enregistrees</p>
           <button onClick={() => setSelectedLot(null)} className="px-8 py-4 bg-gray-700 text-white text-lg rounded-xl active:scale-95">← Retour aux lots</button>
         </div>
       );
     }
 
+    const barreLength = 6000;
     const barres = new Map<number, WEPiece[]>();
     for (const wp of wePieces) {
       const arr = barres.get(wp.barre_no) || [];
@@ -548,124 +548,85 @@ function AtelierView({ lots, semaine, poste, onSelectPoste, onBack, loadLotDetai
       barres.set(wp.barre_no, arr);
     }
     const barreNos = [...barres.keys()].sort((a, b) => a - b);
-    const bIdx = Math.min(weBarIdx, Math.max(0, barreNos.length - 1));
-    const currentBarre = barreNos[bIdx];
-    const barrePieces = barres.get(currentBarre) || [];
-    const allBarreCut = barrePieces.every(p => p.statut === 'coupe');
+
+    const epGroups = new Map<string, number[]>();
+    for (const [no, pcs] of barres) {
+      const key = `${pcs[0]?.epaisseur}mm — ${pcs[0]?.couleur}`;
+      const arr = epGroups.get(key) || [];
+      arr.push(no);
+      epGroups.set(key, arr);
+    }
 
     return (
-      <div className="fixed inset-0 bg-[#0a0c10] flex flex-col z-50">
-        <div className="flex items-center gap-4 p-4 bg-[#14161d] border-b border-[#2a2d35]">
+      <div className="fixed inset-0 bg-white flex flex-col z-50">
+        <div className="flex items-center gap-4 p-3 bg-[#14161d] border-b border-[#2a2d35]">
           <button onClick={() => setSelectedLot(null)} className="text-gray-400 hover:text-white text-lg px-3 py-2">← Lots</button>
           <span className="text-xl font-bold text-white flex-1">{selectedLot.reference}</span>
-          <div className="flex gap-2">
-            <button onClick={() => setWeMode('barres')} className={`px-3 py-1 rounded text-sm ${weMode === 'barres' ? 'bg-amber-600 text-white' : 'bg-gray-800 text-gray-400'}`}>Barre/barre</button>
-            <button onClick={() => setWeMode('liste')} className={`px-3 py-1 rounded text-sm ${weMode === 'liste' ? 'bg-amber-600 text-white' : 'bg-gray-800 text-gray-400'}`}>Liste</button>
-          </div>
+          <span className="text-base text-amber-400 font-bold">COUPE INTERCALAIRE — {barreNos.length} barres</span>
         </div>
 
-        {weMode === 'barres' && barreNos.length > 0 ? (
-          <div className="flex-1 flex flex-col">
-            <div className="flex-1 flex items-center gap-2 px-2">
-              <button onClick={() => setWeBarIdx(Math.max(0, bIdx - 1))} disabled={bIdx === 0}
-                className="text-6xl text-white hover:text-amber-400 disabled:text-gray-800 px-2 select-none active:scale-90 shrink-0">◀</button>
-              <div className="flex-1 flex flex-col items-center gap-4">
-                <div className="text-center">
-                  <div className="text-3xl font-black text-white">Barre {currentBarre}</div>
-                  <div className="text-lg text-amber-400">{barrePieces[0]?.epaisseur}mm — {barrePieces[0]?.couleur}</div>
-                  <div className="text-base text-gray-500">{bIdx + 1} / {barreNos.length} — {barrePieces.length} coupes</div>
-                </div>
-                <div className="w-full max-w-xl">
-                  <table className="w-full text-base">
-                    <thead><tr className="text-gray-400 border-b border-gray-700">
-                      <th className="text-left py-2 px-2">N</th>
-                      <th className="text-left py-2 px-2">Reference</th>
-                      <th className="text-left py-2 px-2">Cote</th>
-                      <th className="text-right py-2 px-2">Longueur</th>
-                      <th className="text-center py-2 px-2">Statut</th>
-                    </tr></thead>
-                    <tbody>
-                      {barrePieces.map((wp, i) => (
-                        <tr key={wp.id} className="border-b border-gray-800">
-                          <td className="py-2 px-2 text-amber-400 font-bold">{i + 1}</td>
-                          <td className="py-2 px-2 text-white">{wp.vitrage_ref}</td>
-                          <td className="py-2 px-2 text-gray-300">{wp.cote}</td>
-                          <td className="py-2 px-2 text-white text-right font-mono text-lg">{wp.longueur} mm</td>
-                          <td className="py-2 px-2 text-center">
-                            {wp.statut === 'coupe' ? (
-                              <span className="text-green-400 font-bold">✓</span>
-                            ) : (
-                              <button onClick={async () => {
+        <div className="flex-1 overflow-auto p-4">
+          {[...epGroups.entries()].map(([groupLabel, nos]) => (
+            <div key={groupLabel} className="mb-8">
+              <div className="flex items-center gap-4 mb-3 border-b-2 border-gray-300 pb-2">
+                <div className="text-lg font-black text-gray-800">{groupLabel}</div>
+                <div className="text-base text-gray-500">Qte {nos.length} barres</div>
+              </div>
+
+              {nos.map(no => {
+                const pcs = barres.get(no) || [];
+                const used = pcs.reduce((s, p) => s + p.longueur, 0);
+                const chute = barreLength - used;
+                const allDone = pcs.every(p => p.statut === 'coupe');
+
+                return (
+                  <div key={no} className="flex items-center gap-3 mb-2">
+                    <div className="text-sm font-mono text-gray-500 w-12 text-right shrink-0">{barreLength}</div>
+                    <div className="flex-1 flex items-center h-12 bg-gray-100 border border-gray-400 rounded overflow-hidden relative">
+                      {pcs.map((wp, i) => {
+                        const pct = (wp.longueur / barreLength) * 100;
+                        const ref = wp.vitrage_ref.replace(/^[^_]*_/, '').substring(0, 8);
+                        return (
+                          <div key={wp.id} className={`h-full border-r-2 border-white flex flex-col items-center justify-center cursor-pointer transition-colors ${
+                            wp.statut === 'coupe' ? 'bg-blue-600' : 'bg-blue-800 hover:bg-blue-700'}`}
+                            style={{ width: `${pct}%`, minWidth: 30 }}
+                            onClick={async () => {
+                              if (wp.statut !== 'coupe') {
                                 await patchJSON(`/api/production/we/${wp.id}`, { statut: 'coupe', operateur: '' });
                                 onReload();
-                              }} className="px-3 py-1 bg-amber-600 hover:bg-amber-500 text-white text-sm rounded active:scale-95">
-                                Couper
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-              <button onClick={() => setWeBarIdx(Math.min(barreNos.length - 1, bIdx + 1))} disabled={bIdx >= barreNos.length - 1}
-                className="text-6xl text-white hover:text-amber-400 disabled:text-gray-800 px-2 select-none active:scale-90 shrink-0">▶</button>
-            </div>
-            <div className="p-4 bg-[#14161d] border-t border-[#2a2d35] flex justify-center gap-6">
-              {!allBarreCut && (
-                <button onClick={async () => {
-                  for (const wp of barrePieces) {
-                    if (wp.statut !== 'coupe') await patchJSON(`/api/production/we/${wp.id}`, { statut: 'coupe', operateur: '' });
-                  }
-                  onReload();
-                }} className="px-12 py-5 rounded-2xl text-xl font-black bg-amber-600 hover:bg-amber-500 text-white shadow-lg active:scale-95">
-                  TOUTE LA BARRE COUPEE
-                </button>
-              )}
-              {allBarreCut && bIdx < barreNos.length - 1 && (
-                <button onClick={() => setWeBarIdx(bIdx + 1)}
-                  className="px-12 py-5 rounded-2xl text-xl font-black bg-green-600 hover:bg-green-500 text-white shadow-lg active:scale-95">
-                  ✓ SUIVANTE ▶
-                </button>
-              )}
-            </div>
-          </div>
-        ) : weMode === 'liste' ? (
-          <div className="flex-1 overflow-auto p-4">
-            <table className="w-full text-sm">
-              <thead><tr className="text-gray-400 border-b border-[#2a2d35]">
-                <th className="text-left py-2 px-2">Barre</th>
-                <th className="text-left py-2 px-2">Reference</th>
-                <th className="text-right py-2 px-2">Longueur</th>
-                <th className="text-left py-2 px-2">Cote</th>
-                <th className="text-left py-2 px-2">Ep.</th>
-                <th className="text-center py-2 px-2">Statut</th>
-              </tr></thead>
-              <tbody>
-                {wePieces.map(wp => (
-                  <tr key={wp.id} className="border-b border-gray-800">
-                    <td className="py-1 px-2 text-white font-bold">B{wp.barre_no}</td>
-                    <td className="py-1 px-2 text-gray-300">{wp.vitrage_ref}</td>
-                    <td className="py-1 px-2 text-white text-right font-mono">{wp.longueur}</td>
-                    <td className="py-1 px-2 text-gray-400">{wp.cote}</td>
-                    <td className="py-1 px-2 text-gray-400">{wp.epaisseur}mm</td>
-                    <td className="py-1 px-2 text-center">
-                      {wp.statut === 'coupe' ? <span className="text-green-400">✓</span> : (
-                        <button onClick={async () => {
-                          await patchJSON(`/api/production/we/${wp.id}`, { statut: 'coupe', operateur: '' });
-                          onReload();
-                        }} className="px-2 py-1 bg-amber-600 text-white text-xs rounded active:scale-95">Couper</button>
+                              }
+                            }}>
+                            <span className="text-[10px] text-white font-bold leading-tight truncate px-0.5">{ref}-{wp.cote}</span>
+                            <span className="text-xs text-blue-200 font-mono leading-tight">{wp.longueur}</span>
+                          </div>
+                        );
+                      })}
+                      {chute > 0 && (
+                        <div className="h-full bg-yellow-400 flex items-center justify-center"
+                          style={{ width: `${(chute / barreLength) * 100}%`, minWidth: 20 }}>
+                          <span className="text-[10px] text-yellow-800 font-mono">{chute}</span>
+                        </div>
                       )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <p className="text-gray-500 text-xl text-center py-20">Aucune coupe WE dans ce lot</p>
-        )}
+                    </div>
+                    <div className="text-sm font-mono text-gray-600 w-12 shrink-0">{chute}</div>
+                    {allDone ? (
+                      <span className="text-green-600 font-bold text-lg w-8 shrink-0">✓</span>
+                    ) : (
+                      <button onClick={async () => {
+                        for (const wp of pcs) {
+                          if (wp.statut !== 'coupe') await patchJSON(`/api/production/we/${wp.id}`, { statut: 'coupe', operateur: '' });
+                        }
+                        onReload();
+                      }} className="px-3 py-2 bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold rounded active:scale-95 shrink-0">
+                        OK
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
