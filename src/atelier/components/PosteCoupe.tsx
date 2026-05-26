@@ -4,6 +4,7 @@ import { v4 as uid } from 'uuid';
 import { useApiCollection } from '../../useApiCollection';
 import { useAuth } from '../../AuthContext';
 import { parseFstlineFile, type FstJob, type FstBar, type FstCut } from '../fstlineParser';
+import { patchCommandeModule, upsertCommandeGlobale } from '../../api';
 
 interface Props { onBack: () => void; }
 
@@ -82,6 +83,43 @@ function getProfileBars(job: FstJob): Map<string, FstBar[]> {
   return map;
 }
 
+/** Fire-and-forget: sync coupe_profiles module status to the global dashboard */
+function syncCoupeToGlobal(commande: Commande) {
+  const machines: MachineName[] = ['lmt65', 'dt', 'renfort'];
+  let totalCuts = 0;
+  let doneCuts = 0;
+  let ncCount = 0;
+  const machineNames: string[] = [];
+
+  for (const m of machines) {
+    const md = commande.machines[m];
+    if (!md?.fstlineJob) continue;
+    machineNames.push(MACHINE_LABELS[m]);
+    for (const bar of md.fstlineJob.bars) {
+      for (const cut of bar.cuts) {
+        totalCuts++;
+        if (cut.statut === 'coupe') doneCuts++;
+        if (cut.statut === 'nc' || cut.statut === 'casse') ncCount++;
+      }
+    }
+  }
+
+  if (totalCuts === 0 && machineNames.length === 0) return;
+
+  const progress = totalCuts > 0 ? Math.round(doneCuts / totalCuts * 100) : 0;
+  const statut: 'attente' | 'en_cours' | 'termine' =
+    progress === 100 ? 'termine'
+    : doneCuts > 0 ? 'en_cours'
+    : 'attente';
+
+  patchCommandeModule(commande.ref, 'coupe_profiles', {
+    statut,
+    total: totalCuts,
+    fait: doneCuts,
+    nc: ncCount,
+  }).catch(() => {}); // silent — don't block if OVH API is down
+}
+
 // ── Main Component ──────────────────────────────────────────────────
 
 export function PosteCoupe({ onBack }: Props) {
@@ -123,6 +161,14 @@ export function PosteCoupe({ onBack }: Props) {
         };
         upsert(updated);
         setSelectedId(updated.id);
+        // Sync to global dashboard (fire-and-forget)
+        if (updated.ref) {
+          upsertCommandeGlobale(updated.ref, {
+            client: '',
+            chantier: updated.chantier || '',
+          }).catch(() => {});
+          syncCoupeToGlobal(updated);
+        }
       } catch (e) {
         alert('Erreur import FSTLINE : ' + (e instanceof Error ? e.message : String(e)));
       }
@@ -145,6 +191,9 @@ export function PosteCoupe({ onBack }: Props) {
     };
     upsert(c);
     setSelectedId(c.id);
+    // Sync to global dashboard (fire-and-forget)
+    upsertCommandeGlobale(ref, { client: '', chantier: '' }).catch(() => {});
+    patchCommandeModule(ref, 'coupe_profiles', { statut: 'attente', total: 0, fait: 0, nc: 0 }).catch(() => {});
   }, [upsert]);
 
   // ── Send to atelier ──
