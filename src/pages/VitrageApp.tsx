@@ -1,16 +1,20 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import type {
-  Commande, Vitrage, IsulaStore, AverySettings, WESettings, GlassSettings,
+  Commande, Vitrage, AverySettings, WESettings, GlassSettings,
   CommandeStatut, WEGroupe, GlassOptimResult, OptimizedPlate, LotFabrication, EMPTY_LOT,
+  DEFAULT_AVERY, DEFAULT_WE, DEFAULT_GLASS,
+  STATUT_LABELS, STATUT_COLORS,
 } from '../vitrage/types';
-import { STATUT_LABELS, STATUT_COLORS } from '../vitrage/types';
 import { parseVitrageSpec } from '../vitrage/parseVitrageSpec';
 import { parseExcelFile, parseCSVText, type ParseResult } from '../vitrage/parseExcel';
 import { optimizeWE } from '../vitrage/optimizeWE';
 import { optimizeGlass } from '../vitrage/optimize2D';
 import { generateLabelsA, generateLabelsB, generateLabelsC } from '../vitrage/generateLabels';
 import { generateFicheWE } from '../vitrage/generateFicheWE';
-import { loadStore, saveStore, addCommande, updateCommande, deleteCommande } from '../vitrage/store';
+import {
+  fetchCommandes, insertCommande, patchCommande, removeCommande,
+  fetchSettings, saveSettings, type Settings,
+} from '../vitrage/store';
 import { v4 as uuid } from 'uuid';
 
 function getISOWeek(date: Date): string {
@@ -664,14 +668,33 @@ function BatchView({ commandes, onBack, avery, we, glass }: {
 type ViewMode = { type: 'dashboard' } | { type: 'order'; id: string } | { type: 'batch'; ids: string[] };
 
 export function VitrageApp({ onBack }: { onBack: () => void }) {
-  const [store, setStoreRaw] = useState<IsulaStore>(loadStore);
+  const [commandes, setCommandes] = useState<Commande[]>([]);
+  const [settings, setSettingsState] = useState<Settings>({
+    averySettings: DEFAULT_AVERY, weSettings: DEFAULT_WE, glassSettings: DEFAULT_GLASS,
+  });
   const [view, setView] = useState<ViewMode>({ type: 'dashboard' });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const saveTimer = useRef<ReturnType<typeof setTimeout>>();
 
-  const setStore = useCallback((fn: (prev: IsulaStore) => IsulaStore) => {
-    setStoreRaw(prev => { const next = fn(prev); saveStore(next); return next; });
+  useEffect(() => {
+    (async () => {
+      try {
+        const [cmds, sets] = await Promise.all([fetchCommandes(), fetchSettings()]);
+        setCommandes(cmds);
+        setSettingsState(sets);
+      } catch (err) {
+        setError(`Erreur chargement Supabase : ${err}`);
+      }
+      setLoading(false);
+    })();
   }, []);
 
-  const handleNew = () => {
+  const reload = useCallback(async () => {
+    try { setCommandes(await fetchCommandes()); } catch { /* ignore */ }
+  }, []);
+
+  const handleNew = async () => {
     const now = new Date();
     const cmd: Commande = {
       id: uuid(),
@@ -685,52 +708,75 @@ export function VitrageApp({ onBack }: { onBack: () => void }) {
       lotFabrication: { ...EMPTY_LOT },
       notes: '',
     };
-    setStore(s => addCommande(s, cmd));
-    setView({ type: 'order', id: cmd.id });
+    try {
+      await insertCommande(cmd);
+      setCommandes(prev => [cmd, ...prev]);
+      setView({ type: 'order', id: cmd.id });
+    } catch (err) { setError(`Erreur creation : ${err}`); }
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (!confirm('Supprimer cette commande ?')) return;
-    setStore(s => deleteCommande(s, id));
-    if (view.type === 'order' && view.id === id) setView({ type: 'dashboard' });
+    try {
+      await removeCommande(id);
+      setCommandes(prev => prev.filter(c => c.id !== id));
+      if (view.type === 'order' && view.id === id) setView({ type: 'dashboard' });
+    } catch (err) { setError(`Erreur suppression : ${err}`); }
   };
 
-  const handleUpdate = (id: string, patch: Partial<Commande>) => {
-    setStore(s => updateCommande(s, id, patch));
-  };
+  const handleUpdate = useCallback((id: string, patch: Partial<Commande>) => {
+    setCommandes(prev => prev.map(c => c.id === id ? { ...c, ...patch } : c));
+    clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(async () => {
+      try { await patchCommande(id, patch); } catch (err) { console.error('Save error:', err); }
+    }, 500);
+  }, []);
 
-  const goHome = () => setView({ type: 'dashboard' });
+  const handleSettings = useCallback((patch: Partial<Settings>) => {
+    setSettingsState(prev => {
+      const next = { ...prev, ...patch };
+      clearTimeout(saveTimer.current);
+      saveTimer.current = setTimeout(async () => {
+        try { await saveSettings(next); } catch { /* ignore */ }
+      }, 1000);
+      return next;
+    });
+  }, []);
+
+  const goHome = () => { setView({ type: 'dashboard' }); reload(); };
 
   const renderContent = () => {
+    if (loading) return <p className="text-gray-500 text-center py-12">Chargement...</p>;
+
     if (view.type === 'order') {
-      const selected = store.commandes.find(c => c.id === view.id);
+      const selected = commandes.find(c => c.id === view.id);
       if (!selected) return null;
       return (
         <OrderDetail
           commande={selected}
           onUpdate={patch => handleUpdate(view.id, patch)}
           onBack={goHome}
-          avery={store.averySettings} we={store.weSettings} glass={store.glassSettings}
-          onAvery={a => setStore(s => ({ ...s, averySettings: a }))}
-          onWE={w => setStore(s => ({ ...s, weSettings: w }))}
-          onGlass={g => setStore(s => ({ ...s, glassSettings: g }))}
+          avery={settings.averySettings} we={settings.weSettings} glass={settings.glassSettings}
+          onAvery={a => handleSettings({ averySettings: a })}
+          onWE={w => handleSettings({ weSettings: w })}
+          onGlass={g => handleSettings({ glassSettings: g })}
         />
       );
     }
     if (view.type === 'batch') {
-      const batchCmds = store.commandes.filter(c => view.ids.includes(c.id));
+      const batchCmds = commandes.filter(c => view.ids.includes(c.id));
       if (batchCmds.length === 0) return null;
       return (
         <BatchView
           commandes={batchCmds}
           onBack={goHome}
-          avery={store.averySettings} we={store.weSettings} glass={store.glassSettings}
+          avery={settings.averySettings} we={settings.weSettings} glass={settings.glassSettings}
         />
       );
     }
     return (
       <Dashboard
-        commandes={store.commandes}
+        commandes={commandes}
         onSelect={id => setView({ type: 'order', id })}
         onNew={handleNew}
         onDelete={handleDelete}
@@ -750,6 +796,13 @@ export function VitrageApp({ onBack }: { onBack: () => void }) {
           </div>
         </div>
       </header>
+      {error && (
+        <div className="bg-red-500/10 border-b border-red-500/30 px-6 py-2">
+          <div className="max-w-6xl mx-auto text-red-400 text-xs">{error}
+            <button onClick={() => setError('')} className="ml-4 text-red-500 hover:text-red-300">x</button>
+          </div>
+        </div>
+      )}
       <main className="max-w-6xl mx-auto px-6 py-6">
         {renderContent()}
       </main>

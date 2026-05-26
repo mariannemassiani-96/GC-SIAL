@@ -1,46 +1,124 @@
-import type { IsulaStore, Commande } from './types';
-import { DEFAULT_AVERY, DEFAULT_WE, DEFAULT_GLASS } from './types';
+import { supabase, isConfigured } from './supabase';
+import type { Commande, AverySettings, WESettings, GlassSettings } from './types';
+import { DEFAULT_AVERY, DEFAULT_WE, DEFAULT_GLASS, EMPTY_LOT } from './types';
 
-const STORAGE_KEY = 'isula_vitrage_store';
+// ── Settings (Supabase — table settings, 1 seule ligne) ─────────────
 
-function emptyStore(): IsulaStore {
+export interface Settings {
+  averySettings: AverySettings;
+  weSettings: WESettings;
+  glassSettings: GlassSettings;
+}
+
+function defaultSettings(): Settings {
   return {
-    commandes: [],
     averySettings: { ...DEFAULT_AVERY },
     weSettings: { ...DEFAULT_WE },
     glassSettings: { ...DEFAULT_GLASS },
   };
 }
 
-export function loadStore(): IsulaStore {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw) as IsulaStore;
-      return {
-        ...emptyStore(),
-        ...parsed,
-      };
-    }
-  } catch { /* ignore */ }
-  return emptyStore();
-}
-
-export function saveStore(store: IsulaStore) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
-}
-
-export function addCommande(store: IsulaStore, cmd: Commande): IsulaStore {
-  return { ...store, commandes: [...store.commandes, cmd] };
-}
-
-export function updateCommande(store: IsulaStore, id: string, patch: Partial<Commande>): IsulaStore {
+export async function fetchSettings(): Promise<Settings> {
+  if (!isConfigured) return defaultSettings();
+  const { data, error } = await supabase.from('settings').select('*').eq('id', 1).single();
+  if (error || !data) return defaultSettings();
   return {
-    ...store,
-    commandes: store.commandes.map(c => c.id === id ? { ...c, ...patch } : c),
+    averySettings: data.avery && typeof data.avery === 'object' ? { ...DEFAULT_AVERY, ...(data.avery as object) } : { ...DEFAULT_AVERY },
+    weSettings: data.we && typeof data.we === 'object' ? { ...DEFAULT_WE, ...(data.we as object) } : { ...DEFAULT_WE },
+    glassSettings: data.glass && typeof data.glass === 'object' ? { ...DEFAULT_GLASS, ...(data.glass as object) } : { ...DEFAULT_GLASS },
   };
 }
 
-export function deleteCommande(store: IsulaStore, id: string): IsulaStore {
-  return { ...store, commandes: store.commandes.filter(c => c.id !== id) };
+export async function saveSettings(s: Settings): Promise<void> {
+  if (!isConfigured) return;
+  await supabase.from('settings').update({
+    avery: s.averySettings,
+    we: s.weSettings,
+    glass: s.glassSettings,
+  }).eq('id', 1);
+}
+
+// ── Commandes (Supabase) ─────────────────────────────────────────────
+
+interface DbRow {
+  id: string;
+  reference: string;
+  client: string;
+  date_creation: string;
+  semaine_fabrication: string;
+  semaine_livraison: string;
+  statut: string;
+  vitrages: unknown;
+  lot_fabrication: unknown;
+  notes: string;
+}
+
+function rowToCommande(row: DbRow): Commande {
+  return {
+    id: row.id,
+    reference: row.reference,
+    client: row.client,
+    dateCreation: row.date_creation,
+    semaineFabrication: row.semaine_fabrication ?? '',
+    semaineLivraison: row.semaine_livraison ?? '',
+    statut: (row.statut as Commande['statut']) ?? 'en_attente',
+    vitrages: Array.isArray(row.vitrages) ? row.vitrages as Commande['vitrages'] : [],
+    lotFabrication: row.lot_fabrication && typeof row.lot_fabrication === 'object'
+      ? { ...EMPTY_LOT, ...(row.lot_fabrication as Record<string, string>) }
+      : { ...EMPTY_LOT },
+    notes: row.notes ?? '',
+  };
+}
+
+function commandeToRow(c: Commande) {
+  return {
+    id: c.id,
+    reference: c.reference,
+    client: c.client,
+    date_creation: c.dateCreation,
+    semaine_fabrication: c.semaineFabrication,
+    semaine_livraison: c.semaineLivraison,
+    statut: c.statut,
+    vitrages: c.vitrages,
+    lot_fabrication: c.lotFabrication,
+    notes: c.notes,
+  };
+}
+
+export async function fetchCommandes(): Promise<Commande[]> {
+  if (!isConfigured) return [];
+  const { data, error } = await supabase
+    .from('commandes')
+    .select('*')
+    .order('date_creation', { ascending: false });
+  if (error) throw new Error(error.message);
+  return (data as DbRow[]).map(rowToCommande);
+}
+
+export async function insertCommande(cmd: Commande): Promise<void> {
+  if (!isConfigured) return;
+  const { error } = await supabase.from('commandes').insert(commandeToRow(cmd));
+  if (error) throw new Error(error.message);
+}
+
+export async function patchCommande(id: string, patch: Partial<Commande>): Promise<void> {
+  if (!isConfigured) return;
+  const updates: Record<string, unknown> = {};
+  if (patch.reference !== undefined) updates.reference = patch.reference;
+  if (patch.client !== undefined) updates.client = patch.client;
+  if (patch.statut !== undefined) updates.statut = patch.statut;
+  if (patch.semaineFabrication !== undefined) updates.semaine_fabrication = patch.semaineFabrication;
+  if (patch.semaineLivraison !== undefined) updates.semaine_livraison = patch.semaineLivraison;
+  if (patch.vitrages !== undefined) updates.vitrages = patch.vitrages;
+  if (patch.lotFabrication !== undefined) updates.lot_fabrication = patch.lotFabrication;
+  if (patch.notes !== undefined) updates.notes = patch.notes;
+  if (Object.keys(updates).length === 0) return;
+  const { error } = await supabase.from('commandes').update(updates).eq('id', id);
+  if (error) throw new Error(error.message);
+}
+
+export async function removeCommande(id: string): Promise<void> {
+  if (!isConfigured) return;
+  const { error } = await supabase.from('commandes').delete().eq('id', id);
+  if (error) throw new Error(error.message);
 }
