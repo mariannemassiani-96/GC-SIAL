@@ -41,7 +41,9 @@ type EventType =
   | 'pdf_remplace'
   | 'xml_remplace'
   | 'fichier_supprime'
-  | 'date_assignee';
+  | 'date_assignee'
+  | 'coupe_pieces'
+  | 'annule_coupe_pieces';
 
 interface Evenement {
   id: string;
@@ -72,6 +74,10 @@ interface OptimisationMachine {
 
   // Traçabilité
   evenements: Evenement[];
+
+  // Suivi multi-niveau (par pièce — pour XML uniquement)
+  // Clé = barcode de la pièce
+  coupePieces?: Record<string, { coupeLe: string; coupePar: string }>;
 }
 
 interface Commande {
@@ -114,6 +120,8 @@ const EVENT_LABEL: Record<EventType, string> = {
   xml_remplace: 'XML remplacé',
   fichier_supprime: 'Fichier supprimé',
   date_assignee: 'Date assignée',
+  coupe_pieces: 'Pièces coupées',
+  annule_coupe_pieces: 'Coupe annulée',
 };
 
 const DEMO: Commande[] = [{
@@ -210,7 +218,7 @@ export function PosteCoupe({ onBack }: Props) {
   const [importState, setImportState] = useState<ImportPayload | null>(null);
   const [pdfViewer, setPdfViewer] = useState<{ dataUrl: string; filename: string } | null>(null);
   const [historyView, setHistoryView] = useState<{ machine: Machine; events: Evenement[] } | null>(null);
-  const [piecesView, setPiecesView] = useState<{ machine: Machine; optim: FstlineOptim } | null>(null);
+  const [piecesView, setPiecesView] = useState<{ commandeId: string; machine: Machine } | null>(null);
   const [view, setView] = useState<'today' | 'all'>(isAdmin ? 'all' : 'today');
   const [currentMachine, setCurrentMachine] = useState<Machine | null>(() => {
     const stored = localStorage.getItem('sial-poste-coupe-machine');
@@ -371,6 +379,35 @@ export function PosteCoupe({ onBack }: Props) {
       makeEvent('date_assignee', userNom, date || '(effacée)'));
   }, [isAdmin, commandes, patchOptim, userNom]);
 
+  const handleCoupePieces = useCallback((commandeId: string, machine: Machine, barcodes: string[], coupe: boolean, levelLabel: string) => {
+    const existing = commandes.find(c => c.id === commandeId)?.optimisations[machine];
+    if (!existing || barcodes.length === 0) return;
+    const current = existing.coupePieces ?? {};
+    const next = { ...current };
+    if (coupe) {
+      const info = { coupeLe: new Date().toISOString(), coupePar: userNom };
+      for (const bc of barcodes) next[bc] = info;
+    } else {
+      for (const bc of barcodes) delete next[bc];
+    }
+    // Auto-bascule du statut machine en 'coupe' quand toutes les pièces sont coupées
+    let newStatut = existing.statut;
+    const total = existing.parsedOptim?.totalPieces ?? 0;
+    if (total > 0) {
+      const coupedCount = Object.keys(next).length;
+      if (coupe && coupedCount === total && existing.statut !== 'coupe') {
+        newStatut = 'coupe';
+      } else if (!coupe && coupedCount < total && existing.statut === 'coupe') {
+        newStatut = 'prepare';
+      }
+    }
+    const evt = makeEvent(coupe ? 'coupe_pieces' : 'annule_coupe_pieces', userNom,
+      `${levelLabel} (${barcodes.length} pièce${barcodes.length > 1 ? 's' : ''})`);
+    const patch: Partial<OptimisationMachine> = { coupePieces: next };
+    if (newStatut !== existing.statut) patch.statut = newStatut;
+    patchOptim(commandeId, machine, patch, evt);
+  }, [commandes, patchOptim, userNom]);
+
   // ── Vue Liste (Aujourd'hui ou Toutes) ──
   if (!selected) {
     const filtered = commandes
@@ -424,7 +461,7 @@ export function PosteCoupe({ onBack }: Props) {
             onOpenCommande={(id) => setSelectedId(id)}
             onChangeStatut={changeStatut}
             onViewPdf={(dataUrl, filename) => setPdfViewer({ dataUrl, filename })}
-            onViewPieces={(machine, opt) => setPiecesView({ machine, optim: opt })}
+            onViewPieces={(commandeId, machine) => setPiecesView({ commandeId, machine })}
           />
         ) : (
           <main className="flex-1 overflow-y-auto px-4 py-6 max-w-5xl mx-auto w-full space-y-4">
@@ -490,12 +527,20 @@ export function PosteCoupe({ onBack }: Props) {
             onConfirm={handleImportConfirm} />
         )}
         {pdfViewer && <PdfViewerModal {...pdfViewer} onClose={() => setPdfViewer(null)} />}
-        {piecesView && (
-          <PiecesModal
-            machine={MACHINES.find(m => m.id === piecesView.machine)!}
-            optim={piecesView.optim}
-            onClose={() => setPiecesView(null)} />
-        )}
+        {piecesView && (() => {
+          const cmd = commandes.find(c => c.id === piecesView.commandeId);
+          const opt = cmd?.optimisations[piecesView.machine];
+          if (!opt?.parsedOptim) return null;
+          return (
+            <PiecesModal
+              machine={MACHINES.find(m => m.id === piecesView.machine)!}
+              commande={cmd!}
+              optim={opt.parsedOptim}
+              coupePieces={opt.coupePieces ?? {}}
+              onCoupePieces={(barcodes, coupe, label) => handleCoupePieces(piecesView.commandeId, piecesView.machine, barcodes, coupe, label)}
+              onClose={() => setPiecesView(null)} />
+          );
+        })()}
       </div>
     );
   }
@@ -554,7 +599,7 @@ export function PosteCoupe({ onBack }: Props) {
                     makeEvent('fichier_supprime', userNom));
                 }}
                 onViewPdf={() => optim?.pdfDataUrl && setPdfViewer({ dataUrl: optim.pdfDataUrl, filename: optim.pdfFilename ?? 'document.pdf' })}
-                onViewPieces={() => optim?.parsedOptim && setPiecesView({ machine: m.id, optim: optim.parsedOptim })}
+                onViewPieces={() => optim?.parsedOptim && setPiecesView({ commandeId: selected.id, machine: m.id })}
                 onViewHistory={() => optim && setHistoryView({ machine: m.id, events: getEvents(optim) })}
                 onStatut={(s) => changeStatut(selected.id, m.id, s)}
                 onNotes={(n) => patchOptim(selected.id, m.id, { notes: n })}
@@ -573,12 +618,20 @@ export function PosteCoupe({ onBack }: Props) {
           events={historyView.events}
           onClose={() => setHistoryView(null)} />
       )}
-      {piecesView && (
-        <PiecesModal
-          machine={MACHINES.find(m => m.id === piecesView.machine)!}
-          optim={piecesView.optim}
-          onClose={() => setPiecesView(null)} />
-      )}
+      {piecesView && (() => {
+        const cmd = commandes.find(c => c.id === piecesView.commandeId);
+        const opt = cmd?.optimisations[piecesView.machine];
+        if (!opt?.parsedOptim) return null;
+        return (
+          <PiecesModal
+            machine={MACHINES.find(m => m.id === piecesView.machine)!}
+            commande={cmd!}
+            optim={opt.parsedOptim}
+            coupePieces={opt.coupePieces ?? {}}
+            onCoupePieces={(barcodes, coupe, label) => handleCoupePieces(piecesView.commandeId, piecesView.machine, barcodes, coupe, label)}
+            onClose={() => setPiecesView(null)} />
+        );
+      })()}
     </div>
   );
 }
@@ -972,41 +1025,102 @@ function HistoryModal({ machine, events, onClose }: {
   );
 }
 
-// ── Modale liste des pièces (XML FSTLINE) ──────────────────────────
+// ── Modale liste des pièces (XML FSTLINE) — multi-niveau ────────────
 
-function PiecesModal({ machine, optim, onClose }: {
+function PiecesModal({ machine, commande, optim, coupePieces, onCoupePieces, onClose }: {
   machine: { id: Machine; label: string; color: string };
+  commande: Commande;
   optim: FstlineOptim;
+  coupePieces: Record<string, { coupeLe: string; coupePar: string }>;
+  onCoupePieces: (barcodes: string[], coupe: boolean, levelLabel: string) => void;
   onClose: () => void;
 }) {
   const [filterProfil, setFilterProfil] = useState<string | null>(null);
+  const [expandedBars, setExpandedBars] = useState<Record<number, boolean>>({});
 
-  const allPieces = useMemo(() => {
-    const list: { barIndex: number; barProfilCode: string; barProfilDesc: string; barLen: number; barChute: number; piece: FstlineOptim['barres'][0]['pieces'][0] }[] = [];
+  // Stats globales
+  const totalCoupes = Object.keys(coupePieces).length;
+  const totalPieces = optim.totalPieces;
+  const pctCoupe = totalPieces > 0 ? Math.round((totalCoupes / totalPieces) * 100) : 0;
+
+  // Stats par profilé : nb pièces coupées
+  const profilStats = useMemo(() => {
+    const stats = new Map<string, { coupees: number; total: number; barresCoupees: number; barresTotal: number }>();
     for (const b of optim.barres) {
+      const s = stats.get(b.profilCode) ?? { coupees: 0, total: 0, barresCoupees: 0, barresTotal: 0 };
+      let allCut = b.pieces.length > 0;
       for (const p of b.pieces) {
-        list.push({ barIndex: b.index, barProfilCode: b.profilCode, barProfilDesc: b.profilDesc, barLen: b.longueurBrute, barChute: b.chute, piece: p });
+        s.total++;
+        if (coupePieces[p.barcode]) s.coupees++;
+        else allCut = false;
       }
+      s.barresTotal++;
+      if (allCut) s.barresCoupees++;
+      stats.set(b.profilCode, s);
     }
-    return list;
-  }, [optim]);
+    return stats;
+  }, [optim, coupePieces]);
 
-  const filtered = filterProfil ? allPieces.filter(it => it.barProfilCode === filterProfil) : allPieces;
+  // Pour une barre, vérifier si toutes ses pièces sont coupées
+  const isBarComplete = (bar: FstlineOptim['barres'][0]) =>
+    bar.pieces.length > 0 && bar.pieces.every(p => coupePieces[p.barcode]);
+
+  const toggleBarExpand = (idx: number) => setExpandedBars(s => ({ ...s, [idx]: !s[idx] }));
+
+  // Actions multi-niveaux
+  const markPiece = (p: FstlineOptim['barres'][0]['pieces'][0], coupe: boolean) =>
+    onCoupePieces([p.barcode], coupe, `Pièce ${p.position ?? p.barcode}`);
+
+  const markBar = (b: FstlineOptim['barres'][0], coupe: boolean) =>
+    onCoupePieces(b.pieces.map(p => p.barcode), coupe, `Barre #${b.index} ${b.profilCode}`);
+
+  const markProfil = (code: string, coupe: boolean) => {
+    const bars = optim.barres.filter(b => b.profilCode === code);
+    const barcodes: string[] = [];
+    for (const b of bars) for (const p of b.pieces) barcodes.push(p.barcode);
+    onCoupePieces(barcodes, coupe, `Profilé ${code}`);
+  };
+
+  const markMachine = (coupe: boolean) => {
+    const barcodes: string[] = [];
+    for (const b of optim.barres) for (const p of b.pieces) barcodes.push(p.barcode);
+    onCoupePieces(barcodes, coupe, `Machine ${machine.label} entière`);
+  };
 
   return (
     <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-[#181a20] border border-[#2a2d35] rounded-2xl max-w-5xl w-full max-h-[90vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
-        <div className="px-5 py-3 border-b border-[#2a2d35] flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-2">
-            <Layers size={16} className="text-purple-400" />
-            <h2 className="text-sm font-bold text-white">Pièces — {machine.label}</h2>
-            <span className="text-[10px] text-gray-500">Job FSTLINE n° {optim.jobNum} · {optim.totalPieces} pièces · {optim.totalBarres} barres</span>
+      <div className="bg-[#181a20] border border-[#2a2d35] rounded-2xl max-w-5xl w-full max-h-[92vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+        {/* Header */}
+        <div className="px-5 py-3 border-b border-[#2a2d35] shrink-0">
+          <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center gap-2 min-w-0">
+              <Layers size={16} className="text-purple-400 shrink-0" />
+              <h2 className="text-sm font-bold text-white truncate">{commande.nom} — {machine.label}</h2>
+              <span className="text-[10px] text-gray-500 font-mono shrink-0">{commande.ref}</span>
+            </div>
+            <button onClick={onClose} className="text-gray-400 hover:text-white shrink-0"><X size={16} /></button>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-white"><X size={16} /></button>
+          <div className="flex items-center gap-3 text-[10px] text-gray-500">
+            <span>Job FSTLINE n° {optim.jobNum}</span>
+            <span>·</span>
+            <span>{optim.totalBarres} barres</span>
+            <span>·</span>
+            <span>{optim.totalPieces} pièces</span>
+            <span>·</span>
+            <span>{optim.profils.length} profilés</span>
+          </div>
+          {/* Progression globale */}
+          <div className="mt-2 flex items-center gap-2">
+            <div className="flex-1 h-2 bg-[#252830] rounded-full overflow-hidden">
+              <div className="h-full bg-green-500 transition-all" style={{ width: `${pctCoupe}%` }} />
+            </div>
+            <span className="text-xs font-mono text-green-400">{totalCoupes}/{totalPieces}</span>
+            <span className="text-[10px] text-gray-500">({pctCoupe}%)</span>
+          </div>
         </div>
 
-        {/* Filtres profilés */}
-        <div className="px-5 py-2 border-b border-[#2a2d35] flex items-center gap-1.5 flex-wrap shrink-0">
+        {/* Filtres + actions machine */}
+        <div className="px-5 py-2 border-b border-[#2a2d35] flex items-center gap-2 flex-wrap shrink-0">
           <button onClick={() => setFilterProfil(null)}
             className={`px-2.5 py-1 rounded text-[10px] font-medium border ${
               filterProfil === null ? 'bg-blue-600/20 text-blue-300 border-blue-500/40' : 'text-gray-400 border-[#2a2d35] hover:border-[#404550]'
@@ -1014,51 +1128,166 @@ function PiecesModal({ machine, optim, onClose }: {
             Tous ({optim.totalPieces})
           </button>
           {optim.profils.map(p => {
-            const count = allPieces.filter(it => it.barProfilCode === p.code).length;
+            const s = profilStats.get(p.code);
+            const complete = s && s.coupees === s.total;
             return (
               <button key={p.code} onClick={() => setFilterProfil(p.code)}
                 className={`px-2.5 py-1 rounded text-[10px] font-medium border ${
-                  filterProfil === p.code ? 'bg-blue-600/20 text-blue-300 border-blue-500/40' : 'text-gray-400 border-[#2a2d35] hover:border-[#404550]'
+                  filterProfil === p.code
+                    ? 'bg-blue-600/20 text-blue-300 border-blue-500/40'
+                    : complete
+                      ? 'bg-green-600/15 text-green-300 border-green-500/30'
+                      : 'text-gray-400 border-[#2a2d35] hover:border-[#404550]'
                 }`}>
-                {p.code} ({count})
+                {p.code} {s && `(${s.coupees}/${s.total})`}
               </button>
+            );
+          })}
+          <div className="flex-1" />
+          {totalCoupes < totalPieces ? (
+            <button onClick={() => markMachine(true)}
+              className="flex items-center gap-1 px-3 py-1 bg-green-600 hover:bg-green-500 text-white text-[10px] font-semibold rounded">
+              <Check size={11} /> Tout coupé (machine)
+            </button>
+          ) : (
+            <button onClick={() => markMachine(false)}
+              className="flex items-center gap-1 px-3 py-1 bg-[#252830] hover:bg-red-500/20 text-gray-300 hover:text-red-400 text-[10px] font-semibold rounded">
+              <RotateCcw size={11} /> Tout réinitialiser
+            </button>
+          )}
+        </div>
+
+        {/* Liste hiérarchique profilés → barres → pièces */}
+        <div className="flex-1 overflow-y-auto p-3">
+          {(filterProfil ? [filterProfil] : optim.profils.map(p => p.code)).map(profilCode => {
+            const profilInfo = optim.profils.find(p => p.code === profilCode);
+            const s = profilStats.get(profilCode);
+            const bars = optim.barres.filter(b => b.profilCode === profilCode);
+            const profilComplete = s && s.coupees === s.total && s.total > 0;
+            return (
+              <div key={profilCode} className="mb-3 bg-[#1c1e24] border border-[#2a2d35] rounded-lg overflow-hidden">
+                {/* En-tête profilé */}
+                <div className="px-3 py-2 border-b border-[#2a2d35] flex items-center justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold text-blue-400 font-mono">{profilCode}</span>
+                      <span className="text-[11px] text-gray-300 truncate">{profilInfo?.desc}</span>
+                      {profilComplete && (
+                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-green-500/20 text-green-300 border border-green-500/40">
+                          <Check size={9} className="inline mr-0.5" /> COMPLET
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-gray-500 mt-0.5">
+                      {s ? `${s.coupees}/${s.total} pièces · ${s.barresCoupees}/${s.barresTotal} barres` : '—'}
+                    </p>
+                  </div>
+                  {!profilComplete ? (
+                    <button onClick={() => markProfil(profilCode, true)}
+                      className="flex items-center gap-1 px-2.5 py-1 bg-green-600/80 hover:bg-green-500 text-white text-[10px] font-semibold rounded shrink-0">
+                      <Check size={11} /> Tout ce profilé
+                    </button>
+                  ) : (
+                    <button onClick={() => markProfil(profilCode, false)}
+                      className="flex items-center gap-1 px-2.5 py-1 bg-[#252830] hover:bg-red-500/20 text-gray-400 hover:text-red-400 text-[10px] rounded shrink-0">
+                      <RotateCcw size={11} /> Annuler
+                    </button>
+                  )}
+                </div>
+
+                {/* Barres */}
+                <ul className="divide-y divide-[#2a2d35]/40">
+                  {bars.map(b => {
+                    const complete = isBarComplete(b);
+                    const coupedInBar = b.pieces.filter(p => coupePieces[p.barcode]).length;
+                    const expanded = expandedBars[b.index];
+                    return (
+                      <li key={b.index} className="px-3 py-2">
+                        <div className="flex items-center gap-2">
+                          <button onClick={() => toggleBarExpand(b.index)}
+                            className="text-gray-500 hover:text-white text-[10px] w-5 text-left">
+                            {expanded ? '▼' : '▶'}
+                          </button>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-[11px] font-mono text-white">Barre #{b.index}</span>
+                              <span className="text-[10px] text-gray-500">{b.longueurBrute}mm</span>
+                              {b.chute > 0 && <span className="text-[10px] text-red-400">chute {b.chute}mm</span>}
+                              <span className={`text-[9px] px-1.5 py-0 rounded border ${
+                                complete ? 'bg-green-500/20 text-green-300 border-green-500/40' : 'bg-[#252830] text-gray-500 border-[#2a2d35]'
+                              }`}>
+                                {coupedInBar}/{b.pieces.length} pièces
+                              </span>
+                              {complete && <span className="text-[9px] text-green-400">✓ coupée</span>}
+                            </div>
+                          </div>
+                          {!complete ? (
+                            <button onClick={() => markBar(b, true)}
+                              className="flex items-center gap-1 px-2 py-1 bg-green-600/70 hover:bg-green-500 text-white text-[10px] font-semibold rounded shrink-0">
+                              <Check size={10} /> Cette barre
+                            </button>
+                          ) : (
+                            <button onClick={() => markBar(b, false)}
+                              className="flex items-center gap-1 px-2 py-1 bg-[#252830] hover:bg-red-500/20 text-gray-400 hover:text-red-400 text-[10px] rounded shrink-0">
+                              <RotateCcw size={10} /> Annuler
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Pièces de la barre (si dépliée) */}
+                        {expanded && (
+                          <table className="w-full mt-2 text-[10px] font-mono">
+                            <thead>
+                              <tr className="text-gray-600">
+                                <th className="text-left py-1 px-2 w-8"></th>
+                                <th className="text-left py-1 px-2">Code-barre</th>
+                                <th className="text-right py-1 px-2">Long.</th>
+                                <th className="text-center py-1 px-2">G°/D°</th>
+                                <th className="text-left py-1 px-2">Typologie</th>
+                                <th className="text-left py-1 px-2">Rôle</th>
+                                <th className="text-left py-1 px-2">Dim.</th>
+                                <th className="text-right py-1 px-2">Usinages</th>
+                                <th className="text-right py-1 px-2">Coupée</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {b.pieces.map(p => {
+                                const cut = coupePieces[p.barcode];
+                                return (
+                                  <tr key={p.barcode} className={`border-t border-[#2a2d35]/30 ${cut ? 'opacity-50' : ''}`}>
+                                    <td className="py-1 px-2">
+                                      <input type="checkbox" checked={!!cut}
+                                        onChange={() => markPiece(p, !cut)}
+                                        className="cursor-pointer" />
+                                    </td>
+                                    <td className="py-1 px-2 text-gray-300 text-[9px]">{p.barcode}</td>
+                                    <td className="py-1 px-2 text-right text-amber-300">{p.longueurInt}</td>
+                                    <td className="py-1 px-2 text-center text-gray-400">{p.angleG}°/{p.angleD}°</td>
+                                    <td className="py-1 px-2 text-gray-300">{p.typologie}</td>
+                                    <td className="py-1 px-2 text-gray-400">{p.role}</td>
+                                    <td className="py-1 px-2 text-gray-500">{p.dimensionsMenuiserie ?? '—'}</td>
+                                    <td className="py-1 px-2 text-right text-gray-500">{p.machinings.length}</td>
+                                    <td className="py-1 px-2 text-right text-[9px] text-green-400">
+                                      {cut ? `${cut.coupePar} · ${fmtDateTime(cut.coupeLe).slice(0, 10)}` : '—'}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
             );
           })}
         </div>
 
-        <div className="flex-1 overflow-y-auto px-5 py-3">
-          <table className="w-full text-[10px] font-mono">
-            <thead className="sticky top-0 bg-[#181a20]">
-              <tr className="text-gray-500 border-b border-[#2a2d35]">
-                <th className="text-left py-1.5 px-2">Barre</th>
-                <th className="text-left py-1.5 px-2">Profilé</th>
-                <th className="text-left py-1.5 px-2">Code-barre</th>
-                <th className="text-right py-1.5 px-2">Long. IL</th>
-                <th className="text-center py-1.5 px-2">G°</th>
-                <th className="text-center py-1.5 px-2">D°</th>
-                <th className="text-left py-1.5 px-2">Typologie</th>
-                <th className="text-left py-1.5 px-2">Rôle</th>
-                <th className="text-left py-1.5 px-2">Dim. menuis.</th>
-                <th className="text-right py-1.5 px-2">Usinages</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((it, i) => (
-                <tr key={`${it.piece.barcode}-${i}`} className="border-b border-[#1e2028] hover:bg-[#1e2028]/50">
-                  <td className="py-1 px-2 text-gray-400">#{it.barIndex}</td>
-                  <td className="py-1 px-2 text-blue-400">{it.barProfilCode}</td>
-                  <td className="py-1 px-2 text-gray-300 text-[9px]">{it.piece.barcode}</td>
-                  <td className="py-1 px-2 text-right text-amber-300">{it.piece.longueurInt}</td>
-                  <td className="py-1 px-2 text-center text-gray-400">{it.piece.angleG}°</td>
-                  <td className="py-1 px-2 text-center text-gray-400">{it.piece.angleD}°</td>
-                  <td className="py-1 px-2 text-gray-300">{it.piece.typologie}</td>
-                  <td className="py-1 px-2 text-gray-400">{it.piece.role}</td>
-                  <td className="py-1 px-2 text-gray-500">{it.piece.dimensionsMenuiserie ?? '—'}</td>
-                  <td className="py-1 px-2 text-right text-gray-500">{it.piece.machinings.length}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        {/* Footer info */}
+        <div className="px-5 py-2 border-t border-[#2a2d35] text-[10px] text-gray-500 shrink-0">
+          Tu peux marquer comme coupé(es) au niveau <span className="text-purple-300">pièce</span>, <span className="text-purple-300">barre</span>, <span className="text-purple-300">profilé</span> ou <span className="text-purple-300">machine entière</span>.
         </div>
       </div>
     </div>
@@ -1086,7 +1315,7 @@ function OperatorTodayView({
   onOpenCommande: (id: string) => void;
   onChangeStatut: (commandeId: string, machine: Machine, statut: StatutMachine) => void;
   onViewPdf: (dataUrl: string, filename: string) => void;
-  onViewPieces: (machine: Machine, optim: FstlineOptim) => void;
+  onViewPieces: (commandeId: string, machine: Machine) => void;
 }) {
   const today = new Date().toISOString().slice(0, 10);
 
@@ -1211,7 +1440,7 @@ function TaskSection({
   onAction: (commandeId: string, machine: Machine, statut: StatutMachine) => void;
   onOpen: (id: string) => void;
   onViewPdf: (dataUrl: string, filename: string) => void;
-  onViewPieces: (machine: Machine, optim: FstlineOptim) => void;
+  onViewPieces: (commandeId: string, machine: Machine) => void;
 }) {
   const accentClass = {
     amber: 'border-amber-500/30 bg-amber-500/5',
@@ -1259,7 +1488,7 @@ function TaskRow({
   onAction: (commandeId: string, machine: Machine, statut: StatutMachine) => void;
   onOpen: (id: string) => void;
   onViewPdf: (dataUrl: string, filename: string) => void;
-  onViewPieces: (machine: Machine, optim: FstlineOptim) => void;
+  onViewPieces: (commandeId: string, machine: Machine) => void;
 }) {
   const { commande, optim, machine } = item;
   const [showAnomalie, setShowAnomalie] = useState(false);
@@ -1302,7 +1531,7 @@ function TaskRow({
             </button>
           )}
           {hasXml && optim.parsedOptim && (
-            <button onClick={() => onViewPieces(machine, optim.parsedOptim!)}
+            <button onClick={() => onViewPieces(commande.id, machine)}
               className="px-2 py-1.5 bg-[#252830] hover:bg-[#2f323a] text-purple-300 text-[10px] rounded">
               <Layers size={11} />
             </button>
