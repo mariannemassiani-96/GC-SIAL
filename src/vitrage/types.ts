@@ -57,6 +57,16 @@ export interface PlacedPiece extends GlassPiece {
   rotated: boolean;
 }
 
+export type RemnantClass = 'poussiere' | 'interdit' | 'surveiller' | 'stockable';
+
+export interface Remnant {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  classe: RemnantClass;
+}
+
 export interface OptimizedPlate {
   numero: number;
   material: string;
@@ -64,6 +74,8 @@ export interface OptimizedPlate {
   plateHeight: number;
   pieces: PlacedPiece[];
   utilisation: number;
+  remnants: Remnant[];
+  hasInterdit: boolean;
 }
 
 export interface GlassOptimResult {
@@ -116,6 +128,7 @@ export interface GlassSettings {
   plateWidth: number;
   plateHeight: number;
   cuttingGap: number;
+  edgeTrimMargin: number;
 }
 
 export interface IsulaStore {
@@ -142,6 +155,7 @@ export const DEFAULT_GLASS: GlassSettings = {
   plateWidth: 3210,
   plateHeight: 2550,
   cuttingGap: 5,
+  edgeTrimMargin: 15,
 };
 
 export const STATUT_LABELS: Record<CommandeStatut, string> = {
