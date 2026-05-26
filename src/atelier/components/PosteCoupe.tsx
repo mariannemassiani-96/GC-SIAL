@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { ArrowLeft, Upload, Search, Trash2, Send, ChevronRight } from 'lucide-react';
 import { v4 as uid } from 'uuid';
 import { useApiCollection } from '../../useApiCollection';
