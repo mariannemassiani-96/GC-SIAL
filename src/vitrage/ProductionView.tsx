@@ -79,7 +79,7 @@ async function patchJSON(path: string, body: unknown) {
 
 export function ProductionView({ onBack }: { onBack: () => void }) {
   const [modeAtelier, setModeAtelier] = useState(false);
-  const [poste, setPoste] = useState<'' | 'preparation' | 'lisec' | 'bottero' | 'we' | 'assemblage'>('');
+  const [poste, setPoste] = useState<'' | 'preparation' | 'lisec' | 'bottero' | 'we' | 'assemblage' | 'arefaire'>('');
   const [semaine, setSemaine] = useState(getISOWeek(new Date()));
   const [lots, setLots] = useState<Lot[]>([]);
   const [selectedLot, setSelectedLot] = useState<Lot | null>(null);
@@ -406,8 +406,8 @@ export function ProductionView({ onBack }: { onBack: () => void }) {
 // ── Mode Atelier (plein écran tactile) ───────────────────────────────
 
 function AtelierView({ lots, semaine, poste, onSelectPoste, onBack, loadLotDetail, selectedLot, setSelectedLot, onReload }: {
-  lots: Lot[]; semaine: string; poste: '' | 'preparation' | 'lisec' | 'bottero' | 'we' | 'assemblage';
-  onSelectPoste: (p: '' | 'preparation' | 'lisec' | 'bottero' | 'we' | 'assemblage') => void;
+  lots: Lot[]; semaine: string; poste: '' | 'preparation' | 'lisec' | 'bottero' | 'we' | 'assemblage' | 'arefaire';
+  onSelectPoste: (p: '' | 'preparation' | 'lisec' | 'bottero' | 'we' | 'assemblage' | 'arefaire') => void;
   onBack: () => void;
   loadLotDetail: (lot: Lot) => void; selectedLot: Lot | null;
   setSelectedLot: (l: Lot | null) => void;
@@ -431,7 +431,8 @@ function AtelierView({ lots, semaine, poste, onSelectPoste, onBack, loadLotDetai
              ['lisec', 'COUPE LISEC', 'bg-blue-700 hover:bg-blue-600'],
              ['bottero', 'COUPE BOTTERO', 'bg-green-700 hover:bg-green-600'],
              ['we', 'COUPE INTERCALAIRE', 'bg-amber-700 hover:bg-amber-600'],
-             ['assemblage', 'ASSEMBLAGE', 'bg-purple-700 hover:bg-purple-600']] as const).map(([id, label, cls]) => (
+             ['assemblage', 'ASSEMBLAGE', 'bg-purple-700 hover:bg-purple-600'],
+             ['arefaire', 'A REFAIRE', 'bg-red-700 hover:bg-red-600']] as const).map(([id, label, cls]) => (
             <button key={id} onClick={() => onSelectPoste(id)}
               className={`${cls} text-white text-2xl font-bold py-8 rounded-2xl transition-colors shadow-lg active:scale-95`}>
               {label}
@@ -730,6 +731,84 @@ function AtelierView({ lots, semaine, poste, onSelectPoste, onBack, loadLotDetai
               </div>
             ))}
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Poste A REFAIRE ──
+  if (poste === 'arefaire') {
+    const ncPieces = pieces.filter(p => p.statut === 'nc' || p.statut === 'casse');
+    const ncWe = wePieces.filter(p => p.statut === 'nc');
+
+    return (
+      <div className="fixed inset-0 bg-[#0a0c10] flex flex-col z-50">
+        <div className="flex items-center gap-4 p-4 bg-[#14161d] border-b border-[#2a2d35]">
+          <button onClick={() => setSelectedLot(null)} className="text-gray-400 hover:text-white text-lg px-3 py-2">← Lots</button>
+          <span className="text-xl font-bold text-white flex-1">{selectedLot.reference}</span>
+          <span className="text-lg text-red-400 font-bold">{ncPieces.length + ncWe.length} A REFAIRE</span>
+        </div>
+        <div className="flex-1 overflow-auto p-4 max-w-2xl mx-auto w-full">
+          {ncPieces.length === 0 && ncWe.length === 0 ? (
+            <div className="text-center py-20">
+              <div className="text-green-400 text-4xl mb-4">✓</div>
+              <div className="text-2xl text-white font-bold">AUCUNE PIECE A REFAIRE</div>
+              <div className="text-gray-500 text-lg mt-2">Tout est conforme</div>
+            </div>
+          ) : (
+            <>
+              {ncPieces.length > 0 && (
+                <div className="mb-6">
+                  <h3 className="text-xl font-bold text-red-400 mb-3">VERRES ({ncPieces.length})</h3>
+                  <div className="space-y-2">
+                    {ncPieces.map(p => (
+                      <div key={p.id} className="flex items-center gap-4 p-4 bg-red-900/20 rounded-xl border border-red-500/30">
+                        <div className="flex-1">
+                          <div className="text-lg font-bold text-white">{p.vitrage_ref}</div>
+                          <div className="text-base text-gray-400">{p.face} — {p.material} — {p.largeur}x{p.hauteur}</div>
+                          <div className="text-sm text-gray-500">{p.commande_ref} — Plaque {p.plaque_no}</div>
+                          {p.notes && <div className="text-sm text-purple-400 mt-1">↳ {p.notes}</div>}
+                          <div className="text-xs text-red-400 font-bold mt-1">
+                            {p.statut === 'nc' ? 'NON CONFORME' : 'CASSE'}
+                            {p.date_coupe && ` — ${new Date(p.date_coupe).toLocaleDateString('fr-FR')}`}
+                          </div>
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <button onClick={async () => { await patchJSON(`/api/production/pieces/${p.id}`, { statut: 'a_couper' }); onReload(); }}
+                            className="px-4 py-2 bg-blue-700 hover:bg-blue-600 text-white text-sm font-bold rounded-xl active:scale-95">
+                            REMETTRE A COUPER
+                          </button>
+                          <button onClick={async () => { await patchJSON(`/api/production/pieces/${p.id}`, { statut: 'coupe' }); onReload(); }}
+                            className="px-4 py-2 bg-green-700 hover:bg-green-600 text-white text-sm font-bold rounded-xl active:scale-95">
+                            DEJA RECOUPE
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {ncWe.length > 0 && (
+                <div>
+                  <h3 className="text-xl font-bold text-red-400 mb-3">INTERCALAIRES ({ncWe.length})</h3>
+                  <div className="space-y-2">
+                    {ncWe.map(p => (
+                      <div key={p.id} className="flex items-center gap-4 p-4 bg-red-900/20 rounded-xl border border-red-500/30">
+                        <div className="flex-1">
+                          <div className="text-lg font-bold text-white">{p.vitrage_ref}</div>
+                          <div className="text-base text-gray-400">Barre {p.barre_no} — {p.longueur}mm — {p.cote}</div>
+                        </div>
+                        <button onClick={async () => { await patchJSON(`/api/production/we/${p.id}`, { statut: 'a_couper' }); onReload(); }}
+                          className="px-4 py-2 bg-blue-700 hover:bg-blue-600 text-white text-sm font-bold rounded-xl active:scale-95">
+                          REMETTRE A COUPER
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
         </div>
       </div>
     );
