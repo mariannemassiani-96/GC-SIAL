@@ -66,8 +66,8 @@ export function AdminPanel({ onBack }: Props) {
     setFormEmail(u.email);
     setFormRole(u.role);
     setFormApps(u.apps_autorisees ?? [...ALL_APPS.map(a => a.id)]);
-    setFormPin((u as Record<string, unknown>).pin as string || '');
-    setFormPinEnabled(!!(u as Record<string, unknown>).pin_enabled);
+    setFormPin((u as unknown as Record<string, unknown>).pin as string || '');
+    setFormPinEnabled(!!(u as unknown as Record<string, unknown>).pin_enabled);
     setFormPassword('');
     setShowNew(false);
   };
