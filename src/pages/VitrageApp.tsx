@@ -723,85 +723,6 @@ const LOT_FIELDS: { key: keyof LotFabrication; label: string; placeholder: strin
   { key: 'gazArgon', label: 'Gaz argon', placeholder: 'N° lot bouteille' },
 ];
 
-function _TabLots({ lot, onUpdate }: { lot: LotFabrication; onUpdate: (l: LotFabrication) => void }) {
-  return (
-    <div className="space-y-4">
-      <div className="text-sm text-gray-400">
-        Tracabilite CEKAL — enregistrer les N° de lot des matieres premieres utilisees pour ce lot de fabrication.
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {LOT_FIELDS.map(f => (
-          <div key={f.key} className="bg-[#181a20] rounded-lg p-4 border border-[#2a2d35]">
-            <label className="text-xs text-gray-400 block mb-1.5">{f.label}</label>
-            <input
-              value={(lot[f.key] as string) ?? ''}
-              onChange={e => onUpdate({ ...lot, [f.key]: e.target.value })}
-              placeholder={f.placeholder}
-              className="bg-[#14161d] border border-[#2a2d35] rounded px-3 py-2 text-sm text-white w-full focus:border-blue-500 outline-none"
-            />
-          </div>
-        ))}
-      </div>
-      <div className="bg-[#181a20] rounded-lg p-4 border border-[#2a2d35]">
-        <label className="text-xs text-gray-400 block mb-1.5">Notes / observations</label>
-        <textarea
-          value={lot.notes ?? ''}
-          onChange={e => onUpdate({ ...lot, notes: e.target.value })}
-          placeholder="Remarques, conditions de stockage, NC detectees..."
-          rows={3}
-          className="bg-[#14161d] border border-[#2a2d35] rounded px-3 py-2 text-sm text-white w-full resize-y focus:border-blue-500 outline-none"
-        />
-      </div>
-    </div>
-  );
-}
-
-// ── Tab: Settings ────────────────────────────────────────────────────
-
-function _TabSettings({ avery, we, glass, onAvery, onWE, onGlass }: {
-  avery: AverySettings; we: WESettings; glass: GlassSettings;
-  onAvery: (s: AverySettings) => void; onWE: (s: WESettings) => void; onGlass: (s: GlassSettings) => void;
-}) {
-  const numInput = (label: string, value: number, onChange: (n: number) => void, step = 1) => (
-    <div>
-      <label className="text-xs text-gray-500 block mb-1">{label}</label>
-      <input type="number" step={step} value={value} onChange={e => onChange(parseFloat(e.target.value) || 0)}
-        className="bg-[#1e2028] border border-[#2a2d35] rounded px-2 py-1 text-sm text-white w-full" />
-    </div>
-  );
-
-  return (
-    <div className="space-y-6">
-      <div>
-        <h4 className="text-sm font-semibold text-gray-300 mb-2">Padding Avery (mm)</h4>
-        <div className="grid grid-cols-4 gap-3">
-          {numInput('Gauche', avery.paddingLeft, v => onAvery({ ...avery, paddingLeft: v }), 0.5)}
-          {numInput('Droite', avery.paddingRight, v => onAvery({ ...avery, paddingRight: v }), 0.5)}
-          {numInput('Haut', avery.paddingTop, v => onAvery({ ...avery, paddingTop: v }), 0.5)}
-          {numInput('Bas', avery.paddingBottom, v => onAvery({ ...avery, paddingBottom: v }), 0.5)}
-        </div>
-      </div>
-      <div>
-        <h4 className="text-sm font-semibold text-gray-300 mb-2">Plaques de verre</h4>
-        <div className="grid grid-cols-3 gap-3">
-          {numInput('Largeur (mm)', glass.plateWidth, v => onGlass({ ...glass, plateWidth: v }))}
-          {numInput('Hauteur (mm)', glass.plateHeight, v => onGlass({ ...glass, plateHeight: v }))}
-          {numInput('Trait de scie (mm)', glass.cuttingGap, v => onGlass({ ...glass, cuttingGap: v }))}
-          {numInput('Marge rive (mm)', glass.edgeTrimMargin ?? 15, v => onGlass({ ...glass, edgeTrimMargin: v }))}
-        </div>
-      </div>
-      <div>
-        <h4 className="text-sm font-semibold text-gray-300 mb-2">Warm Edge</h4>
-        <div className="grid grid-cols-3 gap-3">
-          {numInput('Barre (mm)', we.barreLength, v => onWE({ ...we, barreLength: v }))}
-          {numInput('Marge (mm)', we.marge, v => onWE({ ...we, marge: v }))}
-          {numInput('Trait de scie (mm)', we.kerf, v => onWE({ ...we, kerf: v }))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ── Batch View (multi-order) ─────────────────────────────────────────
 
 const BATCH_TABS = ['Vitrages', 'Optim Verre', 'Warm Edge', 'Etiquettes'] as const;
@@ -1210,17 +1131,6 @@ export function VitrageApp({ onBack }: { onBack: () => void }) {
     }, 800);
   }, []);
 
-  const settingsTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const handleSettings = useCallback((patch: Partial<Settings>) => {
-    setSettingsState(prev => {
-      const next = { ...prev, ...patch };
-      clearTimeout(settingsTimer.current);
-      settingsTimer.current = setTimeout(async () => {
-        try { await saveSettings(next); } catch { /* ignore */ }
-      }, 1000);
-      return next;
-    });
-  }, []);
 
   const goHome = () => { setView({ type: 'home' }); reload(); };
 
