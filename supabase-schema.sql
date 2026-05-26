@@ -128,3 +128,78 @@ CREATE TABLE IF NOT EXISTS stock_remnants (
 ALTER TABLE stock_remnants ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "allow_all_stock_remnants" ON stock_remnants FOR ALL USING (true) WITH CHECK (true);
 CREATE INDEX idx_stock_remnants_code ON stock_remnants(glass_code);
+
+-- ── Lots de production ───────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS production_lots (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  reference TEXT NOT NULL DEFAULT '',
+  semaine TEXT NOT NULL DEFAULT '',
+  date_creation DATE DEFAULT CURRENT_DATE,
+  commande_ids JSONB DEFAULT '[]'::jsonb,
+  commande_refs JSONB DEFAULT '[]'::jsonb,
+  total_pieces INTEGER DEFAULT 0,
+  total_we INTEGER DEFAULT 0,
+  statut TEXT DEFAULT 'en_preparation' CHECK (statut IN ('en_preparation','en_cours','termine')),
+  notes TEXT DEFAULT '',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE production_lots ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "allow_all_production_lots" ON production_lots FOR ALL USING (true) WITH CHECK (true);
+CREATE INDEX idx_production_lots_semaine ON production_lots(semaine);
+
+CREATE TRIGGER production_lots_updated_at
+  BEFORE UPDATE ON production_lots
+  FOR EACH ROW EXECUTE FUNCTION update_modified_column();
+
+-- ── Pieces de production (1 par face verre) ──────────────────────────
+
+CREATE TABLE IF NOT EXISTS production_pieces (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  lot_id UUID NOT NULL REFERENCES production_lots(id) ON DELETE CASCADE,
+  commande_ref TEXT DEFAULT '',
+  vitrage_ref TEXT DEFAULT '',
+  vitrage_id TEXT DEFAULT '',
+  largeur REAL DEFAULT 0,
+  hauteur REAL DEFAULT 0,
+  composition TEXT DEFAULT '',
+  face TEXT DEFAULT 'EXT' CHECK (face IN ('EXT','INT')),
+  material TEXT DEFAULT '',
+  machine TEXT DEFAULT '' CHECK (machine IN ('','lisec','bottero')),
+  plaque_no INTEGER DEFAULT 0,
+  statut TEXT DEFAULT 'a_preparer' CHECK (statut IN ('a_preparer','a_couper','coupe','a_assembler','assemble','nc','casse','manquant')),
+  operateur TEXT DEFAULT '',
+  date_coupe TIMESTAMPTZ,
+  date_assemblage TIMESTAMPTZ,
+  notes TEXT DEFAULT '',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE production_pieces ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "allow_all_production_pieces" ON production_pieces FOR ALL USING (true) WITH CHECK (true);
+CREATE INDEX idx_production_pieces_lot ON production_pieces(lot_id);
+CREATE INDEX idx_production_pieces_statut ON production_pieces(statut);
+
+-- ── Pieces Warm Edge production ──────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS production_we (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  lot_id UUID NOT NULL REFERENCES production_lots(id) ON DELETE CASCADE,
+  barre_no INTEGER DEFAULT 0,
+  longueur REAL DEFAULT 0,
+  orig_dim REAL DEFAULT 0,
+  cote TEXT DEFAULT '',
+  vitrage_ref TEXT DEFAULT '',
+  epaisseur REAL DEFAULT 10,
+  couleur TEXT DEFAULT '',
+  statut TEXT DEFAULT 'a_couper' CHECK (statut IN ('a_couper','coupe','nc')),
+  operateur TEXT DEFAULT '',
+  date_coupe TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE production_we ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "allow_all_production_we" ON production_we FOR ALL USING (true) WITH CHECK (true);
+CREATE INDEX idx_production_we_lot ON production_we(lot_id);

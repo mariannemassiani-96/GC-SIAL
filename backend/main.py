@@ -12,6 +12,7 @@ from services.optimizer import optimize
 from services.machine_export import export_dxf, export_opt
 from services.labels_zpl import generate_zpl_batch
 import db
+import db_production as dbp
 
 app = FastAPI(title="ISULA VITRAGE API", version="1.0.0")
 
@@ -208,6 +209,68 @@ def api_create_remnant(data: dict = Body(...)):
 def api_delete_remnant(rid: str):
     db.delete_stock_remnant(rid)
     return {"ok": True}
+
+
+# ── Production ─────────────────────────────────────────────────────────
+
+@app.get("/api/production/lots")
+def api_list_lots(semaine: str | None = None):
+    rows = dbp.list_lots(semaine)
+    for r in rows:
+        for k in list(r.keys()):
+            if hasattr(r[k], 'isoformat'):
+                r[k] = r[k].isoformat()
+    return rows
+
+
+@app.get("/api/production/lots/{lot_id}")
+def api_get_lot(lot_id: str):
+    lot = dbp.get_lot(lot_id)
+    if not lot:
+        return Response(status_code=404)
+    for k in list(lot.keys()):
+        if hasattr(lot[k], 'isoformat'):
+            lot[k] = lot[k].isoformat()
+    lot['pieces'] = dbp.get_pieces(lot_id)
+    lot['we_pieces'] = dbp.get_we_pieces(lot_id)
+    for p in lot['pieces'] + lot['we_pieces']:
+        for k in list(p.keys()):
+            if hasattr(p[k], 'isoformat'):
+                p[k] = p[k].isoformat()
+    return lot
+
+
+@app.post("/api/production/lots")
+def api_create_lot(data: dict = Body(...)):
+    dbp.create_lot(data)
+    if 'pieces' in data:
+        dbp.insert_pieces(data['pieces'])
+    if 'we_pieces' in data:
+        dbp.insert_we_pieces(data['we_pieces'])
+    return {"ok": True}
+
+
+@app.delete("/api/production/lots/{lot_id}")
+def api_delete_lot(lot_id: str):
+    dbp.delete_lot(lot_id)
+    return {"ok": True}
+
+
+@app.patch("/api/production/pieces/{piece_id}")
+def api_update_piece(piece_id: str, data: dict = Body(...)):
+    dbp.update_piece_statut(piece_id, data.get('statut', ''), data.get('operateur', ''))
+    return {"ok": True}
+
+
+@app.patch("/api/production/we/{piece_id}")
+def api_update_we(piece_id: str, data: dict = Body(...)):
+    dbp.update_we_statut(piece_id, data.get('statut', ''), data.get('operateur', ''))
+    return {"ok": True}
+
+
+@app.get("/api/production/stats")
+def api_production_stats(lot_id: str | None = None, semaine: str | None = None):
+    return dbp.get_stats(lot_id, semaine)
 
 
 if __name__ == "__main__":

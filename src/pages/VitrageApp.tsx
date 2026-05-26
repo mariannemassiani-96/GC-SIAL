@@ -12,6 +12,7 @@ import { optimizeWE } from '../vitrage/optimizeWE';
 import { optimizeGlass, extractGlassPieces } from '../vitrage/optimize2D';
 import { hasBackend, apiOptimize, apiExportDXF, apiExportOPT, apiLabelsZPL } from '../vitrage/api';
 import { generateLabelsA, generateLabelsB, generateLabelsC } from '../vitrage/generateLabels';
+import { ProductionView } from '../vitrage/ProductionView';
 import { generateFicheWE } from '../vitrage/generateFicheWE';
 import { generateEtiquettesCE, generateEtiquettesAtelier, generateEtiquettesPostCoupe, generateEtiquettesWE } from '../vitrage/generateLabelsIndustrial';
 import {
@@ -38,12 +39,13 @@ function download(blob: Blob, name: string) {
 
 // ── Dashboard ────────────────────────────────────────────────────────
 
-function Dashboard({ commandes, onSelect, onNew, onDelete, onBatch }: {
+function Dashboard({ commandes, onSelect, onNew, onDelete, onBatch, onProduction }: {
   commandes: Commande[];
   onSelect: (id: string) => void;
   onNew: () => void;
   onDelete: (id: string) => void;
   onBatch: (ids: string[]) => void;
+  onProduction: () => void;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [filtre, setFiltre] = useState<CommandeStatut | 'all'>('all');
@@ -80,6 +82,9 @@ function Dashboard({ commandes, onSelect, onNew, onDelete, onBatch }: {
               Envoyer en coupe ({selected.size} cmd — {selectedVitrages} vitrages)
             </button>
           )}
+          <button onClick={onProduction} className="px-4 py-2 bg-green-700 hover:bg-green-600 text-white text-sm rounded-lg transition-colors">
+            Production
+          </button>
           <button onClick={onNew} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-lg transition-colors">
             + Nouvelle commande
           </button>
@@ -807,12 +812,60 @@ function BatchView({ commandes, onBack, avery, we, glass }: {
   const { glassResult, loading: optimLoading, backend: usingBackend } = useOptimization(allVitrages, glass);
   const allPlates = useMemo(() => glassResult.flatMap(g => g.plates), [glassResult]);
 
+  const [sending, setSending] = useState(false);
+
+  const envoyerEnProduction = async () => {
+    setSending(true);
+    try {
+      const lotId = uuid();
+      const now = new Date();
+      const sem = getISOWeek(now);
+      const ref = `LOT-${sem}-${now.getTime().toString(36).slice(-4).toUpperCase()}`;
+
+      const prodPieces = allPlates.flatMap(plate =>
+        plate.pieces.map(p => ({
+          lot_id: lotId, commande_ref: commandes.find(c => c.vitrages.some(v => v.id === p.vitrageId))?.reference || '',
+          vitrage_ref: p.vitrageRef, vitrage_id: p.vitrageId,
+          largeur: p.width, hauteur: p.height, composition: '',
+          face: p.face, material: p.material,
+          machine: p.noRotation ? 'lisec' : 'bottero', plaque_no: plate.numero,
+        }))
+      );
+
+      const weProd = weResult.flatMap(g => g.barres.flatMap(b =>
+        b.pieces.map(p => ({
+          lot_id: lotId, barre_no: b.numero, longueur: p.longueur,
+          orig_dim: p.origDim, cote: p.cote === 'court' ? 'C' : 'L',
+          vitrage_ref: p.vitrageRef, epaisseur: g.epaisseur, couleur: g.couleur,
+        }))
+      ));
+
+      await fetch(`${import.meta.env.VITE_ISULA_API_URL}/api/production/lots`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: lotId, reference: ref, semaine: sem,
+          commande_ids: commandes.map(c => c.id), commande_refs: commandes.map(c => c.reference),
+          total_pieces: prodPieces.length, total_we: weProd.length, notes: '',
+          pieces: prodPieces, we_pieces: weProd,
+        }),
+      });
+      alert(`Lot ${ref} cree avec ${prodPieces.length} pieces verre + ${weProd.length} WE`);
+    } catch (err) { alert(`Erreur : ${err}`); }
+    setSending(false);
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-4">
         <button onClick={onBack} className="text-gray-500 hover:text-white text-sm">&larr; Retour</button>
         <h2 className="text-xl font-bold text-amber-400">Lot de coupe</h2>
         <span className="text-xs text-gray-400">{commandes.length} commandes — {allVitrages.length} vitrages</span>
+        {allVitrages.length > 0 && (
+          <button onClick={envoyerEnProduction} disabled={sending}
+            className="ml-auto px-4 py-2 bg-green-600 hover:bg-green-500 text-white text-sm rounded-lg transition-colors disabled:opacity-50">
+            {sending ? 'Envoi...' : 'Envoyer en production'}
+          </button>
+        )}
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -872,7 +925,7 @@ function BatchView({ commandes, onBack, avery, we, glass }: {
 
 // ── Main App ─────────────────────────────────────────────────────────
 
-type ViewMode = { type: 'dashboard' } | { type: 'order'; id: string } | { type: 'batch'; ids: string[] };
+type ViewMode = { type: 'dashboard' } | { type: 'order'; id: string } | { type: 'batch'; ids: string[] } | { type: 'production' };
 
 export function VitrageApp({ onBack }: { onBack: () => void }) {
   const [commandes, setCommandes] = useState<Commande[]>([]);
@@ -986,6 +1039,9 @@ export function VitrageApp({ onBack }: { onBack: () => void }) {
         />
       );
     }
+    if (view.type === 'production') {
+      return <ProductionView onBack={goHome} />;
+    }
     return (
       <Dashboard
         commandes={commandes}
@@ -993,6 +1049,7 @@ export function VitrageApp({ onBack }: { onBack: () => void }) {
         onNew={handleNew}
         onDelete={handleDelete}
         onBatch={ids => setView({ type: 'batch', ids })}
+        onProduction={() => setView({ type: 'production' })}
       />
     );
   };
