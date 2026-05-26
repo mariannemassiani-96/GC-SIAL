@@ -897,19 +897,24 @@ export function VitrageApp({ onBack }: { onBack: () => void }) {
     } catch (err) { setError(`Erreur suppression : ${err}`); }
   };
 
+  const pendingPatch = useRef<Record<string, unknown>>({});
   const handleUpdate = useCallback((id: string, patch: Partial<Commande>) => {
     setCommandes(prev => prev.map(c => c.id === id ? { ...c, ...patch } : c));
+    Object.assign(pendingPatch.current, patch);
     clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(async () => {
-      try { await patchCommande(id, patch); } catch (err) { console.error('Save error:', err); }
-    }, 500);
+      const toSave = { ...pendingPatch.current };
+      pendingPatch.current = {};
+      try { await patchCommande(id, toSave as Partial<Commande>); } catch (err) { console.error('Save error:', err); }
+    }, 800);
   }, []);
 
+  const settingsTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const handleSettings = useCallback((patch: Partial<Settings>) => {
     setSettingsState(prev => {
       const next = { ...prev, ...patch };
-      clearTimeout(saveTimer.current);
-      saveTimer.current = setTimeout(async () => {
+      clearTimeout(settingsTimer.current);
+      settingsTimer.current = setTimeout(async () => {
         try { await saveSettings(next); } catch { /* ignore */ }
       }, 1000);
       return next;
