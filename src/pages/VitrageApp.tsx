@@ -22,9 +22,15 @@ import {
   fetchGlassProducts, upsertGlassProduct, deleteGlassProduct,
   fetchStockPlates, upsertStockPlate, deleteStockPlate,
 } from '../vitrage/store';
-import { patchCommandeModule, upsertCommandeGlobale } from '../api';
-import type { GlassProduct, StockPlate } from '../vitrage/types';
+import { patchCommandeModule, upsertCommandeGlobale, listCommandesGlobales, type CommandeGlobale, type ModuleStatus } from '../api';
+import type { GlassProduct, StockPlate, Vitrage as VitrageType } from '../vitrage/types';
 import { v4 as uuid } from 'uuid';
+
+/** Shape of the vitrage JSONB column when populated with import data */
+interface VitrageModuleData extends ModuleStatus {
+  vitrages?: VitrageType[];
+  fileName?: string;
+}
 
 function getISOWeek(date: Date): string {
   const d = new Date(date);
@@ -57,22 +63,50 @@ function syncVitrageToGlobal(commande: Commande) {
 
 // ── Dashboard ────────────────────────────────────────────────────────
 
-function Dashboard({ commandes, onSelect, onNew, onDelete, onBatch, onProduction, onStock }: {
+function Dashboard({ commandes, onSelect, onDelete, onBatch, onImportGlobal }: {
   commandes: Commande[];
   onSelect: (id: string) => void;
-  onNew: () => void;
   onDelete: (id: string) => void;
   onBatch: (ids: string[]) => void;
-  onStock: () => void;
-  onProduction: () => void;
+  onImportGlobal: (globalCmd: CommandeGlobale) => void;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [filtre, setFiltre] = useState<CommandeStatut | 'all'>('all');
+  const [globalCommandes, setGlobalCommandes] = useState<CommandeGlobale[]>([]);
+  const [loadingGlobal, setLoadingGlobal] = useState(true);
+  const [importingRef, setImportingRef] = useState<string | null>(null);
+
   const stats = useMemo(() => {
     const s = { total: commandes.length, en_attente: 0, en_cours: 0, terminee: 0, livree: 0, totalVitrages: 0 };
     for (const c of commandes) { s[c.statut]++; s.totalVitrages += c.vitrages.length; }
     return s;
   }, [commandes]);
+
+  // Load global commandes with vitrage data
+  useEffect(() => {
+    (async () => {
+      try {
+        const all = await listCommandesGlobales();
+        setGlobalCommandes(all.filter(c => {
+          const v = c.vitrage as VitrageModuleData | undefined;
+          return v?.vitrages && v.vitrages.length > 0;
+        }));
+      } catch { /* silent */ }
+      setLoadingGlobal(false);
+    })();
+  }, [commandes]); // refresh when local commandes change (after import)
+
+  // Which global commandes are already imported locally?
+  const importedRefs = useMemo(() => new Set(commandes.map(c => c.reference.trim())), [commandes]);
+
+  const handleImportGlobal = async (gc: CommandeGlobale) => {
+    setImportingRef(gc.ref);
+    try {
+      await onImportGlobal(gc);
+    } finally {
+      setImportingRef(null);
+    }
+  };
 
   const toggleSelect = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -101,16 +135,17 @@ function Dashboard({ commandes, onSelect, onNew, onDelete, onBatch, onProduction
               Envoyer en coupe ({selected.size} cmd — {selectedVitrages} vitrages)
             </button>
           )}
-          <button onClick={onStock} className="px-4 py-2 bg-purple-700 hover:bg-purple-600 text-white text-sm rounded-lg transition-colors">
-            Catalogue & Stock
-          </button>
-          <button onClick={onProduction} className="px-4 py-2 bg-green-700 hover:bg-green-600 text-white text-sm rounded-lg transition-colors">
-            Production
-          </button>
-          <button onClick={onNew} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-lg transition-colors">
-            + Nouvelle commande
-          </button>
         </div>
+      </div>
+
+      {/* Info banner: commands are created in the global dashboard */}
+      <div className="bg-indigo-600/10 border border-indigo-500/30 rounded-lg p-4 flex items-center gap-3">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-indigo-400 shrink-0">
+          <circle cx="12" cy="12" r="10" /><path d="M12 16v-4" /><path d="M12 8h.01" />
+        </svg>
+        <p className="text-sm text-indigo-300">
+          Les commandes sont creees dans le <span className="font-semibold">Tableau de Bord</span>. Les commandes avec vitrages importes apparaissent ci-dessous.
+        </p>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
@@ -128,6 +163,51 @@ function Dashboard({ commandes, onSelect, onNew, onDelete, onBatch, onProduction
         ))}
       </div>
 
+      {/* Global commands with vitrage data — bridge section */}
+      {!loadingGlobal && globalCommandes.length > 0 && (
+        <div className="space-y-3">
+          <h3 className="text-sm font-semibold text-indigo-400">Commandes globales avec vitrages</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {globalCommandes.map(gc => {
+              const vData = gc.vitrage as VitrageModuleData;
+              const count = vData.vitrages?.length ?? 0;
+              const isImported = importedRefs.has(gc.ref.trim());
+              const isImporting = importingRef === gc.ref;
+              return (
+                <div key={gc.ref} className={`bg-[#181a20] rounded-lg p-4 border ${isImported ? 'border-green-500/30' : 'border-indigo-500/30'}`}>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-mono font-bold text-white">{gc.ref}</span>
+                    {isImported && <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-600/20 text-green-400 border border-green-500/30">Importe</span>}
+                  </div>
+                  <div className="text-xs text-gray-400 mb-1">{gc.client || gc.chantier || '—'}</div>
+                  <div className="text-xs text-blue-400 mb-2">{count} vitrage{count > 1 ? 's' : ''}{vData.fileName ? ` — ${vData.fileName}` : ''}</div>
+                  {gc.semaine_fab && <span className="text-[10px] text-violet-400 mr-2">Fab {gc.semaine_fab}</span>}
+                  {gc.semaine_liv && <span className="text-[10px] text-emerald-400">Liv {gc.semaine_liv}</span>}
+                  <div className="mt-3">
+                    {isImported ? (
+                      <button onClick={() => {
+                        const local = commandes.find(c => c.reference.trim() === gc.ref.trim());
+                        if (local) onSelect(local.id);
+                      }} className="px-3 py-1.5 bg-green-700 hover:bg-green-600 text-white text-xs rounded-lg transition-colors w-full">
+                        Ouvrir la commande
+                      </button>
+                    ) : (
+                      <button onClick={() => handleImportGlobal(gc)} disabled={isImporting}
+                        className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs rounded-lg transition-colors w-full disabled:opacity-50">
+                        {isImporting ? 'Import en cours...' : 'Importer dans ISULA VITRAGE'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      {loadingGlobal && (
+        <p className="text-xs text-gray-500">Chargement des commandes globales...</p>
+      )}
+
       {/* Filtre statut */}
       <div className="flex gap-2">
         {(['all', 'en_attente', 'en_cours', 'terminee', 'livree'] as const).map(s => (
@@ -140,7 +220,7 @@ function Dashboard({ commandes, onSelect, onNew, onDelete, onBatch, onProduction
       </div>
 
       {commandes.length === 0 ? (
-        <p className="text-gray-500 text-sm text-center py-12">Aucune commande. Cliquez sur "+ Nouvelle commande" pour commencer.</p>
+        <p className="text-gray-500 text-sm text-center py-12">Aucune commande importee. Utilisez le Tableau de Bord pour creer des commandes, puis importez-les ici.</p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -1225,17 +1305,39 @@ export function VitrageApp({ onBack, startAtelier }: { onBack: () => void; start
     try { setCommandes(await fetchCommandes()); } catch { /* ignore */ }
   }, []);
 
-  const handleNew = async () => {
+  const handleImportGlobal = async (gc: CommandeGlobale) => {
+    const vData = gc.vitrage as VitrageModuleData;
+    if (!vData.vitrages || vData.vitrages.length === 0) return;
+
+    // Check if already imported
+    const existing = commandes.find(c => c.reference.trim() === gc.ref.trim());
+    if (existing) {
+      // Update vitrages from global
+      const patch: Partial<Commande> = {
+        vitrages: vData.vitrages,
+        client: gc.client || existing.client,
+        semaineFabrication: gc.semaine_fab || existing.semaineFabrication,
+        semaineLivraison: gc.semaine_liv || existing.semaineLivraison,
+      };
+      try {
+        await patchCommande(existing.id, patch);
+        setCommandes(prev => prev.map(c => c.id === existing.id ? { ...c, ...patch } : c));
+        setView({ type: 'order', id: existing.id });
+      } catch (err) { setError(`Erreur mise a jour : ${err}`); }
+      return;
+    }
+
+    // Create new local commande from global data
     const now = new Date();
     const cmd: Commande = {
       id: uuid(),
-      reference: `CMD-${now.toISOString().slice(0, 10).replace(/-/g, '')}`,
-      client: '',
+      reference: gc.ref,
+      client: gc.client || gc.chantier || '',
       dateCreation: now.toISOString().slice(0, 10),
-      semaineFabrication: '',
-      semaineLivraison: '',
+      semaineFabrication: gc.semaine_fab || '',
+      semaineLivraison: gc.semaine_liv || '',
       statut: 'en_attente',
-      vitrages: [],
+      vitrages: vData.vitrages,
       lotFabrication: { ...EMPTY_LOT },
       notes: '',
     };
@@ -1244,7 +1346,7 @@ export function VitrageApp({ onBack, startAtelier }: { onBack: () => void; start
       setCommandes(prev => [cmd, ...prev]);
       setView({ type: 'order', id: cmd.id });
       syncVitrageToGlobal(cmd);
-    } catch (err) { setError(`Erreur creation : ${err}`); }
+    } catch (err) { setError(`Erreur import global : ${err}`); }
   };
 
   const handleDelete = async (id: string) => {
@@ -1352,11 +1454,9 @@ export function VitrageApp({ onBack, startAtelier }: { onBack: () => void; start
       <Dashboard
         commandes={commandes}
         onSelect={id => setView({ type: 'order', id })}
-        onNew={handleNew}
         onDelete={handleDelete}
         onBatch={ids => setView({ type: 'batch', ids })}
-        onProduction={() => setView({ type: 'production' })}
-        onStock={() => setView({ type: 'stock' })}
+        onImportGlobal={handleImportGlobal}
       />
     );
   };
