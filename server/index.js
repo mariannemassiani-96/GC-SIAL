@@ -179,12 +179,13 @@ app.get('/api/commandes-globales', authMiddleware, (req, res) => {
     vitrage: JSON.parse(r.vitrage || '{}'),
     assemblage: JSON.parse(r.assemblage || '{}'),
     livraison: JSON.parse(r.livraison || '{}'),
+    postes_actifs: JSON.parse(r.postes_actifs || '[]'),
   })));
 });
 
 // GET one
 app.get('/api/commandes-globales/:ref', authMiddleware, (req, res) => {
-  const row = db.prepare('SELECT * FROM commandes_globales WHERE ref = ?').get(req.params.ref);
+  const row = db.prepare('SELECT * FROM commandes_globales WHERE ref = ?').get(req.params.ref.trim());
   if (!row) return res.status(404).json({ error: 'Commande non trouvee' });
   res.json({
     ...row,
@@ -193,14 +194,15 @@ app.get('/api/commandes-globales/:ref', authMiddleware, (req, res) => {
     vitrage: JSON.parse(row.vitrage || '{}'),
     assemblage: JSON.parse(row.assemblage || '{}'),
     livraison: JSON.parse(row.livraison || '{}'),
+    postes_actifs: JSON.parse(row.postes_actifs || '[]'),
   });
 });
 
 // PUT (upsert)
 app.put('/api/commandes-globales/:ref', authMiddleware, supervisorOnly, (req, res) => {
-  const { client, chantier, semaine_fab, semaine_liv, reception, coupe_profiles, vitrage, assemblage, livraison, notes } = req.body;
-  db.prepare(`INSERT INTO commandes_globales (ref, client, chantier, semaine_fab, semaine_liv, reception, coupe_profiles, vitrage, assemblage, livraison, notes, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+  const { client, chantier, semaine_fab, semaine_liv, reception, coupe_profiles, vitrage, assemblage, livraison, notes, postes_actifs } = req.body;
+  db.prepare(`INSERT INTO commandes_globales (ref, client, chantier, semaine_fab, semaine_liv, reception, coupe_profiles, vitrage, assemblage, livraison, notes, postes_actifs, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
     ON CONFLICT(ref) DO UPDATE SET
       client = COALESCE(?, client),
       chantier = COALESCE(?, chantier),
@@ -212,20 +214,23 @@ app.put('/api/commandes-globales/:ref', authMiddleware, supervisorOnly, (req, re
       assemblage = COALESCE(?, assemblage),
       livraison = COALESCE(?, livraison),
       notes = COALESCE(?, notes),
+      postes_actifs = COALESCE(?, postes_actifs),
       updated_at = datetime('now')
   `).run(
-    req.params.ref,
+    req.params.ref.trim(),
     client || '', chantier || '', semaine_fab || '', semaine_liv || '',
     JSON.stringify(reception || {}), JSON.stringify(coupe_profiles || {}),
     JSON.stringify(vitrage || {}), JSON.stringify(assemblage || {}),
     JSON.stringify(livraison || {}), notes || '',
+    JSON.stringify(postes_actifs || []),
     client, chantier, semaine_fab, semaine_liv,
     reception ? JSON.stringify(reception) : null,
     coupe_profiles ? JSON.stringify(coupe_profiles) : null,
     vitrage ? JSON.stringify(vitrage) : null,
     assemblage ? JSON.stringify(assemblage) : null,
     livraison ? JSON.stringify(livraison) : null,
-    notes
+    notes,
+    postes_actifs ? JSON.stringify(postes_actifs) : null
   );
   db.prepare('INSERT INTO activity_log (user_id, action, app, detail) VALUES (?, ?, ?, ?)').run(
     req.user.id, 'upsert', 'commandes_globales', req.params.ref

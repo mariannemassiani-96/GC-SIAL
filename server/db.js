@@ -69,6 +69,9 @@ db.exec(`
 try { db.exec('ALTER TABLE users ADD COLUMN pin TEXT DEFAULT NULL'); } catch {}
 try { db.exec('ALTER TABLE users ADD COLUMN pin_enabled INTEGER DEFAULT 0'); } catch {}
 
+// Migrations for commandes_globales
+try { db.exec("ALTER TABLE commandes_globales ADD COLUMN postes_actifs TEXT DEFAULT '[]'"); } catch {}
+
 // Production events (time tracking)
 db.exec(`
   CREATE TABLE IF NOT EXISTS production_events (

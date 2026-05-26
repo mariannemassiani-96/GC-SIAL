@@ -186,6 +186,7 @@ export interface CommandeGlobale {
   livraison: ModuleStatus;
   notes: string;
   updated_at: string;
+  postes_actifs?: string[];
 }
 
 export async function listCommandesGlobales(): Promise<CommandeGlobale[]> {

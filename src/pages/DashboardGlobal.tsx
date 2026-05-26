@@ -179,11 +179,24 @@ function CommandCard({ cmd, onClick }: { cmd: CommandeGlobale; onClick: () => vo
         </div>
       </div>
 
-      {/* Module progress bars */}
+      {/* Module progress bars — only active postes */}
       <div className="space-y-1.5">
-        {MODULES.map(m => (
-          <ModuleProgressBar key={m.key} mod={cmd[m.key] as ModuleStatus} def={m} />
-        ))}
+        {MODULES.filter(m => !cmd.postes_actifs || cmd.postes_actifs.length === 0 || cmd.postes_actifs.includes(m.key))
+          .map(m => {
+            const mod = cmd[m.key] as ModuleStatus;
+            const isBlocked = mod?.statut === 'bloque';
+            return (
+              <div key={m.key}>
+                <ModuleProgressBar mod={mod} def={m} />
+                {isBlocked && (
+                  <div className="flex items-center gap-1 mt-0.5 ml-1">
+                    <AlertTriangle size={10} className="text-red-400" />
+                    <span className="text-[9px] text-red-400 font-bold">BLOQUE — validation requise</span>
+                  </div>
+                )}
+              </div>
+            );
+          })}
       </div>
 
       <AlertBadges cmd={cmd} />
@@ -819,6 +832,42 @@ function DetailView({ cmd, onClose, onRefresh }: { cmd: CommandeGlobale; onClose
         </div>
       </div>
 
+      {/* Alertes bloquantes + Validation superviseur */}
+      {MODULES.some(m => {
+        const mod = cmd[m.key] as ModuleStatus;
+        return mod?.statut === 'bloque' || (mod?.nc && mod.nc > 0);
+      }) && (
+        <div className="bg-red-900/20 border border-red-500/30 rounded-xl p-4 space-y-3">
+          <h4 className="text-sm font-bold text-red-400 flex items-center gap-2">
+            <AlertTriangle size={16} /> Alertes & Validations
+          </h4>
+          {MODULES.map(m => {
+            const mod = cmd[m.key] as ModuleStatus;
+            if (!mod) return null;
+            const isBlocked = mod.statut === 'bloque';
+            const hasNC = mod.nc && mod.nc > 0;
+            if (!isBlocked && !hasNC) return null;
+            return (
+              <div key={m.key} className="flex items-center justify-between p-3 rounded-lg bg-[#14161d] border border-[#2a2d35]">
+                <div>
+                  <span className={`text-sm font-bold ${m.color}`}>{m.label}</span>
+                  {isBlocked && <span className="ml-2 text-xs text-red-400 font-bold">BLOQUE</span>}
+                  {hasNC && <span className="ml-2 text-xs text-amber-400">{mod.nc} NC</span>}
+                </div>
+                {isBlocked && (
+                  <button onClick={async () => {
+                    await upsertCommandeGlobale(cmd.ref, { [m.key]: { ...mod, statut: 'en_cours' } });
+                    onClose();
+                  }} className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-xs font-bold rounded-lg active:scale-95">
+                    VALIDER → Debloquer
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {/* Temps & Productivite */}
       <ProductionStatsSection cmdRef={cmd.ref} />
 
@@ -897,11 +946,15 @@ function NewCommandForm({ onCreated, onCancel }: { onCreated: (ref: string) => v
   const [chantier, setChantier] = useState('');
   const [semFab, setSemFab] = useState('');
   const [semLiv, setSemLiv] = useState('');
+  const [postes, setPostes] = useState<string[]>(['vitrage', 'coupe_profiles']);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
+  const togglePoste = (p: string) => setPostes(prev => prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p]);
+
   const handleSubmit = async () => {
     if (!ref.trim()) { setError('Reference requise'); return; }
+    if (postes.length === 0) { setError('Selectionnez au moins un poste'); return; }
     setSaving(true);
     setError('');
     try {
@@ -910,6 +963,7 @@ function NewCommandForm({ onCreated, onCancel }: { onCreated: (ref: string) => v
         chantier,
         semaine_fab: semFab,
         semaine_liv: semLiv,
+        postes_actifs: postes,
       });
       onCreated(ref.trim());
     } catch (e) {
@@ -948,6 +1002,19 @@ function NewCommandForm({ onCreated, onCancel }: { onCreated: (ref: string) => v
           <label className="block text-[10px] text-gray-500 mb-1">Sem. liv.</label>
           <input value={semLiv} onChange={e => setSemLiv(e.target.value)} placeholder="S24"
             className="w-full bg-[#0f1117] border border-[#2a2d35] rounded px-2 py-1.5 text-sm text-white focus:outline-none focus:border-green-500/50" />
+        </div>
+      </div>
+      <div>
+        <label className="block text-[10px] text-gray-500 mb-2">Postes necessaires</label>
+        <div className="flex flex-wrap gap-2">
+          {MODULES.map(m => (
+            <label key={m.key} className={`flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer transition-colors ${
+              postes.includes(m.key) ? `${m.bgColor} ${m.borderColor}` : 'bg-[#0f1117] border-[#2a2d35]'}`}>
+              <input type="checkbox" checked={postes.includes(m.key)} onChange={() => togglePoste(m.key)}
+                className="w-4 h-4 rounded" />
+              <span className={`text-xs font-medium ${postes.includes(m.key) ? m.color : 'text-gray-500'}`}>{m.label}</span>
+            </label>
+          ))}
         </div>
       </div>
       <div className="flex gap-2">
