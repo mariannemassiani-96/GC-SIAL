@@ -233,6 +233,7 @@ app.patch('/api/commandes-globales/:ref/:module', authMiddleware, (req, res) => 
   if (!validModules.includes(mod)) {
     return res.status(400).json({ error: `Module invalide. Valeurs acceptees: ${validModules.join(', ')}` });
   }
+  req.params.ref = req.params.ref.trim();
   const existing = db.prepare('SELECT ref FROM commandes_globales WHERE ref = ?').get(req.params.ref);
   if (!existing) {
     // Auto-create the command if it doesn't exist
