@@ -117,7 +117,7 @@ function rowToVitrages(
   if (largeur === 0 && hauteur === 0) return [];
 
   const position = get('position');
-  const reference = position ? `${position}_${compositionRaw || refRaw}` : refRaw;
+  const reference = position ? `${position}_${refRaw}` : refRaw;
   const couleur = get('couleur') || '012 (Noir)';
   const { outer, inner, epaisseur } = compositionRaw ? parseVitrageSpec(compositionRaw) : { outer: '', inner: '', epaisseur: 10 };
   const qte = parseInt(get('qte')) || 1;
