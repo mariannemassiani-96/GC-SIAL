@@ -1151,14 +1151,14 @@ function StockView({ onBack }: { onBack: () => void }) {
 
 // ── Main App ─────────────────────────────────────────────────────────
 
-type ViewMode = { type: 'dashboard' } | { type: 'order'; id: string } | { type: 'batch'; ids: string[] } | { type: 'production' } | { type: 'stock' };
+type ViewMode = { type: 'home' } | { type: 'dashboard' } | { type: 'order'; id: string } | { type: 'batch'; ids: string[] } | { type: 'production' } | { type: 'production-atelier' } | { type: 'stock' };
 
 export function VitrageApp({ onBack }: { onBack: () => void }) {
   const [commandes, setCommandes] = useState<Commande[]>([]);
   const [settings, setSettingsState] = useState<Settings>({
     averySettings: DEFAULT_AVERY, weSettings: DEFAULT_WE, glassSettings: DEFAULT_GLASS,
   });
-  const [view, setView] = useState<ViewMode>({ type: 'dashboard' });
+  const [view, setView] = useState<ViewMode>({ type: 'home' });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const saveTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -1234,7 +1234,7 @@ export function VitrageApp({ onBack }: { onBack: () => void }) {
     });
   }, []);
 
-  const goHome = () => { setView({ type: 'dashboard' }); reload(); };
+  const goHome = () => { setView({ type: 'home' }); reload(); };
 
   const renderContent = () => {
     if (loading) return <p className="text-gray-500 text-center py-12">Chargement...</p>;
@@ -1268,8 +1268,42 @@ export function VitrageApp({ onBack }: { onBack: () => void }) {
     if (view.type === 'production') {
       return <ProductionView onBack={goHome} />;
     }
+    if (view.type === 'production-atelier') {
+      return <ProductionView onBack={goHome} startAtelier />;
+    }
     if (view.type === 'stock') {
       return <StockView onBack={goHome} />;
+    }
+    if (view.type === 'home') {
+      return (
+        <div className="max-w-2xl mx-auto py-16 px-6">
+          <h1 className="text-3xl font-black text-white text-center mb-2">ISULA VITRAGE</h1>
+          <p className="text-gray-500 text-center mb-10">Gestion commandes, optimisation coupe, production</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <button onClick={() => setView({ type: 'dashboard' })}
+              className="p-6 bg-blue-700 hover:bg-blue-600 text-white rounded-2xl text-left transition-colors active:scale-[0.98]">
+              <div className="text-xl font-bold">COMMANDES</div>
+              <div className="text-sm text-blue-200 mt-1">Import, vitrages, optimisation, lots de coupe</div>
+              <div className="text-xs text-blue-300 mt-2">{commandes.length} commande{commandes.length > 1 ? 's' : ''}</div>
+            </button>
+            <button onClick={() => setView({ type: 'stock' })}
+              className="p-6 bg-purple-700 hover:bg-purple-600 text-white rounded-2xl text-left transition-colors active:scale-[0.98]">
+              <div className="text-xl font-bold">CATALOGUE & STOCK</div>
+              <div className="text-sm text-purple-200 mt-1">Types de verre, stock plaques</div>
+            </button>
+            <button onClick={() => setView({ type: 'production' })}
+              className="p-6 bg-green-700 hover:bg-green-600 text-white rounded-2xl text-left transition-colors active:scale-[0.98]">
+              <div className="text-xl font-bold">PRODUCTION</div>
+              <div className="text-sm text-green-200 mt-1">Suivi lots, pieces, statistiques</div>
+            </button>
+            <button onClick={() => setView({ type: 'production-atelier' })}
+              className="p-6 bg-orange-600 hover:bg-orange-500 text-white rounded-2xl text-left transition-colors active:scale-[0.98]">
+              <div className="text-xl font-bold">MODE ATELIER</div>
+              <div className="text-sm text-orange-200 mt-1">Interface operateur plein ecran</div>
+            </button>
+          </div>
+        </div>
+      );
     }
     return (
       <Dashboard
