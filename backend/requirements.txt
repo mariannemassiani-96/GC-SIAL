@@ -2,7 +2,7 @@ fastapi==0.115.12
 uvicorn[standard]==0.34.3
 pydantic==2.11.7
 rectpack==0.2.2
-ezdxf==1.4.5
+ezdxf==1.4.4
 celery[redis]==5.5.3
 redis==6.2.0
 psycopg2-binary==2.9.10
