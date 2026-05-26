@@ -141,6 +141,7 @@ CREATE TABLE IF NOT EXISTS production_lots (
   total_pieces INTEGER DEFAULT 0,
   total_we INTEGER DEFAULT 0,
   statut TEXT DEFAULT 'en_preparation' CHECK (statut IN ('en_preparation','en_cours','termine')),
+  lot_matieres JSONB DEFAULT '{}'::jsonb,
   notes TEXT DEFAULT '',
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -169,6 +170,7 @@ CREATE TABLE IF NOT EXISTS production_pieces (
   material TEXT DEFAULT '',
   machine TEXT DEFAULT '' CHECK (machine IN ('','lisec','bottero')),
   plaque_no INTEGER DEFAULT 0,
+  lot_verre TEXT DEFAULT '',
   statut TEXT DEFAULT 'a_preparer' CHECK (statut IN ('a_preparer','a_couper','coupe','a_assembler','assemble','nc','casse','manquant')),
   operateur TEXT DEFAULT '',
   date_coupe TIMESTAMPTZ,

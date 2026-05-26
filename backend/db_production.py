@@ -105,6 +105,21 @@ def update_we_statut(piece_id: str, statut: str, operateur: str = ''):
         conn.commit()
 
 
+def update_lot_verre(lot_id: str, plaque_nos: list[int], lot_verre: str):
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            "UPDATE production_pieces SET lot_verre = %s WHERE lot_id = %s AND plaque_no = ANY(%s)",
+            (lot_verre, lot_id, plaque_nos))
+        conn.commit()
+
+
+def update_lot_matieres(lot_id: str, matieres: dict):
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute("UPDATE production_lots SET lot_matieres = %s::jsonb WHERE id = %s",
+                    (json.dumps(matieres), lot_id))
+        conn.commit()
+
+
 def get_stats(lot_id: str | None = None, semaine: str | None = None):
     with get_conn() as conn, conn.cursor() as cur:
         where = ""

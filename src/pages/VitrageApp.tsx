@@ -15,6 +15,7 @@ import { generateLabelsA, generateLabelsB, generateLabelsC } from '../vitrage/ge
 import { ProductionView } from '../vitrage/ProductionView';
 import { generateFicheWE } from '../vitrage/generateFicheWE';
 import { generateEtiquettesCE, generateEtiquettesAtelier, generateEtiquettesPostCoupe, generateEtiquettesWE } from '../vitrage/generateLabelsIndustrial';
+import { generateOptimVerrePDF } from '../vitrage/generateOptimPDF';
 import {
   fetchCommandes, insertCommande, patchCommande, removeCommande,
   fetchSettings, saveSettings, type Settings,
@@ -318,8 +319,8 @@ function OrderDetail({ commande, onUpdate, onBack, avery, we, glass, onAvery, on
 
       {tab === 0 && <TabImport vitrages={c.vitrages} onUpdate={v => onUpdate({ vitrages: v })} onSetRef={ref => onUpdate({ reference: ref })} />}
       {tab === 1 && <TabVitrages vitrages={c.vitrages} onUpdate={v => onUpdate({ vitrages: v })} />}
-      {tab === 2 && <TabGlass results={glassResult} loading={optimLoading} backend={usingBackend} />}
-      {tab === 3 && <TabWE results={weResult} />}
+      {tab === 2 && <TabGlass results={glassResult} loading={optimLoading} backend={usingBackend} commandeLabel={`${c.reference} — ${c.client}`} />}
+      {tab === 3 && <TabWE results={weResult} commandeLabel={`${c.reference} — ${c.client}`} we={we} />}
       {tab === 4 && <TabExport vitrages={c.vitrages} allPlates={allPlates} weResult={weResult}
         commandeLabel={`${c.reference} — ${c.client}`} commande={c} avery={avery} we={we} />}
       {tab === 5 && <TabLots lot={c.lotFabrication ?? { ...EMPTY_LOT }} onUpdate={l => onUpdate({ lotFabrication: l })} />}
@@ -468,7 +469,7 @@ function TabVitrages({ vitrages, onUpdate }: { vitrages: Vitrage[]; onUpdate: (v
 
 // ── Tab: Glass Optimization ──────────────────────────────────────────
 
-function TabGlass({ results, loading, backend }: { results: GlassOptimResult[]; loading?: boolean; backend?: boolean }) {
+function TabGlass({ results, loading, backend, commandeLabel }: { results: GlassOptimResult[]; loading?: boolean; backend?: boolean; commandeLabel?: string }) {
   if (loading) return <p className="text-blue-400 text-sm">Optimisation en cours (rectpack)...</p>;
   if (results.length === 0) return <p className="text-gray-500 text-sm">Importez des vitrages pour voir l'optimisation.</p>;
 
@@ -483,6 +484,10 @@ function TabGlass({ results, loading, backend }: { results: GlassOptimResult[]; 
         {totalInterdit > 0 && <span className="text-red-400 font-semibold ml-4">{totalInterdit} plaque(s) avec chutes interdites</span>}
         {backend && <span className="text-green-400 ml-auto text-[10px] px-2 py-0.5 rounded bg-green-500/10 border border-green-500/20">rectpack (serveur)</span>}
         {!backend && <span className="text-gray-500 ml-auto text-[10px] px-2 py-0.5 rounded bg-gray-500/10 border border-gray-500/20">JS local</span>}
+        <button onClick={async () => { const blob = await generateOptimVerrePDF(results, commandeLabel || ''); download(blob, 'optimisation_verre.pdf'); }}
+          className="text-xs px-3 py-1 bg-[#181a20] border border-[#2a2d35] rounded hover:border-blue-500/50 text-gray-400 hover:text-white transition-colors">
+          Imprimer PDF
+        </button>
       </div>
       {results.map((r, i) => (
         <div key={i} className="bg-[#181a20] rounded-lg p-4 border border-[#2a2d35]">
@@ -556,11 +561,17 @@ function PlatePreview({ plate }: { plate: OptimizedPlate }) {
 
 // ── Tab: WE ──────────────────────────────────────────────────────────
 
-function TabWE({ results }: { results: WEGroupe[] }) {
+function TabWE({ results, commandeLabel, we }: { results: WEGroupe[]; commandeLabel?: string; we?: WESettings }) {
   if (results.length === 0) return <p className="text-gray-500 text-sm">Importez des vitrages pour voir l'optimisation WE.</p>;
 
   return (
     <div className="space-y-4">
+      <div className="flex justify-end">
+        <button onClick={async () => { const blob = await generateFicheWE(results, commandeLabel || '', we); download(blob, 'optimisation_we.pdf'); }}
+          className="text-xs px-3 py-1 bg-[#181a20] border border-[#2a2d35] rounded hover:border-amber-500/50 text-gray-400 hover:text-white transition-colors">
+          Imprimer PDF
+        </button>
+      </div>
       {results.map((g, i) => (
         <div key={i} className="bg-[#181a20] rounded-lg p-4 border border-[#2a2d35]">
           <div className="flex items-center justify-between mb-2">
@@ -915,8 +926,8 @@ function BatchView({ commandes, onBack, avery, we, glass }: {
           </table>
         </div>
       )}
-      {tab === 1 && <TabGlass results={glassResult} loading={optimLoading} backend={usingBackend} />}
-      {tab === 2 && <TabWE results={weResult} />}
+      {tab === 1 && <TabGlass results={glassResult} loading={optimLoading} backend={usingBackend} commandeLabel={batchLabel} />}
+      {tab === 2 && <TabWE results={weResult} commandeLabel={batchLabel} we={we} />}
       {tab === 3 && <TabExport vitrages={allVitrages} allPlates={allPlates} weResult={weResult}
         commandeLabel={batchLabel} avery={avery} we={we} />}
     </div>

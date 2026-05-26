@@ -268,6 +268,18 @@ def api_update_we(piece_id: str, data: dict = Body(...)):
     return {"ok": True}
 
 
+@app.patch("/api/production/lots/{lot_id}/lot-verre")
+def api_update_lot_verre(lot_id: str, data: dict = Body(...)):
+    dbp.update_lot_verre(lot_id, data.get('plaque_nos', []), data.get('lot_verre', ''))
+    return {"ok": True}
+
+
+@app.patch("/api/production/lots/{lot_id}/lot-matieres")
+def api_update_lot_matieres(lot_id: str, data: dict = Body(...)):
+    dbp.update_lot_matieres(lot_id, data.get('matieres', {}))
+    return {"ok": True}
+
+
 @app.get("/api/production/stats")
 def api_production_stats(lot_id: str | None = None, semaine: str | None = None):
     return dbp.get_stats(lot_id, semaine)
