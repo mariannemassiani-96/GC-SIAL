@@ -69,4 +69,16 @@ db.exec(`
 try { db.exec('ALTER TABLE users ADD COLUMN pin TEXT DEFAULT NULL'); } catch {}
 try { db.exec('ALTER TABLE users ADD COLUMN pin_enabled INTEGER DEFAULT 0'); } catch {}
 
+// Profile images cache
+db.exec(`
+  CREATE TABLE IF NOT EXISTS profile_images (
+    code TEXT PRIMARY KEY,
+    image_base64 TEXT NOT NULL,
+    description TEXT DEFAULT '',
+    brand TEXT DEFAULT '',
+    system TEXT DEFAULT '',
+    updated_at TEXT DEFAULT (datetime('now'))
+  );
+`);
+
 module.exports = db;

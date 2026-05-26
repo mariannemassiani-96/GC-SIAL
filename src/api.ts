@@ -126,6 +126,27 @@ export async function updateUser(id: number, data: Partial<{ nom: string; role: 
   await request('PUT', `/api/users/${id}`, data);
 }
 
+// ── Profile Images Library ─────────────────────────────────────────
+
+export async function getProfileImages(codes: string[]): Promise<Record<string, string>> {
+  if (codes.length === 0) return {};
+  return request<Record<string, string>>('GET', `/api/profile-images/batch/${codes.join(',')}`);
+}
+
+export async function extractAndCacheProfileImages(pdf: File, profileCodes: string[]): Promise<{ code: string; base64: string }[]> {
+  const formData = new FormData();
+  formData.append('pdf', pdf);
+  formData.append('profileCodes', JSON.stringify(profileCodes));
+  const res = await fetch(`${API_URL}/api/extract-profile-images`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${token}` },
+    body: formData,
+  });
+  if (!res.ok) throw new Error('Erreur extraction images');
+  const data = await res.json();
+  return data.profileImages || [];
+}
+
 // ── Commandes Globales ──────────────────────────────────────────────
 
 export interface ModuleStatus {

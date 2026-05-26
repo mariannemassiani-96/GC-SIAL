@@ -259,27 +259,75 @@ app.patch('/api/commandes-globales/:ref/:module', authMiddleware, (req, res) => 
 });
 
 // ══════════════════════════════════════════════════════════════
-// PDF PROFILE IMAGE EXTRACTION
+// PROFILE IMAGES LIBRARY (auto-cache)
+// ══════════════════════════════════════════════════════════════
+
+app.get('/api/profile-images', authMiddleware, (req, res) => {
+  const rows = db.prepare('SELECT code, image_base64, description, brand, system FROM profile_images ORDER BY code').all();
+  res.json(rows);
+});
+
+app.get('/api/profile-images/:code', authMiddleware, (req, res) => {
+  const row = db.prepare('SELECT * FROM profile_images WHERE code = ?').get(req.params.code);
+  if (!row) return res.status(404).json({ error: 'Profil non trouve' });
+  res.json(row);
+});
+
+app.put('/api/profile-images/:code', authMiddleware, (req, res) => {
+  const { image_base64, description, brand, system } = req.body;
+  db.prepare(`INSERT INTO profile_images (code, image_base64, description, brand, system, updated_at)
+    VALUES (?, ?, ?, ?, ?, datetime('now'))
+    ON CONFLICT(code) DO UPDATE SET image_base64 = ?, description = COALESCE(?, description),
+    brand = COALESCE(?, brand), system = COALESCE(?, system), updated_at = datetime('now')`)
+    .run(req.params.code, image_base64, description || '', brand || '', system || '',
+         image_base64, description, brand, system);
+  res.json({ ok: true });
+});
+
+app.get('/api/profile-images/batch/:codes', authMiddleware, (req, res) => {
+  const codes = req.params.codes.split(',').map(c => c.trim()).filter(Boolean);
+  const placeholders = codes.map(() => '?').join(',');
+  const rows = db.prepare(`SELECT code, image_base64, description FROM profile_images WHERE code IN (${placeholders})`).all(...codes);
+  const map = {};
+  for (const r of rows) map[r.code] = r.image_base64;
+  res.json(map);
+});
+
+// ══════════════════════════════════════════════════════════════
+// PDF PROFILE IMAGE EXTRACTION + AUTO-CACHE
 // ══════════════════════════════════════════════════════════════
 
 app.post('/api/extract-profile-images', authMiddleware, upload.single('pdf'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Fichier PDF requis' });
+  const profileCodes = req.body.profileCodes ? JSON.parse(req.body.profileCodes) : [];
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pdfimg-'));
   const pdfPath = path.join(tmpDir, 'input.pdf');
   try {
     fs.writeFileSync(pdfPath, req.file.buffer);
     execSync(`pdfimages -png "${pdfPath}" "${path.join(tmpDir, 'img')}"`, { timeout: 15000 });
     const files = fs.readdirSync(tmpDir).filter(f => f.endsWith('.png')).sort();
-    const images = [];
+    const profileImages = [];
+    let profileIdx = 0;
     for (const f of files) {
       const buf = fs.readFileSync(path.join(tmpDir, f));
       const b64 = buf.toString('base64');
-      // Profile section images are ~100x100, bar images are ~1200x52
-      // We want both but tag them
       const size = buf.length;
-      images.push({ name: f, base64: b64, size, isProfile: size < 2000 && size > 100 });
+      const isProfile = size < 5000 && size > 100;
+      if (isProfile) {
+        const code = profileCodes[profileIdx] || `unknown_${profileIdx}`;
+        profileImages.push({ code, base64: b64 });
+        // Auto-cache in library if code is known
+        if (code && !code.startsWith('unknown_')) {
+          const existing = db.prepare('SELECT code FROM profile_images WHERE code = ?').get(code);
+          if (!existing) {
+            db.prepare(`INSERT INTO profile_images (code, image_base64, updated_at) VALUES (?, ?, datetime('now'))`)
+              .run(code, b64);
+          }
+        }
+        profileIdx++;
+      }
     }
-    res.json({ images, total: images.length });
+    res.json({ profileImages, cached: profileIdx, total: files.length });
   } catch (e) {
     res.status(500).json({ error: 'Erreur extraction: ' + e.message });
   } finally {
