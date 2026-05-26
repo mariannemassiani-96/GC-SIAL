@@ -1,8 +1,15 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const multer = require('multer');
+const { execSync } = require('child_process');
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
 const db = require('./db');
 const { hashPassword, checkPassword, generateToken, authMiddleware, adminOnly, ensureAdmin } = require('./auth');
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -249,6 +256,35 @@ app.patch('/api/commandes-globales/:ref/:module', authMiddleware, (req, res) => 
     req.user.id, 'patch_module', 'commandes_globales', `${req.params.ref}/${mod}`
   );
   res.json({ ok: true });
+});
+
+// ══════════════════════════════════════════════════════════════
+// PDF PROFILE IMAGE EXTRACTION
+// ══════════════════════════════════════════════════════════════
+
+app.post('/api/extract-profile-images', authMiddleware, upload.single('pdf'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Fichier PDF requis' });
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pdfimg-'));
+  const pdfPath = path.join(tmpDir, 'input.pdf');
+  try {
+    fs.writeFileSync(pdfPath, req.file.buffer);
+    execSync(`pdfimages -png "${pdfPath}" "${path.join(tmpDir, 'img')}"`, { timeout: 15000 });
+    const files = fs.readdirSync(tmpDir).filter(f => f.endsWith('.png')).sort();
+    const images = [];
+    for (const f of files) {
+      const buf = fs.readFileSync(path.join(tmpDir, f));
+      const b64 = buf.toString('base64');
+      // Profile section images are ~100x100, bar images are ~1200x52
+      // We want both but tag them
+      const size = buf.length;
+      images.push({ name: f, base64: b64, size, isProfile: size < 2000 && size > 100 });
+    }
+    res.json({ images, total: images.length });
+  } catch (e) {
+    res.status(500).json({ error: 'Erreur extraction: ' + e.message });
+  } finally {
+    try { fs.rmSync(tmpDir, { recursive: true }); } catch {}
+  }
 });
 
 // ══════════════════════════════════════════════════════════════
