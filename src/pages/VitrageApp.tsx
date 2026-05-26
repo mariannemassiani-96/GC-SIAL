@@ -865,6 +865,7 @@ function BatchView({ commandes, onBack, avery, we, glass }: {
           commande_ids: commandes.map(c => c.id), commande_refs: commandes.map(c => c.reference),
           total_pieces: prodPieces.length, total_we: weProd.length, notes: '',
           pieces: prodPieces, we_pieces: weProd,
+          glass_optim: glassResult, we_optim: weResult,
         }),
       });
       alert(`Lot ${ref} cree avec ${prodPieces.length} pieces verre + ${weProd.length} WE`);

@@ -280,6 +280,12 @@ def api_update_lot_matieres(lot_id: str, data: dict = Body(...)):
     return {"ok": True}
 
 
+@app.patch("/api/production/lots/{lot_id}/preparation")
+def api_update_preparation(lot_id: str, data: dict = Body(...)):
+    dbp.update_preparation(lot_id, data.get('preparation', {}))
+    return {"ok": True}
+
+
 @app.get("/api/production/stats")
 def api_production_stats(lot_id: str | None = None, semaine: str | None = None):
     return dbp.get_stats(lot_id, semaine)
