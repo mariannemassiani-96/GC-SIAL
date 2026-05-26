@@ -272,19 +272,13 @@ function useOptimization(vitrages: Vitrage[], glass: GlassSettings) {
 
 const TABS = ['Import', 'Vitrages'] as const;
 
-function OrderDetail({ commande, onUpdate, onBack, avery, we, glass, onAvery, onWE, onGlass }: {
+function OrderDetail({ commande, onUpdate, onBack }: {
   commande: Commande;
   onUpdate: (patch: Partial<Commande>) => void;
   onBack: () => void;
-  avery: AverySettings; we: WESettings; glass: GlassSettings;
-  onAvery: (s: AverySettings) => void; onWE: (s: WESettings) => void; onGlass: (s: GlassSettings) => void;
 }) {
   const [tab, setTab] = useState(0);
   const c = commande;
-
-  const weResult = useMemo(() => c.vitrages.length > 0 ? optimizeWE(c.vitrages, we) : [], [c.vitrages, we]);
-  const { glassResult, loading: optimLoading, backend: usingBackend } = useOptimization(c.vitrages, glass);
-  const allPlates = useMemo(() => glassResult.flatMap(g => g.plates), [glassResult]);
 
   return (
     <div className="space-y-4">
@@ -729,7 +723,7 @@ const LOT_FIELDS: { key: keyof LotFabrication; label: string; placeholder: strin
   { key: 'gazArgon', label: 'Gaz argon', placeholder: 'N° lot bouteille' },
 ];
 
-function TabLots({ lot, onUpdate }: { lot: LotFabrication; onUpdate: (l: LotFabrication) => void }) {
+function _TabLots({ lot, onUpdate }: { lot: LotFabrication; onUpdate: (l: LotFabrication) => void }) {
   return (
     <div className="space-y-4">
       <div className="text-sm text-gray-400">
@@ -764,7 +758,7 @@ function TabLots({ lot, onUpdate }: { lot: LotFabrication; onUpdate: (l: LotFabr
 
 // ── Tab: Settings ────────────────────────────────────────────────────
 
-function TabSettings({ avery, we, glass, onAvery, onWE, onGlass }: {
+function _TabSettings({ avery, we, glass, onAvery, onWE, onGlass }: {
   avery: AverySettings; we: WESettings; glass: GlassSettings;
   onAvery: (s: AverySettings) => void; onWE: (s: WESettings) => void; onGlass: (s: GlassSettings) => void;
 }) {
@@ -1241,10 +1235,6 @@ export function VitrageApp({ onBack }: { onBack: () => void }) {
           commande={selected}
           onUpdate={patch => handleUpdate(view.id, patch)}
           onBack={goHome}
-          avery={settings.averySettings} we={settings.weSettings} glass={settings.glassSettings}
-          onAvery={a => handleSettings({ averySettings: a })}
-          onWE={w => handleSettings({ weSettings: w })}
-          onGlass={g => handleSettings({ glassSettings: g })}
         />
       );
     }
