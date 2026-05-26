@@ -52,9 +52,9 @@ app.get('/api/auth/pin-users', (req, res) => {
 });
 
 app.get('/api/auth/me', authMiddleware, (req, res) => {
-  const user = db.prepare('SELECT id, email, nom, role, apps_autorisees FROM users WHERE id = ?').get(req.user.id);
+  const user = db.prepare('SELECT id, email, nom, role, apps_autorisees, pin_enabled FROM users WHERE id = ?').get(req.user.id);
   if (!user) return res.status(404).json({ error: 'Utilisateur non trouve' });
-  res.json({ ...user, apps_autorisees: JSON.parse(user.apps_autorisees || '[]') });
+  res.json({ ...user, apps_autorisees: JSON.parse(user.apps_autorisees || '[]'), pin_enabled: !!user.pin_enabled });
 });
 
 // ══════════════════════════════════════════════════════════════
