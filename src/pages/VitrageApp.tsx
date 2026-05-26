@@ -270,7 +270,7 @@ function useOptimization(vitrages: Vitrage[], glass: GlassSettings) {
 
 // ── Order Detail ─────────────────────────────────────────────────────
 
-const TABS = ['Import', 'Vitrages', 'Optim Verre', 'Warm Edge', 'Etiquettes', 'Lots & Tracabilite', 'Parametres'] as const;
+const TABS = ['Import', 'Vitrages'] as const;
 
 function OrderDetail({ commande, onUpdate, onBack, avery, we, glass, onAvery, onWE, onGlass }: {
   commande: Commande;
@@ -326,12 +326,6 @@ function OrderDetail({ commande, onUpdate, onBack, avery, we, glass, onAvery, on
 
       {tab === 0 && <TabImport vitrages={c.vitrages} onUpdate={v => onUpdate({ vitrages: v })} onSetRef={ref => onUpdate({ reference: ref })} chantier={c.client} />}
       {tab === 1 && <TabVitrages vitrages={c.vitrages} onUpdate={v => onUpdate({ vitrages: v })} />}
-      {tab === 2 && <TabGlass results={glassResult} loading={optimLoading} backend={usingBackend} commandeLabel={`${c.reference} — ${c.client}`} />}
-      {tab === 3 && <TabWE results={weResult} commandeLabel={`${c.reference} — ${c.client}`} we={we} />}
-      {tab === 4 && <TabExport vitrages={c.vitrages} allPlates={allPlates} weResult={weResult}
-        commandeLabel={`${c.reference} — ${c.client}`} commande={c} avery={avery} we={we} />}
-      {tab === 5 && <TabLots lot={c.lotFabrication ?? { ...EMPTY_LOT }} onUpdate={l => onUpdate({ lotFabrication: l })} />}
-      {tab === 6 && <TabSettings avery={avery} we={we} glass={glass} onAvery={onAvery} onWE={onWE} onGlass={onGlass} />}
     </div>
   );
 }
