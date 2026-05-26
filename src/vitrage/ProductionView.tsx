@@ -1378,7 +1378,13 @@ function EtiquettesTab({ pieces, wePieces, lotRef, weOptim }: {
     });
   };
 
-  const cmdInfo = { reference: lotRef, client: '', date_creation: new Date().toISOString().slice(0, 10) };
+  const cmdInfo = {
+    id: '', reference: lotRef, client: '', dateCreation: new Date().toISOString().slice(0, 10),
+    semaineFabrication: '', semaineLivraison: '', statut: 'en_cours' as const,
+    vitrages: [] as Vitrage[],
+    lotFabrication: { verreExt: '', verreInt: '', intercalaire: '', dessiccant: '', masticButyl: '', masticPU: '', gazArgon: '', notes: '' },
+    notes: '',
+  };
 
   const gen = async (type: string) => {
     setGenerating(true);
