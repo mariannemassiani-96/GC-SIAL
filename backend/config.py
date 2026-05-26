@@ -1,6 +1,6 @@
 import os
 
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://isula:isula@localhost:5433/isula_vitrage")
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://isula:isula2026@localhost:5432/isula_vitrage")
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:5173,https://gc-sial.vercel.app").split(",")
 

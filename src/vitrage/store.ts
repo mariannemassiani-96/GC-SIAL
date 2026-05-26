@@ -1,8 +1,34 @@
-import { supabase, isConfigured } from './supabase';
 import type { Commande, AverySettings, WESettings, GlassSettings, GlassProduct, StockPlate, StockRemnant } from './types';
 import { DEFAULT_AVERY, DEFAULT_WE, DEFAULT_GLASS, EMPTY_LOT } from './types';
 
-// ── Settings (Supabase — table settings, 1 seule ligne) ─────────────
+const API = import.meta.env.VITE_ISULA_API_URL as string || '';
+
+async function get<T>(path: string): Promise<T> {
+  const res = await fetch(`${API}${path}`);
+  if (!res.ok) throw new Error(`GET ${path}: ${res.status}`);
+  return res.json();
+}
+
+async function post(path: string, body: unknown) {
+  const res = await fetch(`${API}${path}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`POST ${path}: ${res.status}`);
+}
+
+async function patch(path: string, body: unknown) {
+  const res = await fetch(`${API}${path}`, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`PATCH ${path}: ${res.status}`);
+}
+
+async function del(path: string) {
+  const res = await fetch(`${API}${path}`, { method: 'DELETE' });
+  if (!res.ok) throw new Error(`DELETE ${path}: ${res.status}`);
+}
+
+// ── Settings ─────────────────────────────────────────────────────────
 
 export interface Settings {
   averySettings: AverySettings;
@@ -11,177 +37,127 @@ export interface Settings {
 }
 
 function defaultSettings(): Settings {
-  return {
-    averySettings: { ...DEFAULT_AVERY },
-    weSettings: { ...DEFAULT_WE },
-    glassSettings: { ...DEFAULT_GLASS },
-  };
+  return { averySettings: { ...DEFAULT_AVERY }, weSettings: { ...DEFAULT_WE }, glassSettings: { ...DEFAULT_GLASS } };
 }
 
 export async function fetchSettings(): Promise<Settings> {
-  if (!isConfigured) return defaultSettings();
-  const { data, error } = await supabase.from('settings').select('*').eq('id', 1).single();
-  if (error || !data) return defaultSettings();
-  return {
-    averySettings: data.avery && typeof data.avery === 'object' ? { ...DEFAULT_AVERY, ...(data.avery as object) } : { ...DEFAULT_AVERY },
-    weSettings: data.we && typeof data.we === 'object' ? { ...DEFAULT_WE, ...(data.we as object) } : { ...DEFAULT_WE },
-    glassSettings: data.glass && typeof data.glass === 'object' ? { ...DEFAULT_GLASS, ...(data.glass as object) } : { ...DEFAULT_GLASS },
-  };
+  if (!API) return defaultSettings();
+  try {
+    const row = await get<Record<string, unknown>>('/api/settings');
+    return {
+      averySettings: row.avery && typeof row.avery === 'object' ? { ...DEFAULT_AVERY, ...(row.avery as object) } : { ...DEFAULT_AVERY },
+      weSettings: row.we && typeof row.we === 'object' ? { ...DEFAULT_WE, ...(row.we as object) } : { ...DEFAULT_WE },
+      glassSettings: row.glass && typeof row.glass === 'object' ? { ...DEFAULT_GLASS, ...(row.glass as object) } : { ...DEFAULT_GLASS },
+    };
+  } catch { return defaultSettings(); }
 }
 
 export async function saveSettings(s: Settings): Promise<void> {
-  if (!isConfigured) return;
-  await supabase.from('settings').update({
-    avery: s.averySettings,
-    we: s.weSettings,
-    glass: s.glassSettings,
-  }).eq('id', 1);
+  if (!API) return;
+  await patch('/api/settings', { avery: s.averySettings, we: s.weSettings, glass: s.glassSettings });
 }
 
-// ── Commandes (Supabase) ─────────────────────────────────────────────
+// ── Commandes ────────────────────────────────────────────────────────
 
-interface DbRow {
-  id: string;
-  reference: string;
-  client: string;
-  date_creation: string;
-  semaine_fabrication: string;
-  semaine_livraison: string;
-  statut: string;
-  vitrages: unknown;
-  lot_fabrication: unknown;
-  notes: string;
-}
-
-function rowToCommande(row: DbRow): Commande {
+function rowToCommande(row: Record<string, unknown>): Commande {
   return {
-    id: row.id,
-    reference: row.reference,
-    client: row.client,
-    dateCreation: row.date_creation,
-    semaineFabrication: row.semaine_fabrication ?? '',
-    semaineLivraison: row.semaine_livraison ?? '',
-    statut: (row.statut as Commande['statut']) ?? 'en_attente',
+    id: row.id as string,
+    reference: row.reference as string || '',
+    client: row.client as string || '',
+    dateCreation: String(row.date_creation || ''),
+    semaineFabrication: row.semaine_fabrication as string || '',
+    semaineLivraison: row.semaine_livraison as string || '',
+    statut: (row.statut as Commande['statut']) || 'en_attente',
     vitrages: Array.isArray(row.vitrages) ? row.vitrages as Commande['vitrages'] : [],
     lotFabrication: row.lot_fabrication && typeof row.lot_fabrication === 'object'
-      ? { ...EMPTY_LOT, ...(row.lot_fabrication as Record<string, string>) }
-      : { ...EMPTY_LOT },
-    notes: row.notes ?? '',
-  };
-}
-
-function commandeToRow(c: Commande) {
-  return {
-    id: c.id,
-    reference: c.reference,
-    client: c.client,
-    date_creation: c.dateCreation,
-    semaine_fabrication: c.semaineFabrication,
-    semaine_livraison: c.semaineLivraison,
-    statut: c.statut,
-    vitrages: c.vitrages,
-    lot_fabrication: c.lotFabrication,
-    notes: c.notes,
+      ? { ...EMPTY_LOT, ...(row.lot_fabrication as Record<string, string>) } : { ...EMPTY_LOT },
+    notes: row.notes as string || '',
   };
 }
 
 export async function fetchCommandes(): Promise<Commande[]> {
-  if (!isConfigured) return [];
-  const { data, error } = await supabase
-    .from('commandes')
-    .select('*')
-    .order('date_creation', { ascending: false });
-  if (error) throw new Error(error.message);
-  return (data as DbRow[]).map(rowToCommande);
+  if (!API) return [];
+  const rows = await get<Record<string, unknown>[]>('/api/commandes');
+  return rows.map(rowToCommande);
 }
 
 export async function insertCommande(cmd: Commande): Promise<void> {
-  if (!isConfigured) return;
-  const { error } = await supabase.from('commandes').insert(commandeToRow(cmd));
-  if (error) throw new Error(error.message);
+  if (!API) return;
+  await post('/api/commandes', {
+    id: cmd.id, reference: cmd.reference, client: cmd.client,
+    date_creation: cmd.dateCreation, semaine_fabrication: cmd.semaineFabrication,
+    semaine_livraison: cmd.semaineLivraison, statut: cmd.statut,
+    vitrages: cmd.vitrages, lot_fabrication: cmd.lotFabrication, notes: cmd.notes,
+  });
 }
 
-export async function patchCommande(id: string, patch: Partial<Commande>): Promise<void> {
-  if (!isConfigured) return;
+export async function patchCommande(id: string, p: Partial<Commande>): Promise<void> {
+  if (!API) return;
   const updates: Record<string, unknown> = {};
-  if (patch.reference !== undefined) updates.reference = patch.reference;
-  if (patch.client !== undefined) updates.client = patch.client;
-  if (patch.statut !== undefined) updates.statut = patch.statut;
-  if (patch.semaineFabrication !== undefined) updates.semaine_fabrication = patch.semaineFabrication;
-  if (patch.semaineLivraison !== undefined) updates.semaine_livraison = patch.semaineLivraison;
-  if (patch.vitrages !== undefined) updates.vitrages = patch.vitrages;
-  if (patch.lotFabrication !== undefined) updates.lot_fabrication = patch.lotFabrication;
-  if (patch.notes !== undefined) updates.notes = patch.notes;
+  if (p.reference !== undefined) updates.reference = p.reference;
+  if (p.client !== undefined) updates.client = p.client;
+  if (p.statut !== undefined) updates.statut = p.statut;
+  if (p.semaineFabrication !== undefined) updates.semaine_fabrication = p.semaineFabrication;
+  if (p.semaineLivraison !== undefined) updates.semaine_livraison = p.semaineLivraison;
+  if (p.vitrages !== undefined) updates.vitrages = p.vitrages;
+  if (p.lotFabrication !== undefined) updates.lot_fabrication = p.lotFabrication;
+  if (p.notes !== undefined) updates.notes = p.notes;
   if (Object.keys(updates).length === 0) return;
-  const { error } = await supabase.from('commandes').update(updates).eq('id', id);
-  if (error) throw new Error(error.message);
+  await patch(`/api/commandes/${id}`, updates);
 }
 
 export async function removeCommande(id: string): Promise<void> {
-  if (!isConfigured) return;
-  const { error } = await supabase.from('commandes').delete().eq('id', id);
-  if (error) throw new Error(error.message);
+  if (!API) return;
+  await del(`/api/commandes/${id}`);
 }
 
-// ── Catalogue verres (Supabase) ──────────────────────────────────────
+// ── Catalogue verres ─────────────────────────────────────────────────
 
 export async function fetchGlassProducts(): Promise<GlassProduct[]> {
-  if (!isConfigured) return [];
-  const { data, error } = await supabase.from('glass_products').select('*').order('code');
-  if (error) throw new Error(error.message);
-  return (data ?? []) as GlassProduct[];
+  if (!API) return [];
+  return get<GlassProduct[]>('/api/glass-products');
 }
 
 export async function upsertGlassProduct(p: Partial<GlassProduct> & { code: string }): Promise<void> {
-  if (!isConfigured) return;
-  const { error } = await supabase.from('glass_products').upsert(p, { onConflict: 'code' });
-  if (error) throw new Error(error.message);
+  if (!API) return;
+  await post('/api/glass-products', p);
 }
 
 export async function deleteGlassProduct(id: string): Promise<void> {
-  if (!isConfigured) return;
-  const { error } = await supabase.from('glass_products').delete().eq('id', id);
-  if (error) throw new Error(error.message);
+  if (!API) return;
+  await del(`/api/glass-products/${id}`);
 }
 
-// ── Stock plaques (Supabase) ─────────────────────────────────────────
+// ── Stock plaques ────────────────────────────────────────────────────
 
 export async function fetchStockPlates(): Promise<StockPlate[]> {
-  if (!isConfigured) return [];
-  const { data, error } = await supabase.from('stock_plates').select('*').order('glass_code');
-  if (error) throw new Error(error.message);
-  return (data ?? []) as StockPlate[];
+  if (!API) return [];
+  return get<StockPlate[]>('/api/stock-plates');
 }
 
 export async function upsertStockPlate(p: Partial<StockPlate>): Promise<void> {
-  if (!isConfigured) return;
-  const { error } = await supabase.from('stock_plates').upsert(p);
-  if (error) throw new Error(error.message);
+  if (!API) return;
+  await post('/api/stock-plates', p);
 }
 
 export async function deleteStockPlate(id: string): Promise<void> {
-  if (!isConfigured) return;
-  const { error } = await supabase.from('stock_plates').delete().eq('id', id);
-  if (error) throw new Error(error.message);
+  if (!API) return;
+  await del(`/api/stock-plates/${id}`);
 }
 
-// ── Stock chutes (Supabase) ──────────────────────────────────────────
+// ── Stock chutes ─────────────────────────────────────────────────────
 
 export async function fetchStockRemnants(): Promise<StockRemnant[]> {
-  if (!isConfigured) return [];
-  const { data, error } = await supabase.from('stock_remnants').select('*').order('glass_code');
-  if (error) throw new Error(error.message);
-  return (data ?? []) as StockRemnant[];
+  if (!API) return [];
+  return get<StockRemnant[]>('/api/stock-remnants');
 }
 
 export async function insertStockRemnant(r: Omit<StockRemnant, 'id'>): Promise<void> {
-  if (!isConfigured) return;
-  const { error } = await supabase.from('stock_remnants').insert(r);
-  if (error) throw new Error(error.message);
+  if (!API) return;
+  await post('/api/stock-remnants', r);
 }
 
 export async function deleteStockRemnant(id: string): Promise<void> {
-  if (!isConfigured) return;
-  const { error } = await supabase.from('stock_remnants').delete().eq('id', id);
-  if (error) throw new Error(error.message);
+  if (!API) return;
+  await del(`/api/stock-remnants/${id}`);
 }
