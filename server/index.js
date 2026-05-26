@@ -149,6 +149,105 @@ app.put('/api/data/:app/:collection', authMiddleware, (req, res) => {
 });
 
 // ══════════════════════════════════════════════════════════════
+// COMMANDES GLOBALES
+// ══════════════════════════════════════════════════════════════
+
+function supervisorOnly(req, res, next) {
+  if (req.user.role !== 'admin' && req.user.role !== 'superviseur' && req.user.role !== 'chef_atelier') {
+    return res.status(403).json({ error: 'Acces reserve aux superviseurs' });
+  }
+  next();
+}
+
+// GET all
+app.get('/api/commandes-globales', authMiddleware, (req, res) => {
+  const rows = db.prepare('SELECT * FROM commandes_globales ORDER BY date_creation DESC').all();
+  res.json(rows.map(r => ({
+    ...r,
+    reception: JSON.parse(r.reception || '{}'),
+    coupe_profiles: JSON.parse(r.coupe_profiles || '{}'),
+    vitrage: JSON.parse(r.vitrage || '{}'),
+    assemblage: JSON.parse(r.assemblage || '{}'),
+    livraison: JSON.parse(r.livraison || '{}'),
+  })));
+});
+
+// GET one
+app.get('/api/commandes-globales/:ref', authMiddleware, (req, res) => {
+  const row = db.prepare('SELECT * FROM commandes_globales WHERE ref = ?').get(req.params.ref);
+  if (!row) return res.status(404).json({ error: 'Commande non trouvee' });
+  res.json({
+    ...row,
+    reception: JSON.parse(row.reception || '{}'),
+    coupe_profiles: JSON.parse(row.coupe_profiles || '{}'),
+    vitrage: JSON.parse(row.vitrage || '{}'),
+    assemblage: JSON.parse(row.assemblage || '{}'),
+    livraison: JSON.parse(row.livraison || '{}'),
+  });
+});
+
+// PUT (upsert)
+app.put('/api/commandes-globales/:ref', authMiddleware, supervisorOnly, (req, res) => {
+  const { client, chantier, semaine_fab, semaine_liv, reception, coupe_profiles, vitrage, assemblage, livraison, notes } = req.body;
+  db.prepare(`INSERT INTO commandes_globales (ref, client, chantier, semaine_fab, semaine_liv, reception, coupe_profiles, vitrage, assemblage, livraison, notes, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    ON CONFLICT(ref) DO UPDATE SET
+      client = COALESCE(?, client),
+      chantier = COALESCE(?, chantier),
+      semaine_fab = COALESCE(?, semaine_fab),
+      semaine_liv = COALESCE(?, semaine_liv),
+      reception = COALESCE(?, reception),
+      coupe_profiles = COALESCE(?, coupe_profiles),
+      vitrage = COALESCE(?, vitrage),
+      assemblage = COALESCE(?, assemblage),
+      livraison = COALESCE(?, livraison),
+      notes = COALESCE(?, notes),
+      updated_at = datetime('now')
+  `).run(
+    req.params.ref,
+    client || '', chantier || '', semaine_fab || '', semaine_liv || '',
+    JSON.stringify(reception || {}), JSON.stringify(coupe_profiles || {}),
+    JSON.stringify(vitrage || {}), JSON.stringify(assemblage || {}),
+    JSON.stringify(livraison || {}), notes || '',
+    client, chantier, semaine_fab, semaine_liv,
+    reception ? JSON.stringify(reception) : null,
+    coupe_profiles ? JSON.stringify(coupe_profiles) : null,
+    vitrage ? JSON.stringify(vitrage) : null,
+    assemblage ? JSON.stringify(assemblage) : null,
+    livraison ? JSON.stringify(livraison) : null,
+    notes
+  );
+  db.prepare('INSERT INTO activity_log (user_id, action, app, detail) VALUES (?, ?, ?, ?)').run(
+    req.user.id, 'upsert', 'commandes_globales', req.params.ref
+  );
+  res.json({ ok: true });
+});
+
+// PATCH a specific module
+app.patch('/api/commandes-globales/:ref/:module', authMiddleware, (req, res) => {
+  const validModules = ['reception', 'coupe_profiles', 'vitrage', 'assemblage', 'livraison'];
+  const mod = req.params.module;
+  if (!validModules.includes(mod)) {
+    return res.status(400).json({ error: `Module invalide. Valeurs acceptees: ${validModules.join(', ')}` });
+  }
+  const existing = db.prepare('SELECT ref FROM commandes_globales WHERE ref = ?').get(req.params.ref);
+  if (!existing) {
+    // Auto-create the command if it doesn't exist
+    db.prepare(`INSERT INTO commandes_globales (ref, ${mod}, updated_at) VALUES (?, ?, datetime('now'))`).run(
+      req.params.ref, JSON.stringify(req.body)
+    );
+  } else {
+    db.prepare(`UPDATE commandes_globales SET ${mod} = ?, updated_at = datetime('now') WHERE ref = ?`).run(
+      JSON.stringify(req.body), req.params.ref
+    );
+  }
+  db.prepare('INSERT INTO activity_log (user_id, action, app, detail) VALUES (?, ?, ?, ?)').run(
+    req.user.id, 'patch_module', 'commandes_globales', `${req.params.ref}/${mod}`
+  );
+  res.json({ ok: true });
+});
+
+// ══════════════════════════════════════════════════════════════
 // ACTIVITY LOG
 // ══════════════════════════════════════════════════════════════
 
