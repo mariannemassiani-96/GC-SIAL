@@ -495,7 +495,7 @@ function AtelierView({
   updateCutStatut: (commandeId: string, machine: MachineName, barId: string, cutIdx: number, statut: FstCut['statut']) => void;
   markBarAllCut: (commandeId: string, machine: MachineName, barId: string) => void;
 }) {
-  const [step, setStep] = useState<AtelierStep>('machine');
+  const [step, setStep] = useState<AtelierStep | 'preparation'>('machine');
   const [machine, setMachine] = useState<MachineName | null>(null);
   const [commandeId, setCommandeId] = useState<string | null>(null);
   const [profileCode, setProfileCode] = useState<string | null>(null);
@@ -536,6 +536,7 @@ function AtelierView({
     if (step === 'bar') { setStep('profile'); setBarIdx(0); }
     else if (step === 'profile') { setStep('commande'); setProfileCode(null); }
     else if (step === 'commande') { setStep('machine'); setCommandeId(null); }
+    else if (step === 'preparation') { setStep('machine'); }
     else onBack();
   };
 
@@ -546,6 +547,84 @@ function AtelierView({
     }
   };
 
+  // ── Step: Preparation ──
+  if (step === 'preparation') {
+    const activeCmds = allCommandes.filter(c => c.statut === 'envoyee' || c.statut === 'en_cours');
+    const allBars: { commande: Commande; machine: MachineName; bar: FstBar }[] = [];
+    for (const c of activeCmds) {
+      for (const m of ['lmt65', 'dt', 'renfort'] as MachineName[]) {
+        const j = c.machines[m]?.fstlineJob;
+        if (j) for (const bar of j.bars) allBars.push({ commande: c, machine: m, bar });
+      }
+    }
+
+    const byProfile = new Map<string, typeof allBars>();
+    for (const item of allBars) {
+      const key = item.bar.code;
+      const arr = byProfile.get(key) || [];
+      arr.push(item);
+      byProfile.set(key, arr);
+    }
+
+    return (
+      <div className="fixed inset-0 bg-[#0a0c10] flex flex-col z-50">
+        <div className="flex items-center gap-4 p-4 bg-[#14161d] border-b border-[#2a2d35]">
+          <button onClick={goBack} className="text-gray-400 hover:text-white text-lg px-3 py-2">
+            <ArrowLeft size={24} className="inline mr-2" />Postes
+          </button>
+          <h1 className="text-2xl font-black text-white flex-1">PREPARATION BARRES</h1>
+          <span className="text-base text-cyan-400 font-bold">{allBars.length} barres au total</span>
+        </div>
+        <div className="flex-1 overflow-auto p-4 max-w-3xl mx-auto w-full">
+          {activeCmds.length === 0 ? (
+            <p className="text-gray-500 text-xl text-center py-20">Aucune commande en cours</p>
+          ) : (
+            [...byProfile.entries()].map(([profileCode, items]) => {
+              const desc = items[0]?.bar.description || profileCode;
+              const total = items.length;
+              const prepared = items.filter(it => it.bar.cuts.every(c => c.statut !== 'a_couper' || c.coupePar !== '')).length;
+              const img = profileImgs[profileCode];
+              return (
+                <div key={profileCode} className="mb-4 bg-[#181a20] rounded-xl border border-[#2a2d35] p-4">
+                  <div className="flex items-center gap-4 mb-3">
+                    {img && (
+                      <img src={`data:image/png;base64,${img}`} alt={profileCode}
+                        className="w-14 h-14 object-contain bg-white rounded-lg border border-gray-600 shrink-0" />
+                    )}
+                    <div className="flex-1">
+                      <div className="text-lg font-bold text-white">{profileCode}</div>
+                      <div className="text-sm text-gray-400">{desc}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-2xl font-black text-cyan-400">{total}</div>
+                      <div className="text-xs text-gray-500">barres</div>
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    {items.map((it, idx) => {
+                      const totalCuts = it.bar.cuts.length;
+                      const barLen = it.bar.length;
+                      const chantier = it.commande.chantier || it.commande.ref;
+                      return (
+                        <div key={`${it.commande.id}_${it.bar.id}_${idx}`}
+                          className="flex items-center gap-3 p-2 rounded-lg bg-[#14161d] border border-[#1e2028]">
+                          <span className="text-xs text-gray-500 w-16 shrink-0">{MACHINE_LABELS[it.machine]}</span>
+                          <span className="text-sm text-white font-mono">{barLen}mm</span>
+                          <span className="text-xs text-gray-400 flex-1">{chantier} — {totalCuts} pcs</span>
+                          <span className="text-xs text-green-400 font-bold">OK</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+    );
+  }
+
   // ── Step 1: Choose Machine ──
   if (step === 'machine') {
     return (
@@ -554,10 +633,16 @@ function AtelierView({
           <ArrowLeft size={24} className="inline mr-2" />Bureau
         </button>
         <h1 className="text-4xl font-black text-white">PREPARATION & COUPE PROFILES</h1>
-        <p className="text-xl text-gray-400">Choisir la machine</p>
+        <p className="text-xl text-gray-400">Choisir le poste</p>
         <div className="grid grid-cols-1 gap-6 w-full max-w-md px-8">
+          <button onClick={() => setStep('preparation')}
+            className="bg-cyan-700 hover:bg-cyan-600 text-white text-2xl font-bold py-8 rounded-2xl transition-colors shadow-lg active:scale-95"
+            style={{ minHeight: 80 }}>
+            PREPARATION BARRES
+            <span className="block text-base opacity-80 mt-1">Preparer les profiles pour toutes les machines</span>
+          </button>
           {(['lmt65', 'dt', 'renfort'] as MachineName[]).map(m => {
-            const count = commandes.filter(c =>
+            const count = allCommandes.filter(c =>
               (c.statut === 'envoyee' || c.statut === 'en_cours') && c.machines[m]?.fstlineJob
             ).length;
             return (
