@@ -22,6 +22,7 @@ import {
   fetchGlassProducts, upsertGlassProduct, deleteGlassProduct,
   fetchStockPlates, upsertStockPlate, deleteStockPlate,
 } from '../vitrage/store';
+import { patchCommandeModule, upsertCommandeGlobale } from '../api';
 import type { GlassProduct, StockPlate } from '../vitrage/types';
 import { v4 as uuid } from 'uuid';
 
@@ -39,6 +40,31 @@ function download(blob: Blob, name: string) {
   const a = document.createElement('a');
   a.href = url; a.download = name; a.click();
   URL.revokeObjectURL(url);
+}
+
+/** Fire-and-forget: sync vitrage module status to the global dashboard */
+function syncVitrageToGlobal(commande: Commande) {
+  const total = commande.vitrages.length;
+  const statut: 'attente' | 'en_cours' | 'termine' =
+    commande.statut === 'terminee' ? 'termine'
+    : commande.statut === 'en_cours' ? 'en_cours'
+    : 'attente';
+  patchCommandeModule(commande.reference, 'vitrage', {
+    statut,
+    total,
+    fait: 0,
+    nc: 0,
+  }).catch(() => {}); // silent — don't block if OVH API is down
+}
+
+/** Fire-and-forget: ensure commande_globale exists with client/chantier info */
+function ensureCommandeGlobale(commande: Commande) {
+  upsertCommandeGlobale(commande.reference, {
+    client: commande.client || '',
+    chantier: commande.client || '',
+    semaine_fab: commande.semaineFabrication || '',
+    semaine_liv: commande.semaineLivraison || '',
+  }).catch(() => {}); // silent — may fail for non-supervisor users
 }
 
 // ── Dashboard ────────────────────────────────────────────────────────
