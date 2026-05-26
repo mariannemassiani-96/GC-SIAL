@@ -200,7 +200,10 @@ export function PosteCoupe({ onBack }: Props) {
   const handleSendToAtelier = useCallback((commandeId: string) => {
     const c = commandes.find(x => x.id === commandeId);
     if (!c) return;
-    upsert({ ...c, statut: 'envoyee' });
+    const updated = { ...c, statut: 'envoyee' as const };
+    upsert(updated);
+    // Sync to global dashboard (fire-and-forget)
+    syncCoupeToGlobal(updated);
   }, [commandes, upsert]);
 
   // ── Update cut statut in a commande ──
