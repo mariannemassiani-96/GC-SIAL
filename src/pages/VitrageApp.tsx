@@ -477,16 +477,18 @@ function TabGlass({ results, loading, backend, commandeLabel }: { results: Glass
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4 text-xs">
-        <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-green-500/30 border border-green-500/50" /> Stockable (&gt;300mm)</span>
-        <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-amber-500/30 border border-amber-500/50" /> Surveiller (250-300)</span>
-        <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-red-500/30 border border-red-500/50" /> Interdit (50-250)</span>
-        {totalInterdit > 0 && <span className="text-red-400 font-semibold ml-4">{totalInterdit} plaque(s) avec chutes interdites</span>}
-        {backend && <span className="text-green-400 ml-auto text-[10px] px-2 py-0.5 rounded bg-green-500/10 border border-green-500/20">rectpack (serveur)</span>}
-        {!backend && <span className="text-gray-500 ml-auto text-[10px] px-2 py-0.5 rounded bg-gray-500/10 border border-gray-500/20">JS local</span>}
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-4 text-xs">
+          <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-green-500/30 border border-green-500/50" /> Stockable (&gt;300mm)</span>
+          <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-amber-500/30 border border-amber-500/50" /> Surveiller (250-300)</span>
+          <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-red-500/30 border border-red-500/50" /> Interdit (50-250)</span>
+          {totalInterdit > 0 && <span className="text-red-400 font-semibold ml-4">{totalInterdit} plaque(s) avec chutes interdites</span>}
+          {backend && <span className="text-green-400 text-[10px] px-2 py-0.5 rounded bg-green-500/10 border border-green-500/20">rectpack (serveur)</span>}
+          {!backend && <span className="text-gray-500 text-[10px] px-2 py-0.5 rounded bg-gray-500/10 border border-gray-500/20">JS local</span>}
+        </div>
         <button onClick={async () => { const blob = await generateOptimVerrePDF(results, commandeLabel || ''); download(blob, 'optimisation_verre.pdf'); }}
-          className="text-xs px-3 py-1 bg-[#181a20] border border-[#2a2d35] rounded hover:border-blue-500/50 text-gray-400 hover:text-white transition-colors">
-          Imprimer PDF
+          className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded transition-colors flex items-center gap-2">
+          🖨 Imprimer PDF
         </button>
       </div>
       {results.map((r, i) => (
@@ -568,8 +570,8 @@ function TabWE({ results, commandeLabel, we }: { results: WEGroupe[]; commandeLa
     <div className="space-y-4">
       <div className="flex justify-end">
         <button onClick={async () => { const blob = await generateFicheWE(results, commandeLabel || '', we); download(blob, 'optimisation_we.pdf'); }}
-          className="text-xs px-3 py-1 bg-[#181a20] border border-[#2a2d35] rounded hover:border-amber-500/50 text-gray-400 hover:text-white transition-colors">
-          Imprimer PDF
+          className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white text-sm font-medium rounded transition-colors flex items-center gap-2">
+          🖨 Imprimer PDF
         </button>
       </div>
       {results.map((g, i) => (
