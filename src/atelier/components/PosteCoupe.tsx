@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
-import { ArrowLeft, Upload, FileText, FileCode2, Trash2, X, Search, ChevronRight, Scissors, Plus, RefreshCw, Send, History, Layers, AlertCircle, Check, AlertTriangle, RotateCcw, Calendar } from 'lucide-react';
+import { ArrowLeft, Upload, FileText, FileCode2, Trash2, X, Search, ChevronRight, Scissors, Plus, RefreshCw, Send, History, Layers, AlertCircle, Check, AlertTriangle, RotateCcw, Calendar, BarChart3, Users } from 'lucide-react';
 import { v4 as uid } from 'uuid';
 import { useApiState } from '../../useApiState';
 import { useAuth } from '../../AuthContext';
@@ -219,7 +219,7 @@ export function PosteCoupe({ onBack }: Props) {
   const [pdfViewer, setPdfViewer] = useState<{ dataUrl: string; filename: string } | null>(null);
   const [historyView, setHistoryView] = useState<{ machine: Machine; events: Evenement[] } | null>(null);
   const [piecesView, setPiecesView] = useState<{ commandeId: string; machine: Machine } | null>(null);
-  const [view, setView] = useState<'today' | 'all'>(isAdmin ? 'all' : 'today');
+  const [view, setView] = useState<'today' | 'all' | 'dashboard'>(isAdmin ? 'dashboard' : 'today');
   const [currentMachine, setCurrentMachine] = useState<Machine | null>(() => {
     const stored = localStorage.getItem('sial-poste-coupe-machine');
     return stored && MACHINES.some(m => m.id === stored) ? (stored as Machine) : null;
@@ -427,6 +427,14 @@ export function PosteCoupe({ onBack }: Props) {
             </div>
             <div className="flex items-center gap-2 shrink-0">
               <div className="flex bg-[#1c1e24] border border-[#2a2d35] rounded-lg p-0.5">
+                {isAdmin && (
+                  <button onClick={() => setView('dashboard')}
+                    className={`px-3 py-1.5 text-[11px] font-semibold rounded transition-colors ${
+                      view === 'dashboard' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'
+                    }`}>
+                    <BarChart3 size={11} className="inline mr-1 -mt-0.5" /> Tableau de bord
+                  </button>
+                )}
                 <button onClick={() => setView('today')}
                   className={`px-3 py-1.5 text-[11px] font-semibold rounded transition-colors ${
                     view === 'today' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'
@@ -437,7 +445,7 @@ export function PosteCoupe({ onBack }: Props) {
                   className={`px-3 py-1.5 text-[11px] font-semibold rounded transition-colors ${
                     view === 'all' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'
                   }`}>
-                  Toutes commandes
+                  Commandes
                 </button>
               </div>
               {isAdmin && (
@@ -450,7 +458,12 @@ export function PosteCoupe({ onBack }: Props) {
           </div>
         </header>
 
-        {view === 'today' ? (
+        {view === 'dashboard' && isAdmin ? (
+          <DashboardView
+            commandes={commandes}
+            onOpenCommande={(id) => setSelectedId(id)}
+          />
+        ) : view === 'today' ? (
           <OperatorTodayView
             commandes={commandes}
             currentMachine={currentMachine}
@@ -1563,5 +1576,328 @@ function TaskRow({
         </div>
       )}
     </li>
+  );
+}
+
+// ── Tableau de bord manager ─────────────────────────────────────────
+
+type Periode = 'jour' | 'semaine' | 'mois' | 'tout';
+
+const PERIODE_LABEL: Record<Periode, string> = {
+  jour: 'Aujourd\'hui',
+  semaine: 'Cette semaine',
+  mois: 'Ce mois',
+  tout: 'Tout',
+};
+
+function isoInPeriode(iso: string | undefined, periode: Periode): boolean {
+  if (!iso) return false;
+  if (periode === 'tout') return true;
+  const target = new Date(iso);
+  if (isNaN(target.getTime())) return false;
+  const today = new Date().toISOString().slice(0, 10);
+  if (periode === 'jour') return iso.slice(0, 10) === today;
+  const now = new Date();
+  const diffDays = (now.getTime() - target.getTime()) / (1000 * 60 * 60 * 24);
+  if (periode === 'semaine') return diffDays >= 0 && diffDays <= 7;
+  return diffDays >= 0 && diffDays <= 30;
+}
+
+function DashboardView({ commandes, onOpenCommande }: {
+  commandes: Commande[];
+  onOpenCommande: (id: string) => void;
+}) {
+  const [periode, setPeriode] = useState<Periode>('jour');
+
+  // Énumère toutes les optims actives (au moins une machine renseignée)
+  const allOptims = useMemo(() => {
+    const list: { commande: Commande; machine: Machine; optim: OptimisationMachine }[] = [];
+    for (const c of commandes) {
+      for (const m of MACHINES.map(x => x.id)) {
+        const o = c.optimisations[m];
+        if (o) list.push({ commande: c, machine: m, optim: o });
+      }
+    }
+    return list;
+  }, [commandes]);
+
+  // KPIs état actuel
+  const kpiActuel = useMemo(() => {
+    let aFaire = 0, prepare = 0, coupe = 0, anomalies = 0, bloque = 0;
+    for (const { optim } of allOptims) {
+      if (!optim.envoyeeAtelier) continue;
+      switch (optim.statut) {
+        case 'a_faire': aFaire++; break;
+        case 'prepare': prepare++; break;
+        case 'coupe': coupe++; break;
+        case 'barre_manquante': case 'non_conforme': bloque++; anomalies++; break;
+        case 'barre_a_refaire': case 'piece_a_refaire': anomalies++; break;
+      }
+    }
+    return { aFaire, prepare, coupe, anomalies, bloque };
+  }, [allOptims]);
+
+  // KPIs activité dans la période
+  const kpiActivite = useMemo(() => {
+    let coupesPeriode = 0, anomaliesPeriode = 0;
+    let piecesCoupees = 0;
+    for (const { optim } of allOptims) {
+      for (const ev of getEvents(optim)) {
+        if (!isoInPeriode(ev.date, periode)) continue;
+        if (ev.type === 'statut_change' && ev.details?.endsWith(STATUT_LABEL.coupe)) coupesPeriode++;
+        if (ev.type === 'statut_change' && STATUT_ANOMALIE.some(s => ev.details?.endsWith(STATUT_LABEL[s]))) anomaliesPeriode++;
+      }
+      if (optim.coupePieces) {
+        for (const info of Object.values(optim.coupePieces)) {
+          if (isoInPeriode(info.coupeLe, periode)) piecesCoupees++;
+        }
+      }
+    }
+    return { coupesPeriode, anomaliesPeriode, piecesCoupees };
+  }, [allOptims, periode]);
+
+  // Anomalies actives (état courant)
+  const anomaliesActives = useMemo(() => {
+    return allOptims
+      .filter(it => STATUT_ANOMALIE.includes(it.optim.statut))
+      .map(it => {
+        const lastAnomalieEvent = [...getEvents(it.optim)].reverse().find(e =>
+          e.type === 'statut_change' && STATUT_ANOMALIE.some(s => e.details?.endsWith(STATUT_LABEL[s]))
+        );
+        return { ...it, declarePar: lastAnomalieEvent?.userNom, declareLe: lastAnomalieEvent?.date };
+      })
+      .sort((a, b) => (b.declareLe ?? '').localeCompare(a.declareLe ?? ''));
+  }, [allOptims]);
+
+  // Productivité par utilisateur (dans la période)
+  const productivite = useMemo(() => {
+    const stats = new Map<string, { coupes: number; pieces: number; machines: Set<string> }>();
+    for (const { machine, optim } of allOptims) {
+      // Coupes au niveau machine (event statut_change → Coupé)
+      for (const ev of getEvents(optim)) {
+        if (!isoInPeriode(ev.date, periode)) continue;
+        if (ev.type === 'statut_change' && ev.details?.endsWith(STATUT_LABEL.coupe)) {
+          const s = stats.get(ev.userNom) ?? { coupes: 0, pieces: 0, machines: new Set() };
+          s.coupes++;
+          s.machines.add(machine);
+          stats.set(ev.userNom, s);
+        }
+      }
+      // Pièces coupées individuellement
+      if (optim.coupePieces) {
+        for (const info of Object.values(optim.coupePieces)) {
+          if (!isoInPeriode(info.coupeLe, periode)) continue;
+          const s = stats.get(info.coupePar) ?? { coupes: 0, pieces: 0, machines: new Set() };
+          s.pieces++;
+          s.machines.add(machine);
+          stats.set(info.coupePar, s);
+        }
+      }
+    }
+    return [...stats.entries()]
+      .map(([user, s]) => ({ user, coupes: s.coupes, pieces: s.pieces, machines: [...s.machines] }))
+      .sort((a, b) => (b.coupes + b.pieces) - (a.coupes + a.pieces));
+  }, [allOptims, periode]);
+
+  // Commandes envoyées atelier (avec au moins une optim envoyée)
+  const commandesEnvoyees = useMemo(() => {
+    return commandes
+      .filter(c => Object.values(c.optimisations).some(o => o?.envoyeeAtelier))
+      .sort((a, b) => b.date.localeCompare(a.date));
+  }, [commandes]);
+
+  return (
+    <main className="flex-1 overflow-y-auto px-4 py-6 max-w-6xl mx-auto w-full space-y-5">
+      {/* Sélecteur période */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-[10px] text-gray-500 uppercase tracking-wide mr-1">Période :</span>
+        {(['jour', 'semaine', 'mois', 'tout'] as Periode[]).map(p => (
+          <button key={p} onClick={() => setPeriode(p)}
+            className={`px-3 py-1 rounded text-[11px] font-medium border transition-all ${
+              periode === p ? 'bg-blue-600/20 text-blue-300 border-blue-500/40' : 'text-gray-400 border-[#2a2d35] hover:border-[#404550]'
+            }`}>
+            {PERIODE_LABEL[p]}
+          </button>
+        ))}
+      </div>
+
+      {/* KPIs activité période */}
+      <section>
+        <h2 className="text-[10px] text-gray-500 uppercase tracking-wide mb-2">Activité — {PERIODE_LABEL[periode]}</h2>
+        <div className="grid grid-cols-3 gap-3">
+          <KpiCard label="Machines coupées" value={kpiActivite.coupesPeriode} color="green" />
+          <KpiCard label="Pièces coupées" value={kpiActivite.piecesCoupees} color="green" />
+          <KpiCard label="Anomalies déclarées" value={kpiActivite.anomaliesPeriode} color="red" />
+        </div>
+      </section>
+
+      {/* KPIs état actuel */}
+      <section>
+        <h2 className="text-[10px] text-gray-500 uppercase tracking-wide mb-2">État actuel (toutes commandes envoyées)</h2>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <KpiCard label="À faire" value={kpiActuel.aFaire} color="gray" />
+          <KpiCard label="Préparées" value={kpiActuel.prepare} color="amber" />
+          <KpiCard label="Coupées" value={kpiActuel.coupe} color="green" />
+          <KpiCard label="Anomalies" value={kpiActuel.anomalies} color="orange" />
+          <KpiCard label="Bloquées" value={kpiActuel.bloque} color="red" />
+        </div>
+      </section>
+
+      {/* Anomalies actives */}
+      {anomaliesActives.length > 0 && (
+        <section className="bg-[#181a20] border border-red-500/30 rounded-xl overflow-hidden">
+          <div className="px-4 py-2.5 border-b border-[#2a2d35] flex items-center gap-2">
+            <AlertCircle size={14} className="text-red-400" />
+            <h2 className="text-xs font-bold text-red-300 uppercase tracking-wide">Anomalies actives</h2>
+            <span className="text-[11px] text-gray-500">({anomaliesActives.length})</span>
+          </div>
+          <ul className="divide-y divide-[#2a2d35]">
+            {anomaliesActives.map(it => {
+              const machineInfo = MACHINES.find(m => m.id === it.machine);
+              return (
+                <li key={it.commande.id + it.machine} className="px-4 py-3 hover:bg-[#1c1e24] cursor-pointer"
+                    onClick={() => onOpenCommande(it.commande.id)}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-bold text-white">{it.commande.nom}</span>
+                        <span className="text-[10px] text-gray-500 font-mono">{it.commande.ref}</span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded border" style={{ borderColor: machineInfo?.color, color: machineInfo?.color }}>
+                          {machineInfo?.label}
+                        </span>
+                        <span className={`text-[10px] px-2 py-0.5 rounded border ${STATUT_STYLE[it.optim.statut]}`}>
+                          {STATUT_LABEL[it.optim.statut]}
+                        </span>
+                      </div>
+                      {it.optim.notes && (
+                        <p className="text-[11px] text-gray-400 italic mt-1">« {it.optim.notes} »</p>
+                      )}
+                      <p className="text-[10px] text-gray-500 mt-1">
+                        Déclarée {it.declarePar && `par ${it.declarePar}`} {it.declareLe && `· ${fmtDateTime(it.declareLe)}`}
+                      </p>
+                    </div>
+                    <ChevronRight size={14} className="text-gray-600 shrink-0 mt-0.5" />
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
+
+      {/* Productivité par opérateur */}
+      <section className="bg-[#181a20] border border-[#2a2d35] rounded-xl overflow-hidden">
+        <div className="px-4 py-2.5 border-b border-[#2a2d35] flex items-center gap-2">
+          <Users size={14} className="text-blue-400" />
+          <h2 className="text-xs font-bold text-white uppercase tracking-wide">Productivité — {PERIODE_LABEL[periode]}</h2>
+        </div>
+        {productivite.length === 0 ? (
+          <p className="px-4 py-4 text-center text-[11px] text-gray-500">Aucune activité sur la période.</p>
+        ) : (
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="text-gray-500 border-b border-[#2a2d35] text-[10px]">
+                <th className="text-left py-2 px-4">Opérateur</th>
+                <th className="text-left py-2 px-4">Machines</th>
+                <th className="text-right py-2 px-4">Machines coupées</th>
+                <th className="text-right py-2 px-4">Pièces coupées</th>
+              </tr>
+            </thead>
+            <tbody>
+              {productivite.map(p => (
+                <tr key={p.user} className="border-b border-[#1e2028] hover:bg-[#1c1e24]">
+                  <td className="py-2 px-4 text-white font-medium">{p.user}</td>
+                  <td className="py-2 px-4 text-gray-400">
+                    {p.machines.map(m => MACHINES.find(x => x.id === m)?.label).filter(Boolean).join(', ')}
+                  </td>
+                  <td className="py-2 px-4 text-right text-green-400 font-mono">{p.coupes}</td>
+                  <td className="py-2 px-4 text-right text-purple-400 font-mono">{p.pieces}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
+
+      {/* Commandes envoyées atelier */}
+      <section className="bg-[#181a20] border border-[#2a2d35] rounded-xl overflow-hidden">
+        <div className="px-4 py-2.5 border-b border-[#2a2d35] flex items-center gap-2">
+          <Scissors size={14} className="text-gray-400" />
+          <h2 className="text-xs font-bold text-white uppercase tracking-wide">Commandes envoyées atelier</h2>
+          <span className="text-[11px] text-gray-500">({commandesEnvoyees.length})</span>
+        </div>
+        {commandesEnvoyees.length === 0 ? (
+          <p className="px-4 py-4 text-center text-[11px] text-gray-500">Aucune commande envoyée pour l'instant.</p>
+        ) : (
+          <ul className="divide-y divide-[#2a2d35]">
+            {commandesEnvoyees.map(c => {
+              const allDone = MACHINES.every(m => {
+                const o = c.optimisations[m.id];
+                return !o || !o.envoyeeAtelier || o.statut === 'coupe';
+              }) && Object.values(c.optimisations).some(o => o?.envoyeeAtelier);
+              return (
+                <li key={c.id} className="px-4 py-3 hover:bg-[#1c1e24] cursor-pointer"
+                    onClick={() => onOpenCommande(c.id)}>
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-bold text-white">{c.nom}</span>
+                        <span className="text-[10px] text-gray-500 font-mono">{c.ref}</span>
+                        {allDone && (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-green-500/20 text-green-300 border border-green-500/40">
+                            <Check size={9} className="inline mr-0.5" /> TERMINÉE
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                        {MACHINES.map(m => {
+                          const opt = c.optimisations[m.id];
+                          if (!opt || !opt.envoyeeAtelier) {
+                            return (
+                              <span key={m.id} className="text-[9px] px-2 py-0.5 rounded border bg-[#1c1e24] text-gray-600 border-[#2a2d35]">
+                                {m.label} · —
+                              </span>
+                            );
+                          }
+                          const total = opt.parsedOptim?.totalPieces ?? 0;
+                          const coupes = opt.coupePieces ? Object.keys(opt.coupePieces).length : 0;
+                          const progressLabel = total > 0 ? `${coupes}/${total}` : '';
+                          return (
+                            <span key={m.id}
+                              className={`text-[9px] px-2 py-0.5 rounded border ${STATUT_STYLE[opt.statut]}`}>
+                              {m.label} · {STATUT_LABEL[opt.statut]} {progressLabel && `· ${progressLabel}`}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    <ChevronRight size={14} className="text-gray-600 shrink-0" />
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
+    </main>
+  );
+}
+
+// ── Carte KPI ───────────────────────────────────────────────────────
+
+function KpiCard({ label, value, color }: { label: string; value: number; color: 'green' | 'amber' | 'red' | 'gray' | 'orange' | 'blue' }) {
+  const colorClass = {
+    green: 'text-green-400',
+    amber: 'text-amber-300',
+    red: 'text-red-400',
+    gray: 'text-gray-400',
+    orange: 'text-orange-300',
+    blue: 'text-blue-400',
+  }[color];
+  return (
+    <div className="bg-[#181a20] border border-[#2a2d35] rounded-xl p-3 text-center">
+      <p className="text-[10px] text-gray-500 uppercase tracking-wide">{label}</p>
+      <p className={`text-2xl font-bold mt-1 ${colorClass}`}>{value}</p>
+    </div>
   );
 }
