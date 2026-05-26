@@ -539,16 +539,17 @@ function PlatePreview({ plate }: { plate: OptimizedPlate }) {
           const effW = p.rotated ? p.height : p.width;
           const effH = p.rotated ? p.width : p.height;
           const fs = Math.min(5, pw / 12, ph / 4);
+          const blues = ['#0000CC', '#0033AA', '#1144BB', '#0022DD', '#2255AA', '#0044CC', '#1133BB', '#0055AA'];
           return (
             <g key={i}>
               <rect x={rx} y={ry} width={pw} height={ph}
-                fill="#0000CC" stroke="#000" strokeWidth={0.4} />
-              {fs > 1.8 && <text x={rx + pw / 2} y={ry + ph / 2 - fs * 0.4}
+                fill={blues[i % blues.length]} stroke="#fff" strokeWidth={1} />
+              {fs > 1.8 && <text x={rx + pw / 2} y={ry + ph / 2 - fs * 0.3}
                 textAnchor="middle" dominantBaseline="middle" fill="white" fontSize={fs} fontWeight="bold">
                 {p.vitrageRef}
               </text>}
-              {fs > 1.8 && <text x={rx + pw / 2} y={ry + ph / 2 + fs * 0.8}
-                textAnchor="middle" dominantBaseline="middle" fill="#AAF" fontSize={fs * 0.75}>
+              {fs > 1.5 && <text x={rx + pw / 2} y={ry + ph / 2 + fs * 0.7}
+                textAnchor="middle" dominantBaseline="middle" fill="#cce" fontSize={fs * 0.7}>
                 {effW}x{effH}
               </text>}
             </g>

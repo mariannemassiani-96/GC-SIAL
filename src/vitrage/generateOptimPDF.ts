@@ -51,7 +51,8 @@ export async function generateOptimVerrePDF(
         const rx = ox + p.x * scale;
         const ry = oy + ph - p.y * scale - rph;
 
-        page.drawRectangle({ x: rx, y: ry, width: rpw, height: rph, color: BLUE, borderColor: BLACK, borderWidth: 0.5 });
+        const blues = [rgb(0, 0, 0.8), rgb(0, 0.13, 0.67), rgb(0.07, 0.27, 0.73), rgb(0, 0.09, 0.87)];
+        page.drawRectangle({ x: rx, y: ry, width: rpw, height: rph, color: blues[i % blues.length], borderColor: WHITE, borderWidth: 1 });
 
         const label = p.vitrageRef;
         const dim = `${effW}x${effH}`;
