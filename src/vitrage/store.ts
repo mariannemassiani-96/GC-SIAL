@@ -1,5 +1,5 @@
 import { supabase, isConfigured } from './supabase';
-import type { Commande, AverySettings, WESettings, GlassSettings } from './types';
+import type { Commande, AverySettings, WESettings, GlassSettings, GlassProduct, StockPlate, StockRemnant } from './types';
 import { DEFAULT_AVERY, DEFAULT_WE, DEFAULT_GLASS, EMPTY_LOT } from './types';
 
 // ── Settings (Supabase — table settings, 1 seule ligne) ─────────────
@@ -120,5 +120,68 @@ export async function patchCommande(id: string, patch: Partial<Commande>): Promi
 export async function removeCommande(id: string): Promise<void> {
   if (!isConfigured) return;
   const { error } = await supabase.from('commandes').delete().eq('id', id);
+  if (error) throw new Error(error.message);
+}
+
+// ── Catalogue verres (Supabase) ──────────────────────────────────────
+
+export async function fetchGlassProducts(): Promise<GlassProduct[]> {
+  if (!isConfigured) return [];
+  const { data, error } = await supabase.from('glass_products').select('*').order('code');
+  if (error) throw new Error(error.message);
+  return (data ?? []) as GlassProduct[];
+}
+
+export async function upsertGlassProduct(p: Partial<GlassProduct> & { code: string }): Promise<void> {
+  if (!isConfigured) return;
+  const { error } = await supabase.from('glass_products').upsert(p, { onConflict: 'code' });
+  if (error) throw new Error(error.message);
+}
+
+export async function deleteGlassProduct(id: string): Promise<void> {
+  if (!isConfigured) return;
+  const { error } = await supabase.from('glass_products').delete().eq('id', id);
+  if (error) throw new Error(error.message);
+}
+
+// ── Stock plaques (Supabase) ─────────────────────────────────────────
+
+export async function fetchStockPlates(): Promise<StockPlate[]> {
+  if (!isConfigured) return [];
+  const { data, error } = await supabase.from('stock_plates').select('*').order('glass_code');
+  if (error) throw new Error(error.message);
+  return (data ?? []) as StockPlate[];
+}
+
+export async function upsertStockPlate(p: Partial<StockPlate>): Promise<void> {
+  if (!isConfigured) return;
+  const { error } = await supabase.from('stock_plates').upsert(p);
+  if (error) throw new Error(error.message);
+}
+
+export async function deleteStockPlate(id: string): Promise<void> {
+  if (!isConfigured) return;
+  const { error } = await supabase.from('stock_plates').delete().eq('id', id);
+  if (error) throw new Error(error.message);
+}
+
+// ── Stock chutes (Supabase) ──────────────────────────────────────────
+
+export async function fetchStockRemnants(): Promise<StockRemnant[]> {
+  if (!isConfigured) return [];
+  const { data, error } = await supabase.from('stock_remnants').select('*').order('glass_code');
+  if (error) throw new Error(error.message);
+  return (data ?? []) as StockRemnant[];
+}
+
+export async function insertStockRemnant(r: Omit<StockRemnant, 'id'>): Promise<void> {
+  if (!isConfigured) return;
+  const { error } = await supabase.from('stock_remnants').insert(r);
+  if (error) throw new Error(error.message);
+}
+
+export async function deleteStockRemnant(id: string): Promise<void> {
+  if (!isConfigured) return;
+  const { error } = await supabase.from('stock_remnants').delete().eq('id', id);
   if (error) throw new Error(error.message);
 }

@@ -184,12 +184,24 @@ function packPlate(
   return { placed, remaining, remnants: analyzeRemnants(freeRects) };
 }
 
-/** Runs 2D guillotine bin-packing to optimize glass cutting across standard plates, grouped by material. */
+function validateMinStrip(remnants: Remnant[], minWidth: number): Remnant[] {
+  return remnants.map(r => {
+    const minDim = Math.min(r.w, r.h);
+    if (minDim > 0 && minDim < minWidth && r.classe !== 'poussiere') {
+      return { ...r, classe: 'interdit' as RemnantClass };
+    }
+    return r;
+  });
+}
+
 export function optimizeGlass(
   vitrages: Vitrage[],
   settings: GlassSettings = DEFAULT_GLASS,
 ): GlassOptimResult[] {
-  const { plateWidth, plateHeight, cuttingGap, edgeTrimMargin } = settings;
+  const { plateWidth, plateHeight, cuttingGap, edgeTrimMargin, minStripWidth = 20 } = settings;
+  const formats = settings.plateFormats?.length
+    ? settings.plateFormats
+    : [{ width: plateWidth, height: plateHeight, label: 'Standard' }];
   const allPieces = extractGlassPieces(vitrages);
 
   const groups = new Map<string, GlassPiece[]>();
@@ -213,57 +225,55 @@ export function optimizeGlass(
     let remaining = sorted;
 
     while (remaining.length > 0) {
-      const { placed, remaining: leftover, remnants } = packPlate(
-        remaining,
-        plateWidth,
-        plateHeight,
-        cuttingGap,
-        edgeTrimMargin,
-      );
+      let bestResult: { placed: PlacedPiece[]; leftover: GlassPiece[]; remnants: Remnant[]; pw: number; ph: number } | null = null;
 
-      if (placed.length === 0) {
-        for (const p of leftover) {
-          const canFit =
-            (p.width <= plateWidth && p.height <= plateHeight) ||
-            (p.height <= plateWidth && p.width <= plateHeight);
-          if (!canFit) continue;
+      for (const fmt of formats) {
+        const result = packPlate(remaining, fmt.width, fmt.height, cuttingGap, edgeTrimMargin);
+        if (result.placed.length > 0) {
+          if (!bestResult || result.placed.length > bestResult.placed.length) {
+            bestResult = { placed: result.placed, leftover: result.remaining, remnants: result.remnants, pw: fmt.width, ph: fmt.height };
+          }
+        }
+      }
 
-          const rotated = p.width > plateWidth || p.height > plateHeight;
-          const actualW = rotated ? p.height : p.width;
-          const actualH = rotated ? p.width : p.height;
-          const usedArea = actualW * actualH;
-          const plateArea = plateWidth * plateHeight;
-
-          plates.push({
-            numero: plates.length + 1,
-            material,
-            plateWidth,
-            plateHeight,
-            pieces: [{ ...p, x: edgeTrimMargin, y: edgeTrimMargin, rotated }],
-            utilisation: (usedArea / plateArea) * 100,
-            remnants: [],
-            hasInterdit: false,
-          });
+      if (!bestResult) {
+        for (const p of remaining) {
+          for (const fmt of formats) {
+            const canFit = (p.width <= fmt.width && p.height <= fmt.height) || (p.height <= fmt.width && p.width <= fmt.height);
+            if (!canFit) continue;
+            const rotated = p.width > fmt.width || p.height > fmt.height;
+            const usedArea = p.width * p.height;
+            plates.push({
+              numero: plates.length + 1, material, plateWidth: fmt.width, plateHeight: fmt.height,
+              pieces: [{ ...p, x: edgeTrimMargin, y: edgeTrimMargin, rotated }],
+              utilisation: (usedArea / (fmt.width * fmt.height)) * 100,
+              remnants: [], hasInterdit: false,
+            });
+            break;
+          }
         }
         break;
       }
+
+      const { placed, leftover, pw, ph } = bestResult;
+      const validatedRemnants = validateMinStrip(bestResult.remnants, minStripWidth);
 
       const usedArea = placed.reduce((sum, p) => {
         const w = p.rotated ? p.height : p.width;
         const h = p.rotated ? p.width : p.height;
         return sum + w * h;
       }, 0);
-      const plateArea = plateWidth * plateHeight;
+      const plateArea = pw * ph;
 
       plates.push({
         numero: plates.length + 1,
         material,
-        plateWidth,
-        plateHeight,
+        plateWidth: pw,
+        plateHeight: ph,
         pieces: placed,
         utilisation: (usedArea / plateArea) * 100,
-        remnants,
-        hasInterdit: remnants.some(r => r.classe === 'interdit'),
+        remnants: validatedRemnants,
+        hasInterdit: validatedRemnants.some(r => r.classe === 'interdit'),
       });
 
       remaining = leftover;
@@ -275,7 +285,7 @@ export function optimizeGlass(
       (sum, p) => sum + (p.utilisation / 100) * p.plateWidth * p.plateHeight,
       0,
     );
-    const totalPlateArea = plates.length * plateWidth * plateHeight;
+    const totalPlateArea = plates.reduce((sum, p) => sum + p.plateWidth * p.plateHeight, 0);
 
     results.push({
       material,
