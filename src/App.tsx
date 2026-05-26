@@ -10,6 +10,7 @@ import { PosteCoupe } from './atelier/components/PosteCoupe';
 import { MaintenanceQualite } from './atelier/components/MaintenanceQualite';
 import { WorkshopApp } from './workshop/WorkshopApp';
 import { VitrageApp } from './pages/VitrageApp';
+import { DashboardGlobal } from './pages/DashboardGlobal';
 import { AuthProvider, LoginScreen, useAuth } from './AuthContext';
 import { AdminPanel } from './AdminPanel';
 import type { Affaire } from './types';
@@ -25,7 +26,8 @@ type AppMode =
   | 'reception_matiere'
   | 'poste_coupe'
   | 'maintenance_qualite'
-  | 'vitrage';
+  | 'vitrage'
+  | 'dashboard_global';
 
 // ── Hub Fabrication (page d'accueil) ─────────────────────────────────
 
