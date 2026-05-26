@@ -898,7 +898,12 @@ function BatchView({ commandes, onBack, avery, we, glass }: {
       });
       // Sync each commande to global dashboard (fire-and-forget)
       for (const c of commandes) {
-        syncVitrageToGlobal(c);
+        upsertCommandeGlobale(c.reference, {
+          client: c.client || '',
+          chantier: c.client || '',
+          semaine_fab: c.semaineFabrication || '',
+          semaine_liv: c.semaineLivraison || '',
+        }).catch(() => {});
         patchCommandeModule(c.reference, 'vitrage', {
           statut: 'en_cours',
           total: c.vitrages.length,
