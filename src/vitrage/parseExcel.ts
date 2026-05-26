@@ -16,11 +16,11 @@ function normalise(name: string): string {
   return name.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[\s_\-.()/]+/g, '');
 }
 
-type Field = 'reference' | 'variante' | 'largeur' | 'hauteur' | 'dimensions' | 'composition' | 'couleur' | 'qte' | 'ug' | 'gaz';
+type Field = 'reference' | 'position' | 'largeur' | 'hauteur' | 'dimensions' | 'composition' | 'couleur' | 'qte' | 'ug' | 'gaz';
 
 const FIELD_PATTERNS: Record<Field, RegExp[]> = {
   reference: [/^code$/, /^ref/, /^proto/, /^repere/, /^designation/, /^nom/, /^piece/, /^id$/],
-  variante: [/^v$/, /^v[12]/, /^variante/],
+  position: [/^pos/, /^n°$/, /^num/],
   largeur: [/^largeur/, /^larg/, /^l$/, /^width/, /^w$/],
   hauteur: [/^hauteur/, /^haut/, /^h$/, /^height/],
   dimensions: [/^dim/, /^taille/, /^size/, /^lxh/],
@@ -116,9 +116,8 @@ function rowToVitrages(
 
   if (largeur === 0 && hauteur === 0) return [];
 
-  const reference = refRaw;
-  const varianteRaw = get('variante').toUpperCase();
-  const variante: 'V1' | 'V2' = varianteRaw === 'V2' ? 'V2' : 'V1';
+  const position = get('position');
+  const reference = position ? `${position}_${compositionRaw || refRaw}` : refRaw;
   const couleur = get('couleur') || '012 (Noir)';
   const { outer, inner, epaisseur } = compositionRaw ? parseVitrageSpec(compositionRaw) : { outer: '', inner: '', epaisseur: 10 };
   const qte = parseInt(get('qte')) || 1;
@@ -128,7 +127,7 @@ function rowToVitrages(
   const result: Vitrage[] = [];
   for (let i = 0; i < qte; i++) {
     result.push({
-      id: uuid(), reference, variante, largeur, hauteur,
+      id: uuid(), reference, variante: 'V1', largeur, hauteur,
       composition: compositionRaw, intercalaireEpaisseur: epaisseur,
       intercalaireCouleur: couleur, outerGlass: outer, innerGlass: inner,
       ug, gazType,
