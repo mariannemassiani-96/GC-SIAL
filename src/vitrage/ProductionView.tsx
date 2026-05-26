@@ -417,8 +417,6 @@ function AtelierView({ lots, semaine, poste, onSelectPoste, onBack, loadLotDetai
   const [selectedMaterial, setSelectedMaterial] = useState<string | null>(null);
   const [editCompo, setEditCompo] = useState<{ pieceId: string; original: string; current: string } | null>(null);
   const [selectedPieceIdx, setSelectedPieceIdx] = useState<number | null>(null);
-  const [weMode, setWeMode] = useState<'barres' | 'liste'>('barres');
-  const [weBarIdx, setWeBarIdx] = useState(0);
 
   if (!poste) {
     return (
@@ -583,7 +581,7 @@ function AtelierView({ lots, semaine, poste, onSelectPoste, onBack, loadLotDetai
                   <div key={no} className="flex items-center gap-3 mb-2">
                     <div className="text-sm font-mono text-gray-500 w-12 text-right shrink-0">{barreLength}</div>
                     <div className="flex-1 flex items-center h-12 bg-gray-100 border border-gray-400 rounded overflow-hidden relative">
-                      {pcs.map((wp, i) => {
+                      {pcs.map((wp) => {
                         const pct = (wp.longueur / barreLength) * 100;
                         const ref = wp.vitrage_ref.replace(/^[^_]*_/, '').substring(0, 8);
                         return (
