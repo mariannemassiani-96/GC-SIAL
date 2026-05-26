@@ -88,8 +88,8 @@ async function patchJSON(path: string, body: unknown) {
 
 // ── Main Production View ─────────────────────────────────────────────
 
-export function ProductionView({ onBack }: { onBack: () => void }) {
-  const [modeAtelier, setModeAtelier] = useState(false);
+export function ProductionView({ onBack, startAtelier }: { onBack: () => void; startAtelier?: boolean }) {
+  const [modeAtelier, setModeAtelier] = useState(startAtelier ?? false);
   const [poste, setPoste] = useState<'' | 'preparation' | 'lisec' | 'bottero' | 'we' | 'assemblage' | 'arefaire'>('');
   const [semaine, setSemaine] = useState(getISOWeek(new Date()));
   const [lots, setLots] = useState<Lot[]>([]);
