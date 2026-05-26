@@ -711,18 +711,6 @@ function TabExport({ vitrages, allPlates, weResult, commandeLabel, commande, ave
   );
 }
 
-// ── Batch View helpers ───────────────────────────────────────────────
-
-const _LOT_FIELDS: { key: keyof LotFabrication; label: string; placeholder: string }[] = [
-  { key: 'verreExt', label: 'Verre exterieur', placeholder: 'N° lot fournisseur' },
-  { key: 'verreInt', label: 'Verre interieur', placeholder: 'N° lot fournisseur' },
-  { key: 'intercalaire', label: 'Intercalaire / Warm Edge', placeholder: 'N° lot' },
-  { key: 'dessiccant', label: 'Dessiccant (tamis)', placeholder: 'N° lot + date ouverture' },
-  { key: 'masticButyl', label: 'Mastic butyl (1re barriere)', placeholder: 'N° lot' },
-  { key: 'masticPU', label: 'Mastic PU (2e barriere)', placeholder: 'N° lot' },
-  { key: 'gazArgon', label: 'Gaz argon', placeholder: 'N° lot bouteille' },
-];
-
 // ── Batch View (multi-order) ─────────────────────────────────────────
 
 const BATCH_TABS = ['Vitrages', 'Optim Verre', 'Warm Edge', 'Etiquettes'] as const;
