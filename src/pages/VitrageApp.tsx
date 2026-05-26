@@ -516,54 +516,47 @@ function TabGlass({ results, loading, backend, commandeLabel }: { results: Glass
 }
 
 function PlatePreview({ plate }: { plate: OptimizedPlate }) {
-  const scale = 180 / Math.max(plate.plateWidth, plate.plateHeight);
+  const pad = 30;
+  const inner = 200;
+  const scale = inner / Math.max(plate.plateWidth, plate.plateHeight);
   const w = plate.plateWidth * scale;
   const h = plate.plateHeight * scale;
-  const remnantColors: Record<string, string> = {
-    poussiere: '#333', interdit: '#ef4444', surveiller: '#f59e0b', stockable: '#22c55e',
-  };
+  const vw = w + pad * 2;
+  const vh = h + pad * 2;
 
   return (
-    <div className={`bg-[#14161d] rounded p-3 ${plate.hasInterdit ? 'border border-red-500/50' : ''}`}>
-      <div className="text-xs text-gray-400 mb-2">
-        Plaque {plate.numero} — {plate.plateWidth}x{plate.plateHeight} — <span className="text-green-400">{plate.utilisation.toFixed(0)}%</span> — {plate.pieces.length} pcs
-        {plate.hasInterdit && <span className="text-red-400 ml-2">Chute interdite</span>}
+    <div className={`bg-white rounded p-2 ${plate.hasInterdit ? 'border border-red-500' : 'border border-gray-300'}`}>
+      <div className="text-xs text-gray-700 mb-1 font-medium">
+        Plaque {plate.numero} — {plate.plateWidth}x{plate.plateHeight} — <span className="text-blue-700 font-bold">{plate.utilisation.toFixed(0)}%</span> — {plate.pieces.length} pcs
       </div>
-      <svg viewBox={`0 0 ${w + 4} ${h + 4}`} className="w-full" style={{ maxHeight: 160 }}>
-        <rect x={2} y={2} width={w} height={h} fill="#1e2028" stroke="#333" strokeWidth={0.5} />
-        {(plate.remnants ?? []).map((r, i) => (
-          <rect key={`r${i}`} x={2 + r.x * scale} y={2 + r.y * scale}
-            width={r.w * scale} height={r.h * scale}
-            fill={remnantColors[r.classe]} opacity={0.15}
-            stroke={remnantColors[r.classe]} strokeWidth={0.3} strokeDasharray="2,1" />
-        ))}
+      <svg viewBox={`0 0 ${vw} ${vh}`} className="w-full" style={{ maxHeight: 180 }}>
+        <rect x={pad} y={pad} width={w} height={h} fill="#FFD700" stroke="#000" strokeWidth={0.8} />
         {plate.pieces.map((p, i) => {
           const pw = (p.rotated ? p.height : p.width) * scale;
           const ph = (p.rotated ? p.width : p.height) * scale;
-          const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316', '#ec4899'];
+          const rx = pad + p.x * scale;
+          const ry = pad + p.y * scale;
+          const effW = p.rotated ? p.height : p.width;
+          const effH = p.rotated ? p.width : p.height;
+          const fs = Math.min(5, pw / 12, ph / 4);
           return (
             <g key={i}>
-              <rect x={2 + p.x * scale} y={2 + p.y * scale} width={pw} height={ph}
-                fill={colors[i % colors.length]} opacity={0.3} stroke={colors[i % colors.length]} strokeWidth={0.5} />
-              <text x={2 + p.x * scale + pw / 2} y={2 + p.y * scale + ph / 2}
-                textAnchor="middle" dominantBaseline="middle" fill="white" fontSize={Math.min(pw, ph) > 15 ? 5 : 3}>
+              <rect x={rx} y={ry} width={pw} height={ph}
+                fill="#0000CC" stroke="#000" strokeWidth={0.4} />
+              {fs > 1.8 && <text x={rx + pw / 2} y={ry + ph / 2 - fs * 0.4}
+                textAnchor="middle" dominantBaseline="middle" fill="white" fontSize={fs} fontWeight="bold">
                 {p.vitrageRef}
-              </text>
+              </text>}
+              {fs > 1.8 && <text x={rx + pw / 2} y={ry + ph / 2 + fs * 0.8}
+                textAnchor="middle" dominantBaseline="middle" fill="#AAF" fontSize={fs * 0.75}>
+                {effW}x{effH}
+              </text>}
             </g>
           );
         })}
+        <text x={pad + w / 2} y={vh - 4} textAnchor="middle" fill="#000" fontSize={7} fontWeight="bold">{plate.plateWidth}</text>
+        <text x={6} y={pad + h / 2} textAnchor="middle" fill="#000" fontSize={7} fontWeight="bold" transform={`rotate(-90,6,${pad + h / 2})`}>{plate.plateHeight}</text>
       </svg>
-      {(plate.remnants ?? []).filter(r => r.classe !== 'poussiere').length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-1">
-          {(plate.remnants ?? []).filter(r => r.classe !== 'poussiere').map((r, i) => (
-            <span key={i} className={`text-[9px] px-1 rounded ${
-              r.classe === 'interdit' ? 'bg-red-500/20 text-red-400' :
-              r.classe === 'surveiller' ? 'bg-amber-500/20 text-amber-400' :
-              'bg-green-500/20 text-green-400'
-            }`}>{r.w}x{r.h}</span>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
