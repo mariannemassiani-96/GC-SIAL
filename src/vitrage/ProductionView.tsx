@@ -140,12 +140,10 @@ export function ProductionView({ onBack }: { onBack: () => void }) {
         lots={lots} semaine={semaine} poste={poste}
         onSelectPoste={setPoste}
         onBack={() => setModeAtelier(false)}
-        onSemaineChange={setSemaine}
         loadLotDetail={loadLotDetail}
         selectedLot={selectedLot}
         setSelectedLot={setSelectedLot}
-        updatePieceStatut={updatePieceStatut}
-        onReload={() => { if (selectedLot) loadLotDetail(selectedLot); }}
+        onReload={() => { if (selectedLot) loadLotDetail(selectedLot); loadStats(); }}
       />
     );
   }
@@ -406,15 +404,16 @@ export function ProductionView({ onBack }: { onBack: () => void }) {
 
 // ── Mode Atelier (plein écran tactile) ───────────────────────────────
 
-function AtelierView({ lots, semaine, poste, onSelectPoste, onBack, onSemaineChange, loadLotDetail, selectedLot, setSelectedLot, updatePieceStatut, onReload }: {
+function AtelierView({ lots, semaine, poste, onSelectPoste, onBack, loadLotDetail, selectedLot, setSelectedLot, onReload }: {
   lots: Lot[]; semaine: string; poste: '' | 'lisec' | 'bottero' | 'assemblage';
   onSelectPoste: (p: '' | 'lisec' | 'bottero' | 'assemblage') => void;
-  onBack: () => void; onSemaineChange: (s: string) => void;
+  onBack: () => void;
   loadLotDetail: (lot: Lot) => void; selectedLot: Lot | null;
   setSelectedLot: (l: Lot | null) => void;
-  updatePieceStatut: (id: string, statut: string) => void; onReload: () => void;
+  onReload: () => void;
 }) {
   const [plateIdx, setPlateIdx] = useState(0);
+  const [selectedMaterial, setSelectedMaterial] = useState<string | null>(null);
 
   if (!poste) {
     return (
@@ -437,9 +436,6 @@ function AtelierView({ lots, semaine, poste, onSelectPoste, onBack, onSemaineCha
   }
 
   const pieces = selectedLot?.pieces ?? [];
-  const machinePieces = poste === 'assemblage'
-    ? pieces.filter(p => p.statut === 'coupe' || p.statut === 'a_assembler')
-    : pieces.filter(p => p.machine === poste);
 
   if (!selectedLot) {
     return (
@@ -473,13 +469,13 @@ function AtelierView({ lots, semaine, poste, onSelectPoste, onBack, onSemaineCha
     );
   }
 
-  // ── Vue plaque par plaque Atelier ──
+  // ── Construire toutes les plaques ──
   const glassOptim = selectedLot.glass_optim || [];
-  const allPlates: OptimPlate[] = [];
+  const allPlatesRaw: OptimPlate[] = [];
   for (const r of glassOptim) {
     for (const p of (r.plates || [])) {
       const raw = p as unknown as Record<string, unknown>;
-      allPlates.push({
+      allPlatesRaw.push({
         numero: p.numero ?? raw.numero as number,
         material: p.material ?? r.material,
         plateWidth: p.plateWidth ?? raw.plate_width as number ?? 3210,
@@ -495,6 +491,67 @@ function AtelierView({ lots, semaine, poste, onSelectPoste, onBack, onSemaineCha
       });
     }
   }
+
+  const materialGroups = new Map<string, number>();
+  for (const p of allPlatesRaw) {
+    materialGroups.set(p.material, (materialGroups.get(p.material) || 0) + 1);
+  }
+
+  // ── Écran choix matériau ──
+  if (!selectedMaterial) {
+    return (
+      <div className="fixed inset-0 bg-[#0a0c10] flex flex-col z-50">
+        <div className="flex items-center gap-4 p-4 bg-[#14161d] border-b border-[#2a2d35]">
+          <button onClick={() => setSelectedLot(null)} className="text-gray-400 hover:text-white text-lg px-3 py-2">← Lots</button>
+          <span className="text-xl font-bold text-white flex-1">{selectedLot.reference}</span>
+          <span className="text-base text-amber-400 font-mono">{poste.toUpperCase()}</span>
+        </div>
+        <div className="flex-1 overflow-auto p-6">
+          <h2 className="text-2xl font-black text-white text-center mb-8">PAR QUELLE COMPOSITION COMMENCER ?</h2>
+          <div className="space-y-4 max-w-lg mx-auto">
+            {[...materialGroups.entries()].map(([mat, count]) => {
+              const pcsForMat = pieces.filter(p => p.material === mat);
+              const donePcs = pcsForMat.filter(p => p.statut === 'coupe' || p.statut === 'assemble').length;
+              const progress = pcsForMat.length > 0 ? Math.round(donePcs / pcsForMat.length * 100) : 0;
+              return (
+                <button key={mat} onClick={() => { setSelectedMaterial(mat); setPlateIdx(0); }}
+                  className="w-full p-6 bg-[#181a20] rounded-2xl border border-[#2a2d35] hover:border-blue-500 transition-colors text-left active:scale-[0.98]">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-2xl font-bold text-white">{mat}</div>
+                      <div className="text-lg text-gray-400 mt-1">{count} plaque{count > 1 ? 's' : ''}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className={`text-2xl font-black ${progress === 100 ? 'text-green-400' : progress > 0 ? 'text-amber-400' : 'text-gray-600'}`}>
+                        {progress}%
+                      </div>
+                      <div className="text-sm text-gray-500">{donePcs}/{pcsForMat.length} pcs</div>
+                    </div>
+                  </div>
+                  {progress > 0 && progress < 100 && (
+                    <div className="mt-3 h-2 bg-gray-800 rounded-full overflow-hidden">
+                      <div className="h-full bg-amber-500 rounded-full" style={{ width: `${progress}%` }} />
+                    </div>
+                  )}
+                  {progress === 100 && (
+                    <div className="mt-2 text-green-400 text-lg font-bold">✓ TERMINE</div>
+                  )}
+                </button>
+              );
+            })}
+            <button onClick={() => { setSelectedMaterial('__ALL__'); setPlateIdx(0); }}
+              className="w-full p-5 bg-blue-900/30 rounded-2xl border border-blue-500/30 hover:border-blue-400 text-center transition-colors active:scale-[0.98]">
+              <div className="text-xl font-bold text-blue-400">TOUTES LES COMPOSITIONS</div>
+              <div className="text-base text-gray-500">{allPlatesRaw.length} plaques au total</div>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Filtrer plaques par matériau sélectionné ──
+  const allPlates = selectedMaterial === '__ALL__' ? allPlatesRaw : allPlatesRaw.filter(p => p.material === selectedMaterial);
 
   const idx = Math.min(plateIdx, Math.max(0, allPlates.length - 1));
   const plate = allPlates[idx];
@@ -530,8 +587,9 @@ function AtelierView({ lots, semaine, poste, onSelectPoste, onBack, onSemaineCha
     <div className="fixed inset-0 bg-[#0a0c10] flex flex-col z-50">
       {/* Header atelier */}
       <div className="flex items-center gap-4 p-3 bg-[#14161d] border-b border-[#2a2d35]">
-        <button onClick={() => setSelectedLot(null)} className="text-gray-400 hover:text-white text-base px-3 py-2">← Lots</button>
-        <span className="text-lg font-bold text-white flex-1">{selectedLot.reference}</span>
+        <button onClick={() => { setSelectedMaterial(null); setPlateIdx(0); }} className="text-gray-400 hover:text-white text-base px-3 py-2">← Compositions</button>
+        <span className="text-lg font-bold text-white">{selectedLot.reference}</span>
+        <span className="text-base text-blue-400 font-bold flex-1">{selectedMaterial === '__ALL__' ? 'TOUTES' : selectedMaterial}</span>
         <span className="text-base text-amber-400 font-mono">{poste.toUpperCase()}</span>
       </div>
 
@@ -579,19 +637,32 @@ function AtelierView({ lots, semaine, poste, onSelectPoste, onBack, onSemaineCha
           {/* Lot verre */}
           {lotVerre && <div className="text-lg text-green-400 font-mono">Lot verre : {lotVerre}</div>}
 
-          {/* Liste pièces compacte */}
-          <div className="w-full max-w-xl overflow-auto max-h-[15vh]">
+          {/* Liste pièces avec actions NC/Cassé */}
+          <div className="w-full max-w-xl overflow-auto max-h-[18vh]">
             <table className="w-full text-sm">
               <tbody>
                 {plate.pieces.map((p, i) => {
                   const effW = p.rotated ? p.height : p.width;
                   const effH = p.rotated ? p.width : p.height;
+                  const dbPiece = piecesOnPlate.find(pp => pp.vitrage_ref === p.vitrageRef && pp.face === p.face);
+                  const isNC = dbPiece?.statut === 'nc' || dbPiece?.statut === 'casse';
                   return (
-                    <tr key={i} className="border-b border-gray-800">
+                    <tr key={i} className={`border-b border-gray-800 ${isNC ? 'bg-red-900/30' : ''}`}>
                       <td className="py-1 px-2 text-amber-400 font-bold text-base">{i + 1}</td>
                       <td className="py-1 px-2 text-white text-base">{p.vitrageRef}</td>
                       <td className={`py-1 px-2 text-base ${p.face === 'EXT' ? 'text-red-400' : 'text-blue-400'}`}>{p.face}</td>
                       <td className="py-1 px-2 text-gray-300 text-base">{effW} x {effH}</td>
+                      <td className="py-1 px-1">
+                        {dbPiece && !isNC && (
+                          <div className="flex gap-1">
+                            <button onClick={() => { patchJSON(`/api/production/pieces/${dbPiece.id}`, { statut: 'nc', operateur: '' }); onReload(); }}
+                              className="px-2 py-1 bg-red-700 hover:bg-red-600 text-white text-xs rounded active:scale-95">NC</button>
+                            <button onClick={() => { patchJSON(`/api/production/pieces/${dbPiece.id}`, { statut: 'casse', operateur: '' }); onReload(); }}
+                              className="px-2 py-1 bg-orange-700 hover:bg-orange-600 text-white text-xs rounded active:scale-95">Cassé</button>
+                          </div>
+                        )}
+                        {isNC && <span className="text-red-400 font-bold text-sm">⚠ A REFAIRE</span>}
+                      </td>
                     </tr>
                   );
                 })}
