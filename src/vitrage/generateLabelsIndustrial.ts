@@ -20,10 +20,7 @@ function txt(page: PDFPage, text: string, x: number, y: number, font: PDFFont, s
   page.drawText(t, { x, y, size, font, color });
 }
 
-function centered(page: PDFPage, text: string, cx: number, y: number, font: PDFFont, size: number, color = rgb(0, 0, 0)) {
-  const w = font.widthOfTextAtSize(text, size);
-  page.drawText(text, { x: cx - w / 2, y, size, font, color });
-}
+
 
 // ── 1. Etiquette vitrage CE/CEKAL (100×70mm) ────────────────────────
 
@@ -228,7 +225,7 @@ function extractCutPieces(vitrages: Vitrage[], plates: OptimizedPlate[], command
   const pieces: CutPiece[] = [];
   for (const plate of plates) {
     for (const p of plate.pieces) {
-      const v = vitrages.find(vt => vt.id === p.vitrageId);
+      vitrages.find(vt => vt.id === p.vitrageId);
       pieces.push({
         vitrageRef: p.vitrageRef,
         face: p.face,
