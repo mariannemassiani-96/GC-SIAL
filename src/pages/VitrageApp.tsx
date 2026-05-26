@@ -698,7 +698,7 @@ export function VitrageApp({ onBack }: { onBack: () => void }) {
   const [view, setView] = useState<ViewMode>({ type: 'dashboard' });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const saveTimer = useRef<ReturnType<typeof setTimeout>>();
+  const saveTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   useEffect(() => {
     (async () => {
