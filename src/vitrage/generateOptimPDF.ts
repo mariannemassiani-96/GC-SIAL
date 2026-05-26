@@ -1,5 +1,5 @@
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
-import type { GlassOptimResult, OptimizedPlate, WEGroupe } from './types';
+import type { GlassOptimResult } from './types';
 
 const MM = 72 / 25.4;
 const A4_W = 210 * MM;
@@ -27,7 +27,6 @@ export async function generateOptimVerrePDF(
       y -= 8 * MM;
 
       const drawW = A4_W - 2 * MARGIN;
-      const drawH = drawW * (plate.plateHeight / plate.plateWidth);
       const maxH = (A4_H - MARGIN * 2) * 0.55;
       const scale = Math.min(drawW / plate.plateWidth, maxH / plate.plateHeight);
       const pw = plate.plateWidth * scale;
