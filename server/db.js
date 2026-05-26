@@ -45,4 +45,8 @@ db.exec(`
   );
 `);
 
+// Migrations
+try { db.exec('ALTER TABLE users ADD COLUMN pin TEXT DEFAULT NULL'); } catch {}
+try { db.exec('ALTER TABLE users ADD COLUMN pin_enabled INTEGER DEFAULT 0'); } catch {}
+
 module.exports = db;

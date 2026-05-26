@@ -41,6 +41,8 @@ export function AdminPanel({ onBack }: Props) {
   const [formPassword, setFormPassword] = useState('');
   const [formRole, setFormRole] = useState('operateur');
   const [formApps, setFormApps] = useState<string[]>([...ALL_APPS.map(a => a.id)]);
+  const [formPin, setFormPin] = useState('');
+  const [formPinEnabled, setFormPinEnabled] = useState(false);
   const [showPwd, setShowPwd] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -64,6 +66,8 @@ export function AdminPanel({ onBack }: Props) {
     setFormEmail(u.email);
     setFormRole(u.role);
     setFormApps(u.apps_autorisees ?? [...ALL_APPS.map(a => a.id)]);
+    setFormPin((u as Record<string, unknown>).pin as string || '');
+    setFormPinEnabled(!!(u as Record<string, unknown>).pin_enabled);
     setFormPassword('');
     setShowNew(false);
   };
@@ -105,7 +109,7 @@ export function AdminPanel({ onBack }: Props) {
     setSaving(true);
     setError(null);
     try {
-      const updates: Parameters<typeof updateUser>[1] = { nom: formNom, role: formRole, apps_autorisees: formApps };
+      const updates: Parameters<typeof updateUser>[1] = { nom: formNom, role: formRole, apps_autorisees: formApps, pin: formPin, pin_enabled: formPinEnabled };
       if (formPassword) updates.password = formPassword;
       await updateUser(editingId, updates);
       setEditingId(null);
@@ -181,6 +185,18 @@ export function AdminPanel({ onBack }: Props) {
                       {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
                     </select>
                   </div>
+                </div>
+
+                <div className="bg-[#0f1117] border border-[#2a2d35] rounded-lg p-3">
+                  <label className="flex items-center gap-2 cursor-pointer mb-2">
+                    <input type="checkbox" checked={formPinEnabled} onChange={e => setFormPinEnabled(e.target.checked)} className="w-4 h-4" />
+                    <span className="text-sm text-gray-300">Connexion par PIN (atelier)</span>
+                  </label>
+                  {formPinEnabled && (
+                    <input value={formPin} onChange={e => { if (/^\d{0,4}$/.test(e.target.value)) setFormPin(e.target.value); }}
+                      placeholder="Code PIN 4 chiffres" maxLength={4}
+                      className="w-32 bg-[#181a20] border border-[#2a2d35] rounded px-3 py-1.5 text-sm text-white text-center tracking-[0.5em] font-mono focus:border-orange-500 outline-none" />
+                  )}
                 </div>
 
                 <div>
