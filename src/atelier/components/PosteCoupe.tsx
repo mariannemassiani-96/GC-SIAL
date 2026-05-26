@@ -138,10 +138,9 @@ export function PosteCoupe({ onBack, startAtelier }: Props) {
 
   // ── Import XML or PDF per machine slot ──
   const handleImportMachine = useCallback((commandeId: string, machine: MachineName) => {
-    const acceptTypes = machine === 'lmt65' ? '.xml,.pdf' : '.pdf';
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = acceptTypes;
+    input.accept = '.xml,.pdf';
     input.onchange = async () => {
       const file = input.files?.[0];
       if (!file) return;
@@ -356,7 +355,7 @@ export function PosteCoupe({ onBack, startAtelier }: Props) {
                   </div>
                   <button onClick={() => handleImportMachine(selected.id, machine)}
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-[#252830] hover:bg-[#353840] text-gray-300 text-xs rounded-lg border border-[#353840]">
-                    <Upload size={12} /> {md ? 'Re-importer' : machine === 'lmt65' ? 'Importer XML/PDF' : 'Importer PDF'}
+                    <Upload size={12} /> {md ? 'Re-importer' : 'Importer XML'}
                   </button>
                 </div>
 
