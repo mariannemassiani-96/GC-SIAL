@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { ArrowLeft, Search, ChevronRight } from 'lucide-react';
 import { useAuth } from '../../AuthContext';
+import { useApiCollection } from '../../useApiCollection';
 import type { FstJob, FstBar, FstCut } from '../fstlineParser';
 import { patchCommandeModule, listCommandesGlobales, type CommandeGlobale, type ModuleStatus, getProfileImages } from '../../api';
 
@@ -132,131 +133,91 @@ function syncCoupeToGlobal(commande: Commande) {
     total: totalCuts,
     fait: doneCuts,
     nc: ncCount,
-  }).catch(() => {}); // silent — don't block if OVH API is down
+  }).catch(() => {}); // silent -- don't block if OVH API is down
 }
 
 // ── Main Component ──────────────────────────────────────────────────
 
 export function PosteCoupe({ onBack, startAtelier }: Props) {
   const { user } = useAuth();
-  const { items: commandes, upsert, remove } = useApiCollection<Commande>('coupe', 'commandes');
+  const { items: commandes, upsert } = useApiCollection<Commande>('coupe', 'commandes');
   const [search, setSearch] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [modeAtelier, setModeAtelier] = useState(startAtelier ?? false);
+  const [globalSynced, setGlobalSynced] = useState(false);
 
-  const isAdmin = user?.role === 'admin' || user?.role === 'manager';
+  const selected = commandes.find((c: Commande) => c.id === selectedId) ?? null;
 
-  const selected = commandes.find(c => c.id === selectedId) ?? null;
-
-  // ── Import XML or PDF per machine slot ──
-  const handleImportMachine = useCallback((commandeId: string, machine: MachineName) => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.xml,.pdf';
-    input.multiple = true;
-    input.onchange = async () => {
-      const files = input.files;
-      if (!files || files.length === 0) return;
-      const commande = commandes.find(c => c.id === commandeId);
-      if (!commande) return;
-
+  // ── Sync from commandes_globales on load ──
+  // Fetch global commands and auto-create local entries for any that have
+  // coupe_profiles machine data but don't yet exist locally.
+  useEffect(() => {
+    if (globalSynced) return;
+    (async () => {
       try {
-        const existing = commande.machines[machine] || {} as MachineData;
-        let job: FstJob | undefined = existing.fstlineJob;
-        let pdfB64: string | undefined = existing.pdfBase64;
-        let xmlName = '';
-        let pdfName = '';
-
-        for (const file of Array.from(files)) {
-          const ext = file.name.split('.').pop()?.toLowerCase();
-          if (ext === 'xml') {
-            job = await parseFstlineFile(file);
-            xmlName = file.name;
-          } else if (ext === 'pdf') {
-            const buffer = await file.arrayBuffer();
-            const bytes = new Uint8Array(buffer);
-            let binary = '';
-            for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-            pdfB64 = btoa(binary);
-            pdfName = file.name;
+        const globals = await listCommandesGlobales();
+        const localRefs = new Set(commandes.map((c: Commande) => c.ref.trim()));
+        for (const gc of globals) {
+          const cp = gc.coupe_profiles as CoupeModuleData | undefined;
+          if (!cp?.machines) continue;
+          // Has at least one machine with FstJob data
+          const hasMachineData = (['lmt65', 'dt', 'renfort'] as MachineName[]).some(
+            m => cp.machines?.[m]?.bars,
+          );
+          if (!hasMachineData) continue;
+          if (localRefs.has(gc.ref.trim())) continue; // already exists locally
+          // Create local commande from global data
+          const machines: Commande['machines'] = {};
+          const fileNames = (cp as CoupeModuleData).fileNames;
+          for (const m of ['lmt65', 'dt', 'renfort'] as MachineName[]) {
+            const job = cp.machines?.[m];
+            if (!job?.bars) continue;
+            machines[m] = {
+              fstlineJob: job,
+              fileName: fileNames?.[m] ?? '',
+              importDate: gc.updated_at || new Date().toISOString(),
+              statut: 'imported',
+              barresTotal: job.totalBars ?? 0,
+              barresFaites: 0,
+            };
           }
+          const newCmd: Commande = {
+            id: gc.ref.trim() + '_' + Date.now().toString(36),
+            ref: gc.ref.trim(),
+            chantier: gc.chantier || gc.client || '',
+            date: gc.date_creation?.slice(0, 10) || new Date().toISOString().slice(0, 10),
+            machines,
+            statut: 'envoyee',
+            notes: '',
+          };
+          upsert(newCmd);
         }
-
-        // Extract profile images from PDF + cache them
-        const pdfFile = Array.from(files).find(f => f.name.toLowerCase().endsWith('.pdf'));
-        if (pdfFile && job) {
-          const profileCodes = job.profiles.map(p => p.code);
-          extractAndCacheProfileImages(pdfFile, profileCodes).catch(() => {});
-        }
-
-        const names = [xmlName, pdfName].filter(Boolean).join(' + ');
-        const md: MachineData = {
-          fstlineJob: job, pdfBase64: pdfB64,
-          fileName: names || existing.fileName || '',
-          importDate: new Date().toISOString(), statut: 'imported',
-          barresTotal: job?.totalBars ?? 0, barresFaites: 0,
-        };
-        const updated: Commande = {
-          ...commande,
-          chantier: commande.chantier || job?.chantier || '',
-          ref: commande.ref || job?.orderCode || '',
-          machines: { ...commande.machines, [machine]: md },
-        };
-        upsert(updated);
-        setSelectedId(updated.id);
-        if (updated.ref) {
-          upsertCommandeGlobale(updated.ref.trim(), { client: '', chantier: updated.chantier || '' }).catch(() => {});
-          syncCoupeToGlobal(updated);
-        }
-      } catch (e) {
-        alert('Erreur import : ' + (e instanceof Error ? e.message : String(e)));
-      }
-    };
-    input.click();
-  }, [commandes, upsert]);
-
-  // ── Create new commande ──
-  const handleNewCommande = useCallback(() => {
-    const ref = prompt('Reference commande (ex: L_2026-0103):');
-    if (!ref) return;
-    const c: Commande = {
-      id: uid(),
-      ref,
-      chantier: '',
-      date: new Date().toISOString().slice(0, 10),
-      machines: {},
-      statut: 'en_attente',
-      notes: '',
-    };
-    upsert(c);
-    setSelectedId(c.id);
-    // Sync to global dashboard (fire-and-forget)
-    upsertCommandeGlobale(ref, { client: '', chantier: '' }).catch(() => {});
-    patchCommandeModule(ref, 'coupe_profiles', { statut: 'attente', total: 0, fait: 0, nc: 0 }).catch(() => {});
-  }, [upsert]);
+      } catch { /* silent -- don't block if API is down */ }
+      setGlobalSynced(true);
+    })();
+  }, [commandes, globalSynced, upsert]);
 
   // ── Send to atelier ──
   const handleSendToAtelier = useCallback((commandeId: string) => {
-    const c = commandes.find(x => x.id === commandeId);
+    const c = commandes.find((x: Commande) => x.id === commandeId);
     if (!c) return;
     const updated = { ...c, statut: 'envoyee' as const };
     upsert(updated);
-    // Sync to global dashboard (fire-and-forget)
     syncCoupeToGlobal(updated);
   }, [commandes, upsert]);
 
   // ── Update cut statut in a commande ──
   const updateCutStatut = useCallback((commandeId: string, machine: MachineName, barId: string, cutIdx: number, statut: FstCut['statut']) => {
-    const c = commandes.find(x => x.id === commandeId);
+    const c = commandes.find((x: Commande) => x.id === commandeId);
     if (!c) return;
     const md = c.machines[machine];
     if (!md?.fstlineJob) return;
 
-    const newBars = md.fstlineJob.bars.map(b => {
+    const newBars = md.fstlineJob.bars.map((b: FstBar) => {
       if (b.id !== barId) return b;
       return {
         ...b,
-        cuts: b.cuts.map((cut, i) => i === cutIdx ? {
+        cuts: b.cuts.map((cut: FstCut, i: number) => i === cutIdx ? {
           ...cut,
           statut,
           coupePar: user?.nom ?? '',
@@ -278,22 +239,21 @@ export function PosteCoupe({ onBack, startAtelier }: Props) {
       },
     };
     upsert(updated);
-    // Sync to global dashboard (fire-and-forget)
     syncCoupeToGlobal(updated);
   }, [commandes, upsert, user]);
 
   // ── Mark entire bar as cut ──
   const markBarAllCut = useCallback((commandeId: string, machine: MachineName, barId: string) => {
-    const c = commandes.find(x => x.id === commandeId);
+    const c = commandes.find((x: Commande) => x.id === commandeId);
     if (!c) return;
     const md = c.machines[machine];
     if (!md?.fstlineJob) return;
 
-    const newBars = md.fstlineJob.bars.map(b => {
+    const newBars = md.fstlineJob.bars.map((b: FstBar) => {
       if (b.id !== barId) return b;
       return {
         ...b,
-        cuts: b.cuts.map(cut => ({
+        cuts: b.cuts.map((cut: FstCut) => ({
           ...cut,
           statut: cut.statut === 'a_couper' ? 'coupe' as const : cut.statut,
           coupePar: cut.statut === 'a_couper' ? (user?.nom ?? '') : cut.coupePar,
@@ -311,7 +271,6 @@ export function PosteCoupe({ onBack, startAtelier }: Props) {
       },
     };
     upsert(updated);
-    // Sync to global dashboard (fire-and-forget)
     syncCoupeToGlobal(updated);
   }, [commandes, upsert, user]);
 
@@ -337,7 +296,7 @@ export function PosteCoupe({ onBack, startAtelier }: Props) {
               <button onClick={() => setSelectedId(null)} className="text-gray-400 hover:text-white"><ArrowLeft size={18} /></button>
               <div>
                 <h1 className="text-sm font-bold text-white">{selected.ref || 'Sans reference'}</h1>
-                <p className="text-[10px] text-gray-500">{selected.chantier || 'Chantier non defini'} — {selected.date}</p>
+                <p className="text-[10px] text-gray-500">{selected.chantier || 'Chantier non defini'} -- {selected.date}</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -347,7 +306,7 @@ export function PosteCoupe({ onBack, startAtelier }: Props) {
               {selected.statut === 'en_attente' && (
                 <button onClick={() => handleSendToAtelier(selected.id)}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-lg">
-                  <Send size={12} /> Envoyer atelier
+                  Envoyer atelier
                 </button>
               )}
             </div>
@@ -355,7 +314,7 @@ export function PosteCoupe({ onBack, startAtelier }: Props) {
         </header>
 
         <main className="flex-1 overflow-y-auto px-4 py-6 max-w-5xl mx-auto w-full space-y-6">
-          {/* 3 Machine Slots */}
+          {/* 3 Machine Slots -- read-only (imports done from Tableau de Bord) */}
           {(['lmt65', 'dt', 'renfort'] as MachineName[]).map(machine => {
             const md = selected.machines[machine];
             const stats = machineStats(md);
@@ -367,23 +326,17 @@ export function PosteCoupe({ onBack, startAtelier }: Props) {
                       {MACHINE_LABELS[machine]}
                     </div>
                     {md && (
-                      <span className="text-[10px] text-gray-500">{md.fileName} — {new Date(md.importDate).toLocaleDateString('fr-FR')}</span>
+                      <span className="text-[10px] text-gray-500">{md.fileName} -- {new Date(md.importDate).toLocaleDateString('fr-FR')}</span>
                     )}
                   </div>
-                  <div className="flex items-center gap-2">
-                    {md?.pdfBase64 && (
-                      <button onClick={() => {
-                        const w = window.open();
-                        if (w) w.document.write(`<iframe src="data:application/pdf;base64,${md.pdfBase64}" width="100%" height="100%" style="border:none;position:absolute;inset:0"></iframe>`);
-                      }} className="flex items-center gap-1 px-3 py-1.5 bg-blue-800 hover:bg-blue-700 text-blue-200 text-xs rounded-lg">
-                        PDF
-                      </button>
-                    )}
-                    <button onClick={() => handleImportMachine(selected.id, machine)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-[#252830] hover:bg-[#353840] text-gray-300 text-xs rounded-lg border border-[#353840]">
-                      <Upload size={12} /> {md ? 'Re-importer' : 'Importer XML + PDF'}
+                  {md?.pdfBase64 && (
+                    <button onClick={() => {
+                      const w = window.open();
+                      if (w) w.document.write(`<iframe src="data:application/pdf;base64,${md.pdfBase64}" width="100%" height="100%" style="border:none;position:absolute;inset:0"></iframe>`);
+                    }} className="flex items-center gap-1 px-3 py-1.5 bg-blue-800 hover:bg-blue-700 text-blue-200 text-xs rounded-lg">
+                      PDF
                     </button>
-                  </div>
+                  )}
                 </div>
 
                 {stats ? (
@@ -401,8 +354,8 @@ export function PosteCoupe({ onBack, startAtelier }: Props) {
                       <p className="text-[10px] text-gray-500">profils</p>
                     </div>
                     {md?.fstlineJob && (() => {
-                      const totalCuts = md.fstlineJob.bars.reduce((s, b) => s + b.cuts.length, 0);
-                      const doneCuts = md.fstlineJob.bars.reduce((s, b) => s + b.cuts.filter(c => c.statut === 'coupe').length, 0);
+                      const totalCuts = md.fstlineJob.bars.reduce((s: number, b: FstBar) => s + b.cuts.length, 0);
+                      const doneCuts = md.fstlineJob.bars.reduce((s: number, b: FstBar) => s + b.cuts.filter((ct: FstCut) => ct.statut === 'coupe').length, 0);
                       const pct = totalCuts > 0 ? Math.round(doneCuts / totalCuts * 100) : 0;
                       return (
                         <div className="flex-1">
@@ -415,16 +368,6 @@ export function PosteCoupe({ onBack, startAtelier }: Props) {
                         </div>
                       );
                     })()}
-                  </div>
-                ) : md?.pdfBase64 ? (
-                  <div>
-                    <div className="flex items-center gap-4 mb-2">
-                      <span className="text-sm text-green-400">PDF importe</span>
-                      <button onClick={() => {
-                        const w = window.open();
-                        if (w) { w.document.write(`<iframe src="data:application/pdf;base64,${md.pdfBase64}" width="100%" height="100%" style="border:none;position:absolute;inset:0"></iframe>`); }
-                      }} className="text-xs text-blue-400 hover:text-blue-300 underline">Voir le PDF</button>
-                    </div>
                   </div>
                 ) : (
                   <p className="text-xs text-gray-600">Aucun fichier importe</p>
@@ -449,11 +392,11 @@ export function PosteCoupe({ onBack, startAtelier }: Props) {
   }
 
   // ── Admin/Manager: List of Commandes ──
-  const filtered = commandes.filter(c => {
+  const filtered = commandes.filter((c: Commande) => {
     if (!search) return true;
     const q = search.toLowerCase();
     return c.ref.toLowerCase().includes(q) || c.chantier.toLowerCase().includes(q);
-  }).sort((a, b) => b.date.localeCompare(a.date));
+  }).sort((a: Commande, b: Commande) => b.date.localeCompare(a.date));
 
   return (
     <div className="min-h-screen bg-[#0f1117] flex flex-col">
@@ -463,23 +406,27 @@ export function PosteCoupe({ onBack, startAtelier }: Props) {
             <button onClick={onBack} className="text-gray-400 hover:text-white"><ArrowLeft size={18} /></button>
             <div>
               <h1 className="text-sm font-bold text-white">Preparation & Coupe Profiles</h1>
-              <p className="text-[10px] text-gray-500">Import FSTLINE XML — Gestion coupes profils</p>
+              <p className="text-[10px] text-gray-500">Gestion coupes profils</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button onClick={() => setModeAtelier(true)}
-              className="px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold rounded-lg">
-              MODE ATELIER
-            </button>
-            <button onClick={handleNewCommande}
-              className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-lg">
-              + Nouvelle commande
-            </button>
-          </div>
+          <button onClick={() => setModeAtelier(true)}
+            className="px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold rounded-lg">
+            MODE ATELIER
+          </button>
         </div>
       </header>
 
       <main className="flex-1 overflow-y-auto px-4 py-6 max-w-5xl mx-auto w-full space-y-4">
+        {/* Info banner */}
+        <div className="bg-indigo-600/10 border border-indigo-500/30 rounded-lg p-4 flex items-center gap-3">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-indigo-400 shrink-0">
+            <circle cx="12" cy="12" r="10" /><path d="M12 16v-4" /><path d="M12 8h.01" />
+          </svg>
+          <p className="text-sm text-indigo-300">
+            Commandes gerees depuis le <span className="font-semibold">Tableau de Bord</span>. Les commandes avec fichiers FSTLINE importes apparaissent automatiquement ici.
+          </p>
+        </div>
+
         <div className="relative max-w-md">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Chercher commande / chantier..."
@@ -487,16 +434,16 @@ export function PosteCoupe({ onBack, startAtelier }: Props) {
         </div>
 
         {filtered.length === 0 && (
-          <p className="text-gray-600 text-sm text-center py-12">Aucune commande. Cliquez sur "+ Nouvelle commande" pour commencer.</p>
+          <p className="text-gray-600 text-sm text-center py-12">Aucune commande. Utilisez le Tableau de Bord pour creer des commandes et importer des fichiers FSTLINE.</p>
         )}
 
-        {filtered.map(c => {
+        {filtered.map((c: Commande) => {
           const machineCount = (['lmt65', 'dt', 'renfort'] as MachineName[]).filter(m => c.machines[m]).length;
-          const totalBars = (['lmt65', 'dt', 'renfort'] as MachineName[]).reduce((s, m) => {
+          const totalBars = (['lmt65', 'dt', 'renfort'] as MachineName[]).reduce((s: number, m: MachineName) => {
             const md = c.machines[m];
             return s + (md?.fstlineJob?.totalBars ?? 0);
           }, 0);
-          const totalCuts = (['lmt65', 'dt', 'renfort'] as MachineName[]).reduce((s, m) => {
+          const totalCuts = (['lmt65', 'dt', 'renfort'] as MachineName[]).reduce((s: number, m: MachineName) => {
             const md = c.machines[m];
             return s + (md?.fstlineJob?.totalCuts ?? 0);
           }, 0);
@@ -515,16 +462,10 @@ export function PosteCoupe({ onBack, startAtelier }: Props) {
                     <span>{c.date}</span>
                     {c.chantier && <span>{c.chantier}</span>}
                     <span>{machineCount}/3 machines</span>
-                    {totalBars > 0 && <span>{totalBars} barres — {totalCuts} pieces</span>}
+                    {totalBars > 0 && <span>{totalBars} barres -- {totalCuts} pieces</span>}
                   </div>
                 </button>
-                <div className="flex items-center gap-2">
-                  {isAdmin && (
-                    <button onClick={() => { if (confirm('Supprimer cette commande ?')) remove(c.id); }}
-                      className="text-gray-600 hover:text-red-400 p-1"><Trash2 size={14} /></button>
-                  )}
-                  <ChevronRight size={16} className="text-gray-600" />
-                </div>
+                <ChevronRight size={16} className="text-gray-600" />
               </div>
             </div>
           );
@@ -554,7 +495,7 @@ function AtelierView({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [profileImgs, setProfileImgs] = useState<Record<string, string>>({});
 
-  const commande = commandes.find(c => c.id === commandeId) ?? null;
+  const commande = commandes.find((c: Commande) => c.id === commandeId) ?? null;
   const md = commande && machine ? commande.machines[machine] : undefined;
 
   // Load profile images when we have a job
@@ -567,7 +508,7 @@ function AtelierView({
         setProfileImgs(prev => ({ ...prev, ...imgs }));
       }).catch(() => {});
     }
-  }, [md?.fstlineJob]);
+  }, [md?.fstlineJob, profileImgs]);
   const job = md?.fstlineJob ?? null;
 
   // Bars for selected profile
@@ -578,7 +519,7 @@ function AtelierView({
 
   // Commandes available for selected machine
   const availableCommandes = machine
-    ? commandes.filter(c =>
+    ? commandes.filter((c: Commande) =>
         (c.statut === 'envoyee' || c.statut === 'en_cours') && c.machines[machine]?.fstlineJob
       )
     : [];
@@ -608,7 +549,7 @@ function AtelierView({
         <p className="text-xl text-gray-400">Choisir la machine</p>
         <div className="grid grid-cols-1 gap-6 w-full max-w-md px-8">
           {(['lmt65', 'dt', 'renfort'] as MachineName[]).map(m => {
-            const count = commandes.filter(c =>
+            const count = commandes.filter((c: Commande) =>
               (c.statut === 'envoyee' || c.statut === 'en_cours') && c.machines[m]?.fstlineJob
             ).length;
             return (
@@ -642,11 +583,11 @@ function AtelierView({
             <p className="text-gray-500 text-2xl text-center py-20">Aucune commande envoyee pour {MACHINE_LABELS[machine]}</p>
           ) : (
             <div className="space-y-4 max-w-2xl mx-auto">
-              {availableCommandes.map(c => {
+              {availableCommandes.map((c: Commande) => {
                 const mdata = c.machines[machine];
                 const j = mdata?.fstlineJob;
-                const totalCuts = j?.bars.reduce((s, b) => s + b.cuts.length, 0) ?? 0;
-                const doneCuts = j?.bars.reduce((s, b) => s + b.cuts.filter(ct => ct.statut === 'coupe').length, 0) ?? 0;
+                const totalCuts = j?.bars.reduce((s: number, b: FstBar) => s + b.cuts.length, 0) ?? 0;
+                const doneCuts = j?.bars.reduce((s: number, b: FstBar) => s + b.cuts.filter((ct: FstCut) => ct.statut === 'coupe').length, 0) ?? 0;
                 const pct = totalCuts > 0 ? Math.round(doneCuts / totalCuts * 100) : 0;
                 return (
                   <button key={c.id} onClick={() => { setCommandeId(c.id); setStep('profile'); }}
@@ -700,8 +641,8 @@ function AtelierView({
           <div className="space-y-4 max-w-2xl mx-auto">
             {[...profileMap.entries()].map(([code, bars]) => {
               const desc = bars[0]?.description || code;
-              const totalCuts = bars.reduce((s, b) => s + b.cuts.length, 0);
-              const doneCuts = bars.reduce((s, b) => s + b.cuts.filter(c => c.statut === 'coupe').length, 0);
+              const totalCuts = bars.reduce((s: number, b: FstBar) => s + b.cuts.length, 0);
+              const doneCuts = bars.reduce((s: number, b: FstBar) => s + b.cuts.filter((ct: FstCut) => ct.statut === 'coupe').length, 0);
               const pct = totalCuts > 0 ? Math.round(doneCuts / totalCuts * 100) : 0;
               const profileInfo = job.profiles.find(p => p.code === code);
               return (
@@ -717,8 +658,8 @@ function AtelierView({
                       <div className="text-lg font-bold text-white">{code}</div>
                       <div className="text-base text-gray-400">{desc}</div>
                       <div className="text-sm text-gray-500 mt-1">
-                        {bars.length} barre{bars.length > 1 ? 's' : ''} — {totalCuts} pieces
-                        {profileInfo?.innerColor ? ` — ${profileInfo.innerColor}` : ''}
+                        {bars.length} barre{bars.length > 1 ? 's' : ''} -- {totalCuts} pieces
+                        {profileInfo?.innerColor ? ` -- ${profileInfo.innerColor}` : ''}
                       </div>
                     </div>
                     <div className="text-right">
@@ -760,7 +701,7 @@ function AtelierView({
           )}
           <div className="flex-1">
             <span className="text-lg font-bold text-white">{commande?.ref}</span>
-            <span className="text-base text-gray-500 ml-3">{currentBar.code} — {currentBar.description}</span>
+            <span className="text-base text-gray-500 ml-3">{currentBar.code} -- {currentBar.description}</span>
           </div>
           <span className="text-base text-amber-400 font-mono">{MACHINE_LABELS[machine]}</span>
         </div>
@@ -781,7 +722,7 @@ function AtelierView({
                 Barre {barIdx + 1} / {profileBars.length}
               </div>
               <div className="text-lg text-gray-400">
-                {currentBar.code} — {currentBar.length} mm — {currentBar.cuts.length} pieces
+                {currentBar.code} -- {currentBar.length} mm -- {currentBar.cuts.length} pieces
               </div>
               <div className="text-base mt-1">
                 <span className={barAllDone ? 'text-green-400 font-bold' : 'text-amber-400'}>
@@ -814,10 +755,10 @@ function AtelierView({
                         <div className="text-base font-bold text-white">{cut.ref || cut.bcod || `Piece ${i + 1}`}</div>
                         <div className="text-sm text-gray-400">
                           {cut.ol} mm
-                          {cut.angleLeft !== 90 && ` — G:${cut.angleLeft}°`}
-                          {cut.angleRight !== 90 && ` — D:${cut.angleRight}°`}
-                          {cut.chantier && ` — ${cut.chantier}`}
-                          {cut.dimensions && ` — ${cut.dimensions}`}
+                          {cut.angleLeft !== 90 && ` -- G:${cut.angleLeft}`}
+                          {cut.angleRight !== 90 && ` -- D:${cut.angleRight}`}
+                          {cut.chantier && ` -- ${cut.chantier}`}
+                          {cut.dimensions && ` -- ${cut.dimensions}`}
                         </div>
                       </div>
                       <div className="flex gap-2">
@@ -973,12 +914,12 @@ function BarVisualization({ bar, onCutClick }: {
                 {/* Angle indicators */}
                 {angleL !== 90 && w > 20 && (
                   <text x={x + 3} y={barY + barH + 10} fontSize={6} fill="#fbbf24" fontFamily="monospace">
-                    {angleL}&deg;
+                    {angleL}
                   </text>
                 )}
                 {angleR !== 90 && w > 20 && (
                   <text x={x + w - 15} y={barY + barH + 10} fontSize={6} fill="#fbbf24" fontFamily="monospace">
-                    {angleR}&deg;
+                    {angleR}
                   </text>
                 )}
               </g>
