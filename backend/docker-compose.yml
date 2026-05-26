@@ -4,7 +4,7 @@ services:
     ports:
       - "8100:8100"
     environment:
-      - DATABASE_URL=postgresql://isula:isula2026@host.docker.internal:5432/isula_vitrage
+      - DATABASE_URL=postgresql://isula:isula2026@172.17.0.1:5432/isula_vitrage
       - REDIS_URL=redis://redis:6379/0
       - CORS_ORIGINS=http://localhost:5173,https://gc-sial.vercel.app
     depends_on:
