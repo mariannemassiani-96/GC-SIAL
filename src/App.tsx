@@ -139,12 +139,25 @@ function HubFabrication({ onSelect }: { onSelect: (mode: AppMode) => void }) {
       ),
       color: 'blue',
     },
+    {
+      id: 'dashboard_global' as AppMode,
+      label: 'Tableau de Bord',
+      description: 'Suivi global des commandes — progression par module, alertes NC, filtres par semaine et statut.',
+      icon: (
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-indigo-400">
+          <rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" />
+          <rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" />
+        </svg>
+      ),
+      color: 'indigo',
+    },
   ];
 
   const atelierApps = apps.filter(a =>
     ['reception_matiere', 'poste_coupe', 'smart_assembly', 'stock_accessoires', 'preparation_livraison', 'maintenance_qualite', 'vitrage'].includes(a.id),
   );
   const beApps = apps.filter(a => ['gc', 'workshop_layout'].includes(a.id));
+  const supervisionApps = apps.filter(a => ['dashboard_global'].includes(a.id));
 
   const filterApps = (list: typeof apps) =>
     list.filter(app => {
@@ -222,6 +235,25 @@ function HubFabrication({ onSelect }: { onSelect: (mode: AppMode) => void }) {
             {filterApps(beApps).map(renderCard)}
           </div>
         </section>
+
+        {/* SUPERVISION */}
+        {user && (user.role === 'admin' || user.role === 'superviseur' || user.role === 'chef_atelier') && filterApps(supervisionApps).length > 0 && (
+          <section>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-8 h-8 rounded-lg bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-indigo-400">
+                  <rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" />
+                  <rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" />
+                </svg>
+              </div>
+              <h2 className="text-lg font-bold text-white">SUPERVISION</h2>
+              <span className="text-xs text-gray-500">Suivi global, tableaux de bord</span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {filterApps(supervisionApps).map(renderCard)}
+            </div>
+          </section>
+        )}
       </main>
     </div>
   );
@@ -288,6 +320,7 @@ function AppContent() {
   if (mode === 'preparation_livraison') return <PreparationLivraison onBack={goHome} />;
   if (mode === 'workshop_layout') return <WorkshopApp onHome={goHome} />;
   if (mode === 'vitrage') return <VitrageApp onBack={goHome} />;
+  if (mode === 'dashboard_global') return <DashboardGlobal onBack={goHome} />;
 
   // ── Garde-corps ────────────────────────────────────
   if (selectedAffaire) {

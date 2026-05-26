@@ -8,8 +8,6 @@ interface Props {
   onBack: () => void;
 }
 
-type ViewMode = 'grid' | 'detail';
-
 interface ModuleDef {
   key: keyof Pick<CommandeGlobale, 'reception' | 'coupe_profiles' | 'vitrage' | 'assemblage' | 'livraison'>;
   label: string;

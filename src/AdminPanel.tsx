@@ -22,6 +22,7 @@ const ALL_APPS = [
   { id: 'preparation_livraison', label: 'Preparation & Livraison' },
   { id: 'workshop_layout', label: 'Plan Atelier' },
   { id: 'maintenance_qualite', label: 'Maintenance & Qualite' },
+  { id: 'dashboard_global', label: 'Tableau de Bord' },
 ];
 
 function getRoleStyle(role: string) {
