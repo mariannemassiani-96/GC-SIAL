@@ -857,7 +857,7 @@ export function VitrageApp({ onBack }: { onBack: () => void }) {
         setCommandes(cmds);
         setSettingsState(sets);
       } catch (err) {
-        setError(`Erreur chargement Supabase : ${err}`);
+        setError(`Erreur chargement API : ${err}`);
       }
       setLoading(false);
     })();
