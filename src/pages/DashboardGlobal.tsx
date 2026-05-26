@@ -1,6 +1,9 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { ArrowLeft, Search, X, AlertTriangle, ChevronDown, ChevronUp, Plus, Save } from 'lucide-react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { ArrowLeft, Search, X, AlertTriangle, ChevronDown, ChevronUp, Plus, Save, Upload, CheckCircle, Send, FileText } from 'lucide-react';
 import { listCommandesGlobales, upsertCommandeGlobale, type CommandeGlobale, type ModuleStatus } from '../api';
+import { parseExcelFile, parseCSVText } from '../vitrage/parseExcel';
+import { parseFstlineFile, type FstJob } from '../atelier/fstlineParser';
+import type { Vitrage } from '../vitrage/types';
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -15,6 +18,28 @@ interface ModuleDef {
   bgColor: string;
   borderColor: string;
 }
+
+/** Shape of the vitrage JSONB column when populated with import data */
+interface VitrageModuleData extends ModuleStatus {
+  vitrages?: Vitrage[];
+  fileName?: string;
+}
+
+/** Shape of the coupe_profiles JSONB column when populated with import data */
+interface CoupeModuleData extends ModuleStatus {
+  machines?: {
+    lmt65?: FstJob;
+    dt?: FstJob;
+    renfort?: FstJob;
+  };
+  fileNames?: {
+    lmt65?: string;
+    dt?: string;
+    renfort?: string;
+  };
+}
+
+type CoupeMachineKey = 'lmt65' | 'dt' | 'renfort';
 
 const MODULES: ModuleDef[] = [
   { key: 'reception', label: 'Reception', color: 'text-sky-400', bgColor: 'bg-sky-600/20', borderColor: 'border-sky-500/30' },
@@ -166,6 +191,221 @@ function CommandCard({ cmd, onClick }: { cmd: CommandeGlobale; onClick: () => vo
   );
 }
 
+// ── Import Slot: Vitrage ────────────────────────────────────────────
+
+function ImportSlotVitrage({
+  vitrageData,
+  chantier,
+  onImported,
+}: {
+  vitrageData: VitrageModuleData;
+  chantier: string;
+  onImported: (data: VitrageModuleData) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState('');
+
+  const hasData = vitrageData.vitrages && vitrageData.vitrages.length > 0;
+
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setImporting(true);
+    setImportError('');
+    try {
+      let vitrages: Vitrage[];
+      if (file.name.endsWith('.csv')) {
+        const text = await file.text();
+        const result = parseCSVText(text);
+        vitrages = result.vitrages;
+      } else {
+        const result = await parseExcelFile(file, chantier);
+        vitrages = result.vitrages;
+      }
+
+      if (vitrages.length === 0) {
+        setImportError('Aucun vitrage detecte dans le fichier');
+        return;
+      }
+
+      onImported({
+        statut: 'attente',
+        total: vitrages.length,
+        fait: 0,
+        nc: 0,
+        vitrages,
+        fileName: file.name,
+      });
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message : 'Erreur import');
+    } finally {
+      setImporting(false);
+      if (inputRef.current) inputRef.current.value = '';
+    }
+  };
+
+  return (
+    <div className="px-5 py-4 border border-[#2a2d35] rounded-lg bg-[#0f1117]">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-blue-500" />
+          <span className="text-sm font-semibold text-blue-400">ISULA VITRAGE</span>
+        </div>
+        {hasData && <CheckCircle size={16} className="text-green-400" />}
+      </div>
+
+      <div className="flex items-center gap-3">
+        <button
+          onClick={() => inputRef.current?.click()}
+          disabled={importing}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-blue-600/20 text-blue-400 border border-blue-500/30 rounded-lg hover:bg-blue-600/30 transition-colors disabled:opacity-50"
+        >
+          <Upload size={12} />
+          {importing ? 'Import...' : 'Importer Excel SI-AL'}
+        </button>
+        <input
+          ref={inputRef}
+          type="file"
+          accept=".xlsx,.xls,.csv"
+          onChange={handleFile}
+          className="hidden"
+        />
+        {hasData && vitrageData.fileName && (
+          <div className="flex items-center gap-1.5 text-xs text-gray-400">
+            <FileText size={12} />
+            <span>{vitrageData.fileName}</span>
+          </div>
+        )}
+      </div>
+
+      {hasData && (
+        <p className="mt-2 text-xs text-green-400">{vitrageData.vitrages!.length} vitrages importes</p>
+      )}
+
+      {importError && (
+        <p className="mt-2 text-xs text-red-400">{importError}</p>
+      )}
+    </div>
+  );
+}
+
+// ── Import Slot: Coupe (single machine) ─────────────────────────────
+
+function ImportSlotCoupe({
+  label,
+  machineKey,
+  coupeData,
+  onImported,
+}: {
+  label: string;
+  machineKey: CoupeMachineKey;
+  coupeData: CoupeModuleData;
+  onImported: (machineKey: CoupeMachineKey, job: FstJob, xmlName: string) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState('');
+
+  const machines = coupeData.machines || {};
+  const fileNames = coupeData.fileNames || {};
+  const job = machines[machineKey];
+  const hasData = !!job;
+
+  const handleFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    setImporting(true);
+    setImportError('');
+    try {
+      // Find the XML file in the selection
+      let xmlFile: File | null = null;
+      let xmlName = '';
+      for (let i = 0; i < files.length; i++) {
+        const f = files[i];
+        if (f.name.toLowerCase().endsWith('.xml')) {
+          xmlFile = f;
+          xmlName = f.name;
+        }
+      }
+
+      if (!xmlFile) {
+        setImportError('Aucun fichier XML trouve');
+        return;
+      }
+
+      const parsed = await parseFstlineFile(xmlFile);
+      if (parsed.totalBars === 0) {
+        setImportError('Aucune barre detectee dans le XML');
+        return;
+      }
+
+      onImported(machineKey, parsed, xmlName);
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message : 'Erreur import');
+    } finally {
+      setImporting(false);
+      if (inputRef.current) inputRef.current.value = '';
+    }
+  };
+
+  const colorMap: Record<CoupeMachineKey, { dot: string; text: string; border: string; bg: string }> = {
+    lmt65: { dot: 'bg-red-500', text: 'text-red-400', border: 'border-red-500/30', bg: 'bg-red-600/20' },
+    dt: { dot: 'bg-orange-500', text: 'text-orange-400', border: 'border-orange-500/30', bg: 'bg-orange-600/20' },
+    renfort: { dot: 'bg-yellow-500', text: 'text-yellow-400', border: 'border-yellow-500/30', bg: 'bg-yellow-600/20' },
+  };
+  const colors = colorMap[machineKey];
+
+  return (
+    <div className="px-5 py-4 border border-[#2a2d35] rounded-lg bg-[#0f1117]">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <span className={`w-2 h-2 rounded-full ${colors.dot}`} />
+          <span className={`text-sm font-semibold ${colors.text}`}>{label}</span>
+        </div>
+        {hasData && <CheckCircle size={16} className="text-green-400" />}
+      </div>
+
+      <div className="flex items-center gap-3">
+        <button
+          onClick={() => inputRef.current?.click()}
+          disabled={importing}
+          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium ${colors.bg} ${colors.text} border ${colors.border} rounded-lg hover:opacity-80 transition-colors disabled:opacity-50`}
+        >
+          <Upload size={12} />
+          {importing ? 'Import...' : 'Importer XML + PDF'}
+        </button>
+        <input
+          ref={inputRef}
+          type="file"
+          accept=".xml,.pdf"
+          multiple
+          onChange={handleFiles}
+          className="hidden"
+        />
+        {hasData && fileNames[machineKey] && (
+          <div className="flex items-center gap-1.5 text-xs text-gray-400">
+            <FileText size={12} />
+            <span>{fileNames[machineKey]}</span>
+          </div>
+        )}
+      </div>
+
+      {hasData && job && (
+        <p className="mt-2 text-xs text-green-400">
+          {job.totalBars} barres, {job.totalCuts} pieces
+        </p>
+      )}
+
+      {importError && (
+        <p className="mt-2 text-xs text-red-400">{importError}</p>
+      )}
+    </div>
+  );
+}
+
 // ── Detail View ─────────────────────────────────────────────────────
 
 function DetailView({ cmd, onClose, onRefresh }: { cmd: CommandeGlobale; onClose: () => void; onRefresh: () => void }) {
@@ -176,18 +416,36 @@ function DetailView({ cmd, onClose, onRefresh }: { cmd: CommandeGlobale; onClose
   const [formSemLiv, setFormSemLiv] = useState(cmd.semaine_liv);
   const [formNotes, setFormNotes] = useState(cmd.notes);
   const [saving, setSaving] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [sendSuccess, setSendSuccess] = useState(false);
+
+  // Local import state — mirrors what's in the command but allows accumulation before save
+  const [localVitrage, setLocalVitrage] = useState<VitrageModuleData>(
+    (cmd.vitrage as VitrageModuleData) || {}
+  );
+  const [localCoupe, setLocalCoupe] = useState<CoupeModuleData>(
+    (cmd.coupe_profiles as CoupeModuleData) || {}
+  );
+  const [importDirty, setImportDirty] = useState(false);
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      await upsertCommandeGlobale(cmd.ref, {
+      const payload: Partial<CommandeGlobale> = {
         client: formClient,
         chantier: formChantier,
         semaine_fab: formSemFab,
         semaine_liv: formSemLiv,
         notes: formNotes,
-      });
+      };
+      // Include import data if changed
+      if (importDirty) {
+        payload.vitrage = localVitrage;
+        payload.coupe_profiles = localCoupe;
+      }
+      await upsertCommandeGlobale(cmd.ref, payload);
       setEditing(false);
+      setImportDirty(false);
       onRefresh();
     } catch {
       // silent
@@ -195,6 +453,88 @@ function DetailView({ cmd, onClose, onRefresh }: { cmd: CommandeGlobale; onClose
       setSaving(false);
     }
   };
+
+  const handleSaveImports = async () => {
+    setSaving(true);
+    try {
+      await upsertCommandeGlobale(cmd.ref, {
+        vitrage: localVitrage,
+        coupe_profiles: localCoupe,
+      });
+      setImportDirty(false);
+      onRefresh();
+    } catch {
+      // silent
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleVitrageImported = (data: VitrageModuleData) => {
+    setLocalVitrage(data);
+    setImportDirty(true);
+  };
+
+  const handleCoupeImported = (machineKey: CoupeMachineKey, job: FstJob, xmlName: string) => {
+    setLocalCoupe(prev => {
+      const machines = { ...(prev.machines || {}), [machineKey]: job };
+      const fileNames = { ...(prev.fileNames || {}), [machineKey]: xmlName };
+      // Compute totals across all machines
+      let totalBars = 0;
+      let totalCuts = 0;
+      for (const k of ['lmt65', 'dt', 'renfort'] as CoupeMachineKey[]) {
+        const m = machines[k];
+        if (m) {
+          totalBars += m.totalBars;
+          totalCuts += m.totalCuts;
+        }
+      }
+      return {
+        ...prev,
+        statut: 'attente' as const,
+        total: totalCuts,
+        fait: prev.fait || 0,
+        nc: prev.nc || 0,
+        machines,
+        fileNames,
+        totalBars,
+      };
+    });
+    setImportDirty(true);
+  };
+
+  const handleEnvoyerAuxPostes = async () => {
+    setSending(true);
+    setSendSuccess(false);
+    try {
+      // Save import data and set statut to en_cours
+      const vitragePayload: VitrageModuleData = {
+        ...localVitrage,
+        statut: localVitrage.vitrages && localVitrage.vitrages.length > 0 ? 'en_cours' : localVitrage.statut,
+      };
+      const coupePayload: CoupeModuleData = {
+        ...localCoupe,
+        statut: localCoupe.machines && Object.keys(localCoupe.machines).length > 0 ? 'en_cours' : localCoupe.statut,
+      };
+
+      await upsertCommandeGlobale(cmd.ref, {
+        vitrage: vitragePayload,
+        coupe_profiles: coupePayload,
+      });
+      setLocalVitrage(vitragePayload);
+      setLocalCoupe(coupePayload);
+      setImportDirty(false);
+      setSendSuccess(true);
+      onRefresh();
+    } catch {
+      // silent
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const hasAnyImport = (localVitrage.vitrages && localVitrage.vitrages.length > 0) ||
+    (localCoupe.machines && Object.keys(localCoupe.machines).length > 0);
 
   return (
     <div className="bg-[#181a20] border border-[#2a2d35] rounded-xl overflow-hidden">
@@ -213,6 +553,16 @@ function DetailView({ cmd, onClose, onRefresh }: { cmd: CommandeGlobale; onClose
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {cmd.semaine_fab && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-violet-600/20 text-violet-400 border border-violet-500/30">
+              Fab {cmd.semaine_fab}
+            </span>
+          )}
+          {cmd.semaine_liv && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-600/20 text-emerald-400 border border-emerald-500/30">
+              Liv {cmd.semaine_liv}
+            </span>
+          )}
           {!editing ? (
             <button
               onClick={() => setEditing(true)}
@@ -269,6 +619,76 @@ function DetailView({ cmd, onClose, onRefresh }: { cmd: CommandeGlobale; onClose
           </div>
         </div>
       )}
+
+      {/* ── File Import Section ─────────────────────────────────── */}
+      <div className="px-5 py-4 border-b border-[#2a2d35]">
+        <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">
+          Import fichiers par poste
+        </h3>
+
+        <div className="space-y-3">
+          {/* Vitrage slot */}
+          <ImportSlotVitrage
+            vitrageData={localVitrage}
+            chantier={cmd.chantier || ''}
+            onImported={handleVitrageImported}
+          />
+
+          {/* Coupe LMT 65 */}
+          <ImportSlotCoupe
+            label="COUPE LMT 65"
+            machineKey="lmt65"
+            coupeData={localCoupe}
+            onImported={handleCoupeImported}
+          />
+
+          {/* Coupe Double Tete */}
+          <ImportSlotCoupe
+            label="COUPE DOUBLE TETE"
+            machineKey="dt"
+            coupeData={localCoupe}
+            onImported={handleCoupeImported}
+          />
+
+          {/* Coupe Renfort Acier */}
+          <ImportSlotCoupe
+            label="COUPE RENFORT ACIER"
+            machineKey="renfort"
+            coupeData={localCoupe}
+            onImported={handleCoupeImported}
+          />
+        </div>
+
+        {/* Save imports + Envoyer aux postes */}
+        <div className="flex items-center gap-3 mt-4">
+          {importDirty && (
+            <button
+              onClick={handleSaveImports}
+              disabled={saving}
+              className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-semibold rounded-lg transition-colors"
+            >
+              <Save size={14} /> {saving ? 'Sauvegarde...' : 'Sauvegarder imports'}
+            </button>
+          )}
+
+          {hasAnyImport && (
+            <button
+              onClick={handleEnvoyerAuxPostes}
+              disabled={sending || importDirty}
+              className="flex items-center gap-1.5 px-4 py-2 bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white text-xs font-semibold rounded-lg transition-colors"
+              title={importDirty ? 'Sauvegardez les imports d\'abord' : 'Envoyer les donnees aux postes de travail'}
+            >
+              <Send size={14} /> {sending ? 'Envoi...' : 'Envoyer aux postes'}
+            </button>
+          )}
+
+          {sendSuccess && (
+            <span className="flex items-center gap-1 text-xs text-green-400">
+              <CheckCircle size={14} /> Envoye aux postes
+            </span>
+          )}
+        </div>
+      </div>
 
       {/* Modules detail */}
       <div className="divide-y divide-[#2a2d35]">
@@ -339,7 +759,7 @@ function DetailView({ cmd, onClose, onRefresh }: { cmd: CommandeGlobale; onClose
 
 // ── New Command Form ────────────────────────────────────────────────
 
-function NewCommandForm({ onCreated, onCancel }: { onCreated: () => void; onCancel: () => void }) {
+function NewCommandForm({ onCreated, onCancel }: { onCreated: (ref: string) => void; onCancel: () => void }) {
   const [ref, setRef] = useState('');
   const [client, setClient] = useState('');
   const [chantier, setChantier] = useState('');
@@ -359,7 +779,7 @@ function NewCommandForm({ onCreated, onCancel }: { onCreated: () => void; onCanc
         semaine_fab: semFab,
         semaine_liv: semLiv,
       });
-      onCreated();
+      onCreated(ref.trim());
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Erreur creation');
     } finally {
@@ -524,6 +944,13 @@ export function DashboardGlobal({ onBack }: Props) {
 
   const selectedCmd = selectedRef ? commandes.find(c => c.ref === selectedRef) : null;
 
+  const handleCommandCreated = (ref: string) => {
+    setShowNew(false);
+    load().then(() => {
+      setSelectedRef(ref);
+    });
+  };
+
   return (
     <div className="min-h-screen bg-[#0f1117]">
       {/* Header */}
@@ -563,7 +990,7 @@ export function DashboardGlobal({ onBack }: Props) {
         {/* New command form */}
         {showNew && (
           <NewCommandForm
-            onCreated={() => { setShowNew(false); load(); }}
+            onCreated={handleCommandCreated}
             onCancel={() => setShowNew(false)}
           />
         )}
