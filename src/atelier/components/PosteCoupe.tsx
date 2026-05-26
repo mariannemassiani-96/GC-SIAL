@@ -1,12 +1,24 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { ArrowLeft, Upload, Search, Trash2, Send, ChevronRight } from 'lucide-react';
-import { v4 as uid } from 'uuid';
-import { useApiCollection } from '../../useApiCollection';
+import { ArrowLeft, Search, ChevronRight } from 'lucide-react';
 import { useAuth } from '../../AuthContext';
-import { parseFstlineFile, type FstJob, type FstBar, type FstCut } from '../fstlineParser';
-import { patchCommandeModule, upsertCommandeGlobale, extractAndCacheProfileImages, getProfileImages } from '../../api';
+import type { FstJob, FstBar, FstCut } from '../fstlineParser';
+import { patchCommandeModule, listCommandesGlobales, type CommandeGlobale, type ModuleStatus, getProfileImages } from '../../api';
 
 interface Props { onBack: () => void; startAtelier?: boolean; }
+
+/** Shape of the coupe_profiles JSONB column when populated with import data */
+interface CoupeModuleData extends ModuleStatus {
+  machines?: {
+    lmt65?: FstJob;
+    dt?: FstJob;
+    renfort?: FstJob;
+  };
+  fileNames?: {
+    lmt65?: string;
+    dt?: string;
+    renfort?: string;
+  };
+}
 
 // ── Types ────────────────────────────────────────────────────────────
 
