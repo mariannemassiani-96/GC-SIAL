@@ -177,6 +177,17 @@ export function ProductionView({ onBack, startAtelier }: { onBack: () => void; s
       <div className="flex items-center gap-4 flex-wrap">
         <button onClick={onBack} className="text-gray-500 hover:text-white text-sm">&larr; Retour</button>
         <h2 className="text-xl font-bold text-amber-400">Production</h2>
+        {(() => {
+          const pendingCount = lots.filter(l => {
+            const s = l.statut || 'en_preparation';
+            return s === 'en_preparation' || s === 'en_coupe' || s === 'en_assemblage';
+          }).length;
+          return pendingCount > 0 ? (
+            <span className="px-3 py-1 bg-red-600 text-white text-xs font-bold rounded-full animate-pulse">
+              {pendingCount} validation{pendingCount > 1 ? 's' : ''} en attente
+            </span>
+          ) : null;
+        })()}
         <button onClick={() => setModeAtelier(true)}
           className="px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white text-sm rounded-lg font-bold transition-colors">
           MODE ATELIER
@@ -246,6 +257,9 @@ export function ProductionView({ onBack, startAtelier }: { onBack: () => void; s
               Supprimer lot
             </button>
           </div>
+
+          {/* Workflow validation */}
+          <WorkflowBar lot={selectedLot} pieces={pieces} onReload={() => loadLotDetail(selectedLot)} />
 
           {/* Tabs */}
           <div className="flex gap-1 border-b border-[#2a2d35] flex-wrap">
@@ -432,6 +446,93 @@ export function ProductionView({ onBack, startAtelier }: { onBack: () => void; s
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Workflow Validation Bar ──────────────────────────────────────────
+
+const WORKFLOW_STEPS = [
+  { id: 'en_preparation', label: 'Preparation', next: 'pret_coupe' },
+  { id: 'pret_coupe', label: 'Pret a couper', next: 'en_coupe' },
+  { id: 'en_coupe', label: 'En coupe', next: 'pret_assemblage' },
+  { id: 'pret_assemblage', label: 'Pret assemblage', next: 'en_assemblage' },
+  { id: 'en_assemblage', label: 'En assemblage', next: 'termine' },
+  { id: 'termine', label: 'Termine', next: '' },
+];
+
+function WorkflowBar({ lot, pieces, onReload }: { lot: Lot; pieces: Piece[]; onReload: () => void }) {
+  const statut = lot.statut || 'en_preparation';
+  const currentStep = WORKFLOW_STEPS.findIndex(s => s.id === statut);
+  const prep = lot.preparation || {};
+  const allPrepReady = Object.values(prep).length > 0 && Object.values(prep).every((p: PrepItem) => p.ready);
+  const allCut = pieces.length > 0 && pieces.every(p => p.statut === 'coupe' || p.statut === 'assemble');
+  const allAssembled = pieces.length > 0 && pieces.every(p => p.statut === 'assemble');
+  const hasNC = pieces.some(p => p.statut === 'nc' || p.statut === 'casse');
+
+  const needsValidation = (
+    (statut === 'en_preparation' && !allPrepReady) ||
+    (statut === 'en_coupe' && !allCut && hasNC) ||
+    (statut === 'en_assemblage' && !allAssembled && hasNC)
+  );
+
+  const canAdvance = (
+    (statut === 'en_preparation' && allPrepReady) ||
+    (statut === 'pret_coupe') ||
+    (statut === 'en_coupe' && allCut) ||
+    (statut === 'pret_assemblage') ||
+    (statut === 'en_assemblage' && allAssembled)
+  );
+
+  const advance = async () => {
+    const step = WORKFLOW_STEPS.find(s => s.id === statut);
+    if (!step?.next) return;
+    await patchJSON(`/api/production/lots/${lot.id}/statut`, { statut: step.next });
+    onReload();
+  };
+
+  const forceValidate = async () => {
+    const step = WORKFLOW_STEPS.find(s => s.id === statut);
+    if (!step?.next) return;
+    await patchJSON(`/api/production/lots/${lot.id}/statut`, { statut: step.next });
+    onReload();
+  };
+
+  return (
+    <div className="bg-[#181a20] rounded-lg p-3 border border-[#2a2d35]">
+      <div className="flex items-center gap-1 mb-2">
+        {WORKFLOW_STEPS.map((s, i) => {
+          const done = i < currentStep;
+          const active = i === currentStep;
+          return (
+            <div key={s.id} className="flex items-center flex-1">
+              <div className={`flex-1 h-2 rounded-full ${done ? 'bg-green-500' : active ? 'bg-amber-500' : 'bg-gray-700'}`} />
+              {i < WORKFLOW_STEPS.length - 1 && <div className="w-1" />}
+            </div>
+          );
+        })}
+      </div>
+      <div className="flex items-center justify-between">
+        <div>
+          <span className="text-sm font-bold text-white">{WORKFLOW_STEPS[currentStep]?.label || statut}</span>
+          {needsValidation && <span className="ml-2 text-xs text-amber-400 font-bold animate-pulse">⚠ VALIDATION REQUISE</span>}
+        </div>
+        <div className="flex gap-2">
+          {needsValidation && (
+            <button onClick={forceValidate}
+              className="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white text-xs font-bold rounded transition-colors">
+              FORCER VALIDATION (superviseur)
+            </button>
+          )}
+          {canAdvance && statut !== 'termine' && (
+            <button onClick={advance}
+              className="px-3 py-1.5 bg-green-600 hover:bg-green-500 text-white text-xs font-bold rounded transition-colors">
+              PASSER A L'ETAPE SUIVANTE →
+            </button>
+          )}
+          {statut === 'termine' && <span className="text-green-400 text-sm font-bold">✓ LOT TERMINE</span>}
+        </div>
+      </div>
     </div>
   );
 }

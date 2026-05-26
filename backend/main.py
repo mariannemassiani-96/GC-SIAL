@@ -289,6 +289,12 @@ def api_update_preparation(lot_id: str, data: dict = Body(...)):
     return {"ok": True}
 
 
+@app.patch("/api/production/lots/{lot_id}/statut")
+def api_update_lot_statut(lot_id: str, data: dict = Body(...)):
+    dbp.update_lot_statut(lot_id, data.get('statut', ''))
+    return {"ok": True}
+
+
 @app.get("/api/production/pieces/by-commande/{commande_ref}")
 def api_pieces_by_commande(commande_ref: str):
     rows = dbp.get_pieces_by_commande(commande_ref)

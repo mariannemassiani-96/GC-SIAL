@@ -138,6 +138,12 @@ def update_preparation(lot_id: str, preparation: dict):
         conn.commit()
 
 
+def update_lot_statut(lot_id: str, statut: str):
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute("UPDATE production_lots SET statut = %s WHERE id = %s", (statut, lot_id))
+        conn.commit()
+
+
 def get_pieces_by_commande(commande_ref: str):
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute("""
