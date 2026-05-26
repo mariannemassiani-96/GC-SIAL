@@ -416,6 +416,7 @@ function AtelierView({ lots, semaine, poste, onSelectPoste, onBack, loadLotDetai
   const [plateIdx, setPlateIdx] = useState(0);
   const [selectedMaterial, setSelectedMaterial] = useState<string | null>(null);
   const [editCompo, setEditCompo] = useState<{ pieceId: string; original: string; current: string } | null>(null);
+  const [selectedPieceIdx, setSelectedPieceIdx] = useState<number | null>(null);
   const [weMode, setWeMode] = useState<'barres' | 'liste'>('barres');
   const [weBarIdx, setWeBarIdx] = useState(0);
 
@@ -874,22 +875,28 @@ function AtelierView({ lots, semaine, poste, onSelectPoste, onBack, loadLotDetai
             <div className="text-base text-gray-500">{idx + 1} / {allPlates.length}</div>
           </div>
 
-          {/* SVG plaque */}
+          {/* SVG plaque — pièces cliquables */}
           <div className="bg-white rounded-xl p-3 w-full max-w-xl">
-            <svg viewBox={`0 0 ${w + pad * 2} ${h + pad * 2}`} className="w-full" style={{ maxHeight: '35vh' }}>
+            <svg viewBox={`0 0 ${w + pad * 2} ${h + pad * 2}`} className="w-full" style={{ maxHeight: '30vh' }}>
               <rect x={pad} y={pad} width={w} height={h} fill="#FFD700" stroke="#000" strokeWidth={1.5} />
               {plate.pieces.map((p, i) => {
                 const pw = (p.rotated ? p.height : p.width) * scale;
                 const ph = (p.rotated ? p.width : p.height) * scale;
                 const rx = pad + p.x * scale;
                 const ry = pad + p.y * scale;
-                const fills = ['#0000CC', '#2244AA', '#0033BB', '#1155CC', '#003399', '#2266BB'];
+                const dbP = piecesOnPlate[i];
+                const isNC = dbP?.statut === 'nc' || dbP?.statut === 'casse';
+                const isSel = selectedPieceIdx === i;
+                const fillColor = isNC ? '#991111' : isSel ? '#4488FF' : ['#0000CC', '#2244AA', '#0033BB', '#1155CC'][i % 4];
                 const fs = Math.min(12, pw / 8, ph / 3);
                 return (
-                  <g key={i}>
-                    <rect x={rx} y={ry} width={pw} height={ph} fill={fills[i % fills.length]} stroke="#FFD700" strokeWidth={2} />
+                  <g key={i} onClick={() => setSelectedPieceIdx(isSel ? null : i)} style={{ cursor: 'pointer' }}>
+                    <rect x={rx} y={ry} width={pw} height={ph} fill={fillColor}
+                      stroke={isSel ? '#fff' : '#FFD700'} strokeWidth={isSel ? 3 : 2} />
                     <text x={rx + pw / 2} y={ry + ph / 2} textAnchor="middle" dominantBaseline="middle"
-                      fill="#FFD700" fontSize={Math.max(fs, 6)} fontWeight="bold">{i + 1}</text>
+                      fill={isNC ? '#ff6666' : '#FFD700'} fontSize={Math.max(fs, 6)} fontWeight="bold">
+                      {isNC ? '✕' : i + 1}
+                    </text>
                   </g>
                 );
               })}
@@ -902,41 +909,55 @@ function AtelierView({ lots, semaine, poste, onSelectPoste, onBack, loadLotDetai
           {/* Lot verre */}
           {lotVerre && <div className="text-lg text-green-400 font-mono">Lot verre : {lotVerre}</div>}
 
-          {/* Liste pièces avec actions NC/Cassé */}
-          <div className="w-full max-w-xl overflow-auto max-h-[18vh]">
-            <table className="w-full text-sm">
-              <tbody>
-                {plate.pieces.map((p, i) => {
-                  const effW = p.rotated ? p.height : p.width;
-                  const effH = p.rotated ? p.width : p.height;
-                  const dbPiece = piecesOnPlate.find(pp => pp.vitrage_ref === p.vitrageRef && pp.face === p.face);
-                  const isNC = dbPiece?.statut === 'nc' || dbPiece?.statut === 'casse';
-                  return (
-                    <tr key={i} className={`border-b border-gray-800 ${isNC ? 'bg-red-900/30' : ''}`}>
-                      <td className="py-1 px-2 text-amber-400 font-bold text-base">{i + 1}</td>
-                      <td className="py-1 px-2 text-white text-base">{p.vitrageRef}</td>
-                      <td className={`py-1 px-2 text-base ${p.face === 'EXT' ? 'text-red-400' : 'text-blue-400'}`}>{p.face}</td>
-                      <td className="py-1 px-2 text-gray-300 text-base">{effW} x {effH}</td>
-                      <td className="py-1 px-1">
-                        {dbPiece && !isNC && (
-                          <div className="flex gap-1">
-                            <button onClick={() => setEditCompo({ pieceId: dbPiece.id, original: dbPiece.material, current: dbPiece.material })}
-                              className="px-2 py-1 bg-purple-700 hover:bg-purple-600 text-white text-xs rounded active:scale-95">Compo</button>
-                            <button onClick={() => { patchJSON(`/api/production/pieces/${dbPiece.id}`, { statut: 'nc', operateur: '' }); onReload(); }}
-                              className="px-2 py-1 bg-red-700 hover:bg-red-600 text-white text-xs rounded active:scale-95">NC</button>
-                            <button onClick={() => { patchJSON(`/api/production/pieces/${dbPiece.id}`, { statut: 'casse', operateur: '' }); onReload(); }}
-                              className="px-2 py-1 bg-orange-700 hover:bg-orange-600 text-white text-xs rounded active:scale-95">Cassé</button>
-                          </div>
-                        )}
-                        {dbPiece && dbPiece.notes && <div className="text-purple-400 text-[10px]">↳ {dbPiece.notes}</div>}
-                        {isNC && <span className="text-red-400 font-bold text-sm">⚠ A REFAIRE</span>}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          {/* Pièce sélectionnée — actions */}
+          {selectedPieceIdx !== null && (() => {
+            const p = plate.pieces[selectedPieceIdx];
+            if (!p) return null;
+            const dbPiece = piecesOnPlate[selectedPieceIdx];
+            const effW = p.rotated ? p.height : p.width;
+            const effH = p.rotated ? p.width : p.height;
+            const isNC = dbPiece?.statut === 'nc' || dbPiece?.statut === 'casse';
+            return (
+              <div className="w-full max-w-xl bg-[#181a20] rounded-xl p-4 border border-blue-500/50">
+                <div className="flex items-center gap-4 mb-3">
+                  <span className="text-2xl font-black text-amber-400">{selectedPieceIdx + 1}</span>
+                  <div className="flex-1">
+                    <div className="text-lg font-bold text-white">{p.vitrageRef}</div>
+                    <div className="text-base text-gray-400">{p.face} — {p.material} — {effW} x {effH}</div>
+                  </div>
+                  <button onClick={() => setSelectedPieceIdx(null)} className="text-gray-500 hover:text-white text-xl px-2">✕</button>
+                </div>
+                {isNC ? (
+                  <div className="text-red-400 text-xl font-bold text-center py-2">⚠ {dbPiece?.statut === 'nc' ? 'NON CONFORME' : 'CASSE'} — A REFAIRE</div>
+                ) : dbPiece ? (
+                  <div className="flex gap-3 justify-center">
+                    <button onClick={() => { setEditCompo({ pieceId: dbPiece.id, original: dbPiece.material, current: dbPiece.material }); }}
+                      className="px-5 py-3 bg-purple-700 hover:bg-purple-600 text-white text-base font-bold rounded-xl active:scale-95">
+                      CHANGER COMPO
+                    </button>
+                    <button onClick={async () => { await patchJSON(`/api/production/pieces/${dbPiece.id}`, { statut: 'nc', operateur: '' }); setSelectedPieceIdx(null); onReload(); }}
+                      className="px-5 py-3 bg-red-700 hover:bg-red-600 text-white text-base font-bold rounded-xl active:scale-95">
+                      NON CONFORME
+                    </button>
+                    <button onClick={async () => { await patchJSON(`/api/production/pieces/${dbPiece.id}`, { statut: 'casse', operateur: '' }); setSelectedPieceIdx(null); onReload(); }}
+                      className="px-5 py-3 bg-orange-700 hover:bg-orange-600 text-white text-base font-bold rounded-xl active:scale-95">
+                      CASSE
+                    </button>
+                  </div>
+                ) : (
+                  <div className="text-gray-500 text-center">Piece non trouvee en base</div>
+                )}
+                {dbPiece?.notes && <div className="text-purple-400 text-sm mt-2 text-center">↳ {dbPiece.notes}</div>}
+              </div>
+            );
+          })()}
+
+          {/* Liste résumée des pièces */}
+          {selectedPieceIdx === null && (
+            <div className="w-full max-w-xl text-sm text-gray-400 text-center">
+              Cliquez sur une piece dans le plan pour la selectionner
+            </div>
+          )}
         </div>
 
         {/* Flèche droite */}
