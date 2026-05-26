@@ -1,8 +1,8 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
-import { ArrowLeft, Upload, FileText, FileCode2, Trash2, X, Search, ChevronRight, Scissors, Plus, RefreshCw, Send, History, Layers, AlertCircle, Check, AlertTriangle, RotateCcw, Calendar, BarChart3, Users, Download } from 'lucide-react';
+import { ArrowLeft, Upload, FileText, FileCode2, Trash2, X, Search, ChevronRight, Scissors, Plus, RefreshCw, Send, History, Layers, AlertCircle, Check, AlertTriangle, RotateCcw, Calendar, BarChart3, Users, Download, Cloud, CloudOff, Loader2, CheckCircle2 } from 'lucide-react';
 import { v4 as uid } from 'uuid';
 import * as XLSX from 'xlsx';
-import { useApiState } from '../../useApiState';
+import { useApiCollection, type SyncStatus } from '../../useApiCollection';
 import { useAuth } from '../../AuthContext';
 import {
   parseFstlineXml, detectIsFstlineXml, detectChantier, detectOrdreRef,
@@ -213,7 +213,8 @@ export function PosteCoupe({ onBack }: Props) {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
   const userNom = user?.nom ?? 'Inconnu';
-  const [commandes, setCommandes] = useApiState<Commande[]>('coupe', 'commandes', STORAGE_KEY, DEMO);
+  const { items: commandes, setItems: setCommandes, syncStatus, lastError, flushNow } =
+    useApiCollection<Commande>('coupe', 'commandes', c => c.id, STORAGE_KEY, DEMO);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [importState, setImportState] = useState<ImportPayload | null>(null);
@@ -427,6 +428,7 @@ export function PosteCoupe({ onBack }: Props) {
               </div>
             </div>
             <div className="flex items-center gap-2 shrink-0">
+              <SyncIndicator status={syncStatus} lastError={lastError} onFlush={flushNow} />
               <div className="flex bg-[#1c1e24] border border-[#2a2d35] rounded-lg p-0.5">
                 {isAdmin && (
                   <button onClick={() => setView('dashboard')}
@@ -580,12 +582,15 @@ export function PosteCoupe({ onBack }: Props) {
               </div>
             </div>
           </div>
-          {isAdmin && (
-            <button onClick={() => { if (confirm(`Supprimer la commande ${selected.nom} ?`)) removeCommande(selected.id); }}
-              className="text-red-400 hover:text-red-300 text-xs px-2 py-1 rounded border border-red-500/20 hover:border-red-500/40 shrink-0">
-              <Trash2 size={12} className="inline mr-1" /> Supprimer
-            </button>
-          )}
+          <div className="flex items-center gap-2 shrink-0">
+            <SyncIndicator status={syncStatus} lastError={lastError} onFlush={flushNow} />
+            {isAdmin && (
+              <button onClick={() => { if (confirm(`Supprimer la commande ${selected.nom} ?`)) removeCommande(selected.id); }}
+                className="text-red-400 hover:text-red-300 text-xs px-2 py-1 rounded border border-red-500/20 hover:border-red-500/40">
+                <Trash2 size={12} className="inline mr-1" /> Supprimer
+              </button>
+            )}
+          </div>
         </div>
       </header>
 
@@ -1577,6 +1582,32 @@ function TaskRow({
         </div>
       )}
     </li>
+  );
+}
+
+// ── Indicateur de sync OVH ──────────────────────────────────────────
+
+function SyncIndicator({ status, lastError, onFlush }: {
+  status: SyncStatus;
+  lastError: string | null;
+  onFlush: () => Promise<void>;
+}) {
+  const isError = status === 'error' || status === 'offline';
+  const cfg = {
+    idle: { icon: <Cloud size={12} />, label: 'OVH', tone: 'text-gray-500 border-[#2a2d35] bg-[#1c1e24]' },
+    saving: { icon: <Loader2 size={12} className="animate-spin" />, label: 'Sauvegarde…', tone: 'text-amber-300 border-amber-500/40 bg-amber-500/10' },
+    saved: { icon: <CheckCircle2 size={12} />, label: 'Sauvegardé', tone: 'text-green-400 border-green-500/40 bg-green-500/10' },
+    error: { icon: <CloudOff size={12} />, label: 'Erreur OVH', tone: 'text-red-300 border-red-500/40 bg-red-500/10' },
+    offline: { icon: <CloudOff size={12} />, label: 'Hors-ligne', tone: 'text-red-300 border-red-500/40 bg-red-500/10' },
+  }[status];
+
+  return (
+    <button onClick={() => { if (isError) void onFlush(); }}
+      title={lastError ? `Erreur : ${lastError}\n(Cliquer pour réessayer)` : 'État synchronisation OVH'}
+      disabled={!isError}
+      className={`flex items-center gap-1.5 px-2 py-1 rounded border text-[10px] font-medium transition-colors ${cfg.tone} ${isError ? 'hover:brightness-125 cursor-pointer' : 'cursor-default'}`}>
+      {cfg.icon} <span className="hidden sm:inline">{cfg.label}</span>
+    </button>
   );
 }
 
