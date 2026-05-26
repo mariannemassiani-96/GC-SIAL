@@ -1,12 +1,31 @@
 export type CommandeStatut = 'en_attente' | 'en_cours' | 'terminee' | 'livree';
 
+export interface LotFabrication {
+  verreExt: string;
+  verreInt: string;
+  intercalaire: string;
+  dessiccant: string;
+  masticButyl: string;
+  masticPU: string;
+  gazArgon: string;
+  notes: string;
+}
+
+export const EMPTY_LOT: LotFabrication = {
+  verreExt: '', verreInt: '', intercalaire: '',
+  dessiccant: '', masticButyl: '', masticPU: '', gazArgon: '', notes: '',
+};
+
 export interface Commande {
   id: string;
   reference: string;
   client: string;
   dateCreation: string;
+  semaineFabrication: string;
+  semaineLivraison: string;
   statut: CommandeStatut;
   vitrages: Vitrage[];
+  lotFabrication: LotFabrication;
   notes: string;
 }
 
