@@ -39,7 +39,7 @@ interface Lot {
 }
 
 interface Piece {
-  id: string; commande_ref: string; vitrage_ref: string; largeur: number; hauteur: number;
+  id: string; commande_ref: string; vitrage_ref: string; vitrage_id: string; largeur: number; hauteur: number;
   composition: string; face: string; material: string; machine: string; plaque_no: number;
   lot_verre: string; statut: string; operateur: string; date_coupe: string | null; date_assemblage: string | null;
   notes: string;
@@ -635,16 +635,16 @@ function AtelierView({ lots, semaine, poste, onSelectPoste, onBack, loadLotDetai
   if (poste === 'assemblage') {
     const vitrageGroups = new Map<string, Piece[]>();
     for (const p of pieces) {
-      const key = `${p.vitrage_ref}`;
+      const key = p.vitrage_id || `${p.vitrage_ref}_${p.id}`;
       const arr = vitrageGroups.get(key) || [];
       arr.push(p);
       vitrageGroups.set(key, arr);
     }
 
-    const vitrages = [...vitrageGroups.entries()].map(([ref, pcs]) => {
+    const vitrages = [...vitrageGroups.entries()].map(([vid, pcs]) => {
       const allAssembled = pcs.every(p => p.statut === 'assemble');
       const allCut = pcs.every(p => p.statut === 'coupe' || p.statut === 'assemble');
-      return { ref, pieces: pcs, allAssembled, allCut, commande: pcs[0]?.commande_ref || '' };
+      return { ref: pcs[0]?.vitrage_ref || vid, pieces: pcs, allAssembled, allCut, commande: pcs[0]?.commande_ref || '' };
     });
 
     const totalVitrages = vitrages.length;
