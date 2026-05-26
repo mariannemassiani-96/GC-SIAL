@@ -139,55 +139,87 @@ function HubFabrication({ onSelect }: { onSelect: (mode: AppMode) => void }) {
     },
   ];
 
+  const atelierApps = apps.filter(a =>
+    ['reception_matiere', 'poste_coupe', 'smart_assembly', 'stock_accessoires', 'preparation_livraison', 'maintenance_qualite', 'vitrage'].includes(a.id),
+  );
+  const beApps = apps.filter(a => ['gc', 'workshop_layout'].includes(a.id));
+
+  const filterApps = (list: typeof apps) =>
+    list.filter(app => {
+      if (!user) return false;
+      if (user.role === 'admin') return true;
+      if (!user.apps_autorisees || user.apps_autorisees.length === 0) return true;
+      return user.apps_autorisees.includes(app.id);
+    });
+
+  const renderCard = (app: typeof apps[0]) => (
+    <button
+      key={app.label}
+      onClick={() => onSelect(app.id)}
+      className="group text-left p-6 rounded-xl border-2 border-[#2a2d35] bg-[#181a20] hover:border-green-500/50 hover:bg-green-600/5 cursor-pointer transition-all"
+    >
+      <div className="w-12 h-12 rounded-xl bg-green-600/10 border border-green-500/20 flex items-center justify-center mb-4">
+        {app.icon}
+      </div>
+      <h3 className="font-semibold text-base text-white group-hover:text-green-400 transition-colors mb-1">
+        {app.label}
+      </h3>
+      <p className="text-xs text-gray-500 leading-relaxed">{app.description}</p>
+    </button>
+  );
+
   return (
     <div className="min-h-screen bg-[#0f1117]">
       <header className="bg-[#181a20] border-b border-[#2a2d35] px-6 py-4">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-bold text-white">SIAL Fabrication</h1>
-            <p className="text-sm text-gray-500 mt-0.5">Outils atelier et configurateurs techniques</p>
+            <h1 className="text-xl font-bold text-white">SIAL — Groupe VISTA</h1>
+            <p className="text-sm text-gray-500 mt-0.5">Outils atelier et bureau d'etudes</p>
           </div>
           {user && (
             <div className="flex items-center gap-3">
               <span className="text-sm text-gray-400">{user.nom}</span>
               <span className="text-xs px-2 py-0.5 rounded bg-green-600/20 text-green-400 border border-green-500/30">{user.role}</span>
               {user.role === 'admin' && (
-                <button onClick={() => onSelect('admin')} className="text-xs text-gray-500 hover:text-amber-400 transition-colors">
-                  Admin
-                </button>
+                <button onClick={() => onSelect('admin')} className="text-xs text-gray-500 hover:text-amber-400 transition-colors">Admin</button>
               )}
-              <button onClick={logout} className="text-xs text-gray-500 hover:text-red-400 transition-colors">
-                Deconnexion
-              </button>
+              <button onClick={logout} className="text-xs text-gray-500 hover:text-red-400 transition-colors">Deconnexion</button>
             </div>
           )}
         </div>
       </header>
-      <main className="max-w-5xl mx-auto px-6 py-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {apps
-            .filter(app => {
-              if (!user) return false;
-              if (user.role === 'admin') return true;
-              if (!user.apps_autorisees || user.apps_autorisees.length === 0) return true;
-              return user.apps_autorisees.includes(app.id);
-            })
-            .map((app) => (
-            <button
-              key={app.label}
-              onClick={() => onSelect(app.id)}
-              className="group text-left p-6 rounded-xl border-2 border-[#2a2d35] bg-[#181a20] hover:border-green-500/50 hover:bg-green-600/5 cursor-pointer transition-all"
-            >
-              <div className="w-12 h-12 rounded-xl bg-green-600/10 border border-green-500/20 flex items-center justify-center mb-4">
-                {app.icon}
-              </div>
-              <h3 className="font-semibold text-base text-white group-hover:text-green-400 transition-colors mb-1">
-                {app.label}
-              </h3>
-              <p className="text-xs text-gray-500 leading-relaxed">{app.description}</p>
-            </button>
-          ))}
-        </div>
+      <main className="max-w-5xl mx-auto px-6 py-8 space-y-10">
+        {/* ATELIER */}
+        <section>
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-8 h-8 rounded-lg bg-amber-600/20 border border-amber-500/30 flex items-center justify-center">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-amber-400">
+                <path d="M2 20h20M4 20V10l8-6 8 6v10" /><rect x="9" y="14" width="6" height="6" />
+              </svg>
+            </div>
+            <h2 className="text-lg font-bold text-white">ATELIER</h2>
+            <span className="text-xs text-gray-500">Production, logistique, qualite</span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {filterApps(atelierApps).map(renderCard)}
+          </div>
+        </section>
+
+        {/* BE */}
+        <section>
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-8 h-8 rounded-lg bg-violet-600/20 border border-violet-500/30 flex items-center justify-center">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-violet-400">
+                <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" /><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+              </svg>
+            </div>
+            <h2 className="text-lg font-bold text-white">BUREAU D'ETUDES</h2>
+            <span className="text-xs text-gray-500">Configuration, plans techniques</span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {filterApps(beApps).map(renderCard)}
+          </div>
+        </section>
       </main>
     </div>
   );
