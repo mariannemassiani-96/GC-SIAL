@@ -36,6 +36,7 @@ export interface User {
   nom: string;
   role: string;
   apps_autorisees: string[];
+  pin_enabled?: boolean;
 }
 
 interface LoginResponse {

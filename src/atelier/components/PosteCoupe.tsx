@@ -6,7 +6,7 @@ import { useAuth } from '../../AuthContext';
 import { parseFstlineFile, type FstJob, type FstBar, type FstCut } from '../fstlineParser';
 import { patchCommandeModule, upsertCommandeGlobale } from '../../api';
 
-interface Props { onBack: () => void; }
+interface Props { onBack: () => void; startAtelier?: boolean; }
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -125,12 +125,12 @@ function syncCoupeToGlobal(commande: Commande) {
 
 // ── Main Component ──────────────────────────────────────────────────
 
-export function PosteCoupe({ onBack }: Props) {
+export function PosteCoupe({ onBack, startAtelier }: Props) {
   const { user } = useAuth();
   const { items: commandes, upsert, remove } = useApiCollection<Commande>('coupe', 'commandes');
   const [search, setSearch] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [modeAtelier, setModeAtelier] = useState(false);
+  const [modeAtelier, setModeAtelier] = useState(startAtelier ?? false);
 
   const isAdmin = user?.role === 'admin' || user?.role === 'manager';
 

@@ -1198,12 +1198,12 @@ function StockView({ onBack }: { onBack: () => void }) {
 
 type ViewMode = { type: 'home' } | { type: 'dashboard' } | { type: 'order'; id: string } | { type: 'batch'; ids: string[] } | { type: 'production' } | { type: 'production-atelier' } | { type: 'stock' };
 
-export function VitrageApp({ onBack }: { onBack: () => void }) {
+export function VitrageApp({ onBack, startAtelier }: { onBack: () => void; startAtelier?: boolean }) {
   const [commandes, setCommandes] = useState<Commande[]>([]);
   const [settings, setSettingsState] = useState<Settings>({
     averySettings: DEFAULT_AVERY, weSettings: DEFAULT_WE, glassSettings: DEFAULT_GLASS,
   });
-  const [view, setView] = useState<ViewMode>({ type: 'home' });
+  const [view, setView] = useState<ViewMode>(startAtelier ? { type: 'production-atelier' } : { type: 'home' });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const saveTimer = useRef<ReturnType<typeof setTimeout>>(undefined);

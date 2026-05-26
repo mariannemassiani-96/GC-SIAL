@@ -43,7 +43,7 @@ app.post('/api/auth/login-pin', (req, res) => {
   if (!user) return res.status(401).json({ error: 'Prenom ou PIN incorrect' });
   const token = generateToken(user);
   db.prepare('INSERT INTO activity_log (user_id, action) VALUES (?, ?)').run(user.id, 'login-pin');
-  res.json({ token, user: { id: user.id, email: user.email, nom: user.nom, role: user.role, apps_autorisees: JSON.parse(user.apps_autorisees || '[]') } });
+  res.json({ token, user: { id: user.id, email: user.email, nom: user.nom, role: user.role, apps_autorisees: JSON.parse(user.apps_autorisees || '[]'), pin_enabled: true } });
 });
 
 app.get('/api/auth/pin-users', (req, res) => {

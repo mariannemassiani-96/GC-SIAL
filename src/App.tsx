@@ -13,6 +13,7 @@ import { VitrageApp } from './pages/VitrageApp';
 import { DashboardGlobal } from './pages/DashboardGlobal';
 import { AuthProvider, LoginScreen, useAuth } from './AuthContext';
 import { AdminPanel } from './AdminPanel';
+import { logout as apiLogout } from './api';
 import type { Affaire } from './types';
 
 type AppMode =
@@ -302,7 +303,44 @@ function AppContent() {
 
   if (!user) return <LoginScreen />;
 
-  // ── Routage ────────────────────────────────────────
+  const isOperateurPIN = !!user.pin_enabled && user.role === 'operateur';
+
+  // ── Opérateur PIN → mode atelier direct ──
+  if (isOperateurPIN) {
+    const autoApps = user.apps_autorisees || [];
+    if (mode === 'home') {
+      if (autoApps.length === 1) {
+        if (autoApps[0] === 'vitrage') return <VitrageApp onBack={goHome} startAtelier />;
+        if (autoApps[0] === 'poste_coupe') return <PosteCoupe onBack={goHome} startAtelier />;
+      }
+      return (
+        <div className="fixed inset-0 bg-[#0a0c10] flex flex-col items-center justify-center gap-8">
+          <h1 className="text-3xl font-black text-white">SIAL ATELIER</h1>
+          <p className="text-lg text-gray-400">Bonjour {user.nom}</p>
+          <div className="grid grid-cols-1 gap-4 w-full max-w-md px-8">
+            {autoApps.includes('vitrage') && (
+              <button onClick={() => setMode('vitrage')} className="p-6 bg-blue-700 hover:bg-blue-600 text-white text-2xl font-bold rounded-2xl active:scale-95">
+                ISULA VITRAGE
+              </button>
+            )}
+            {autoApps.includes('poste_coupe') && (
+              <button onClick={() => setMode('poste_coupe')} className="p-6 bg-green-700 hover:bg-green-600 text-white text-2xl font-bold rounded-2xl active:scale-95">
+                COUPE PROFILES
+              </button>
+            )}
+            <button onClick={() => { apiLogout(); window.location.reload(); }}
+              className="p-4 bg-gray-800 hover:bg-gray-700 text-gray-400 text-base rounded-xl">
+              Deconnexion
+            </button>
+          </div>
+        </div>
+      );
+    }
+    if (mode === 'vitrage') return <VitrageApp onBack={goHome} startAtelier />;
+    if (mode === 'poste_coupe') return <PosteCoupe onBack={goHome} startAtelier />;
+  }
+
+  // ── Routage normal ────────────────────────────────────────
 
   if (mode === 'admin' && user.role === 'admin') {
     return <AdminPanel onBack={goHome} />;
