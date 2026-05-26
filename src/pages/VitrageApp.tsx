@@ -18,7 +18,7 @@ import { generateEtiquettesCE, generateEtiquettesAtelier, generateEtiquettesPost
 import { generateOptimVerrePDF } from '../vitrage/generateOptimPDF';
 import {
   fetchCommandes, insertCommande, patchCommande, removeCommande,
-  fetchSettings, saveSettings, type Settings,
+  fetchSettings, type Settings,
   fetchGlassProducts, upsertGlassProduct, deleteGlassProduct,
   fetchStockPlates, upsertStockPlate, deleteStockPlate,
 } from '../vitrage/store';
@@ -711,9 +711,9 @@ function TabExport({ vitrages, allPlates, weResult, commandeLabel, commande, ave
   );
 }
 
-// ── Tab: Lots & Tracabilite ───────────────────────────────────────────
+// ── Batch View helpers ───────────────────────────────────────────────
 
-const LOT_FIELDS: { key: keyof LotFabrication; label: string; placeholder: string }[] = [
+const _LOT_FIELDS: { key: keyof LotFabrication; label: string; placeholder: string }[] = [
   { key: 'verreExt', label: 'Verre exterieur', placeholder: 'N° lot fournisseur' },
   { key: 'verreInt', label: 'Verre interieur', placeholder: 'N° lot fournisseur' },
   { key: 'intercalaire', label: 'Intercalaire / Warm Edge', placeholder: 'N° lot' },
