@@ -3,6 +3,7 @@ import { generateEtiquettesCE, generateEtiquettesAtelier, generateEtiquettesPost
 import { generateLabelsA, generateLabelsB, generateLabelsC } from './generateLabels';
 import type { Vitrage, WEGroupe } from './types';
 import { DEFAULT_AVERY } from './types';
+import { logProductionEvent } from '../api';
 
 const API = import.meta.env.VITE_ISULA_API_URL as string || '';
 
@@ -135,12 +136,27 @@ export function ProductionView({ onBack, startAtelier }: { onBack: () => void; s
 
   const updatePieceStatut = async (pieceId: string, statut: string) => {
     await patchJSON(`/api/production/pieces/${pieceId}`, { statut, operateur: '' });
+    const piece = pieces.find(p => p.id === pieceId);
+    const posteMap: Record<string, string> = { coupe: 'vitrage_coupe', assemble: 'vitrage_assemblage', nc: 'vitrage_coupe', casse: 'vitrage_coupe' };
+    logProductionEvent({
+      commande_ref: selectedLot?.reference || '',
+      poste: posteMap[statut] || 'vitrage_coupe',
+      action: statut,
+      piece_ref: piece?.vitrage_ref || pieceId,
+    }).catch(() => {});
     if (selectedLot) loadLotDetail(selectedLot);
     loadStats();
   };
 
   const updateWEStatut = async (pieceId: string, statut: string) => {
     await patchJSON(`/api/production/we/${pieceId}`, { statut, operateur: '' });
+    const wePiece = (selectedLot?.we_pieces ?? []).find(p => p.id === pieceId);
+    logProductionEvent({
+      commande_ref: selectedLot?.reference || '',
+      poste: 'vitrage_we',
+      action: statut,
+      piece_ref: wePiece?.vitrage_ref || pieceId,
+    }).catch(() => {});
     if (selectedLot) loadLotDetail(selectedLot);
     loadStats();
   };
@@ -746,6 +762,7 @@ function AtelierView({ lots, semaine, poste, onSelectPoste, onBack, loadLotDetai
                             onClick={async () => {
                               if (wp.statut !== 'coupe') {
                                 await patchJSON(`/api/production/we/${wp.id}`, { statut: 'coupe', operateur: '' });
+                                logProductionEvent({ commande_ref: selectedLot?.reference || '', poste: 'vitrage_we', action: 'coupe', piece_ref: wp.vitrage_ref }).catch(() => {});
                                 onReload();
                               }
                             }}>
@@ -767,7 +784,10 @@ function AtelierView({ lots, semaine, poste, onSelectPoste, onBack, loadLotDetai
                     ) : (
                       <button onClick={async () => {
                         for (const wp of pcs) {
-                          if (wp.statut !== 'coupe') await patchJSON(`/api/production/we/${wp.id}`, { statut: 'coupe', operateur: '' });
+                          if (wp.statut !== 'coupe') {
+                            await patchJSON(`/api/production/we/${wp.id}`, { statut: 'coupe', operateur: '' });
+                            logProductionEvent({ commande_ref: selectedLot?.reference || '', poste: 'vitrage_we', action: 'coupe', piece_ref: wp.vitrage_ref }).catch(() => {});
+                          }
                         }
                         onReload();
                       }} className="px-3 py-2 bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold rounded active:scale-95 shrink-0">
@@ -970,6 +990,12 @@ function AtelierView({ lots, semaine, poste, onSelectPoste, onBack, loadLotDetai
     for (const p of piecesOnPlate) {
       if (p.statut !== 'coupe' && p.statut !== 'assemble') {
         await patchJSON(`/api/production/pieces/${p.id}`, { statut: 'coupe', operateur: '' });
+        logProductionEvent({
+          commande_ref: selectedLot?.reference || '',
+          poste: 'vitrage_coupe',
+          action: 'coupe',
+          piece_ref: p.vitrage_ref,
+        }).catch(() => {});
       }
     }
     onReload();
@@ -1087,11 +1113,19 @@ function AtelierView({ lots, semaine, poste, onSelectPoste, onBack, loadLotDetai
                       className="px-5 py-3 bg-purple-700 hover:bg-purple-600 text-white text-base font-bold rounded-xl active:scale-95">
                       CHANGER COMPO
                     </button>
-                    <button onClick={async () => { await patchJSON(`/api/production/pieces/${dbPiece.id}`, { statut: 'nc', operateur: '' }); setSelectedPieceIdx(null); onReload(); }}
+                    <button onClick={async () => {
+                      await patchJSON(`/api/production/pieces/${dbPiece.id}`, { statut: 'nc', operateur: '' });
+                      logProductionEvent({ commande_ref: selectedLot?.reference || '', poste: 'vitrage_coupe', action: 'nc', piece_ref: p.vitrageRef }).catch(() => {});
+                      setSelectedPieceIdx(null); onReload();
+                    }}
                       className="px-5 py-3 bg-red-700 hover:bg-red-600 text-white text-base font-bold rounded-xl active:scale-95">
                       NON CONFORME
                     </button>
-                    <button onClick={async () => { await patchJSON(`/api/production/pieces/${dbPiece.id}`, { statut: 'casse', operateur: '' }); setSelectedPieceIdx(null); onReload(); }}
+                    <button onClick={async () => {
+                      await patchJSON(`/api/production/pieces/${dbPiece.id}`, { statut: 'casse', operateur: '' });
+                      logProductionEvent({ commande_ref: selectedLot?.reference || '', poste: 'vitrage_coupe', action: 'casse', piece_ref: p.vitrageRef }).catch(() => {});
+                      setSelectedPieceIdx(null); onReload();
+                    }}
                       className="px-5 py-3 bg-orange-700 hover:bg-orange-600 text-white text-base font-bold rounded-xl active:scale-95">
                       CASSE
                     </button>
@@ -1402,6 +1436,12 @@ function AssemblageView({ selectedLot, pieces, onReload, setSelectedLot }: {
     for (const p of vitragePieces) {
       if (p.statut !== 'assemble') {
         await patchJSON(`/api/production/pieces/${p.id}`, { statut: 'assemble', operateur: '' });
+        logProductionEvent({
+          commande_ref: selectedLot.reference || '',
+          poste: 'vitrage_assemblage',
+          action: 'assemble',
+          piece_ref: p.vitrage_ref,
+        }).catch(() => {});
       }
     }
     onReload();
@@ -1546,6 +1586,12 @@ function OptimVerreTab({ glassOptim, pieces, lotId, onReload }: {
     for (const p of piecesOnPlate) {
       if (p.statut !== 'coupe' && p.statut !== 'assemble') {
         await patchJSON(`/api/production/pieces/${p.id}`, { statut: 'coupe', operateur: '' });
+        logProductionEvent({
+          commande_ref: p.commande_ref || '',
+          poste: 'vitrage_coupe',
+          action: 'coupe',
+          piece_ref: p.vitrage_ref,
+        }).catch(() => {});
       }
     }
     onReload();
