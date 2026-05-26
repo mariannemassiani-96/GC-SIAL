@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import type {
   Commande, Vitrage, AverySettings, WESettings, GlassSettings,
-  CommandeStatut, WEGroupe, GlassOptimResult, OptimizedPlate, LotFabrication,
+  CommandeStatut, WEGroupe, GlassOptimResult, OptimizedPlate,
 } from '../vitrage/types';
 import {
   EMPTY_LOT, DEFAULT_AVERY, DEFAULT_WE, DEFAULT_GLASS, STATUT_LABELS, STATUT_COLORS,
