@@ -1,5 +1,5 @@
-import { useState, useCallback, useMemo } from 'react';
-import { ArrowLeft, Upload, FileText, FileCode2, Trash2, X, Search, ChevronRight, Scissors, Plus, RefreshCw, Send, History, Layers, AlertCircle } from 'lucide-react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
+import { ArrowLeft, Upload, FileText, FileCode2, Trash2, X, Search, ChevronRight, Scissors, Plus, RefreshCw, Send, History, Layers, AlertCircle, Check, AlertTriangle, RotateCcw, Calendar } from 'lucide-react';
 import { v4 as uid } from 'uuid';
 import { useApiState } from '../../useApiState';
 import { useAuth } from '../../AuthContext';
@@ -211,6 +211,16 @@ export function PosteCoupe({ onBack }: Props) {
   const [pdfViewer, setPdfViewer] = useState<{ dataUrl: string; filename: string } | null>(null);
   const [historyView, setHistoryView] = useState<{ machine: Machine; events: Evenement[] } | null>(null);
   const [piecesView, setPiecesView] = useState<{ machine: Machine; optim: FstlineOptim } | null>(null);
+  const [view, setView] = useState<'today' | 'all'>(isAdmin ? 'all' : 'today');
+  const [currentMachine, setCurrentMachine] = useState<Machine | null>(() => {
+    const stored = localStorage.getItem('sial-poste-coupe-machine');
+    return stored && MACHINES.some(m => m.id === stored) ? (stored as Machine) : null;
+  });
+
+  useEffect(() => {
+    if (currentMachine) localStorage.setItem('sial-poste-coupe-machine', currentMachine);
+    else localStorage.removeItem('sial-poste-coupe-machine');
+  }, [currentMachine]);
 
   const selected = commandes.find(c => c.id === selectedId) ?? null;
 
@@ -361,7 +371,7 @@ export function PosteCoupe({ onBack }: Props) {
       makeEvent('date_assignee', userNom, date || '(effacée)'));
   }, [isAdmin, commandes, patchOptim, userNom]);
 
-  // ── Vue Liste ──
+  // ── Vue Liste (Aujourd'hui ou Toutes) ──
   if (!selected) {
     const filtered = commandes
       .filter(c => !search || c.nom.toLowerCase().includes(search.toLowerCase()) || c.ref.toLowerCase().includes(search.toLowerCase()))
@@ -370,76 +380,109 @@ export function PosteCoupe({ onBack }: Props) {
     return (
       <div className="min-h-screen bg-[#0f1117] flex flex-col">
         <header className="bg-[#181a20] border-b border-[#2a2d35] px-4 py-3 shrink-0">
-          <div className="max-w-5xl mx-auto flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <button onClick={onBack} className="text-gray-400 hover:text-white"><ArrowLeft size={18} /></button>
-              <div>
+          <div className="max-w-5xl mx-auto flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <button onClick={onBack} className="text-gray-400 hover:text-white shrink-0"><ArrowLeft size={18} /></button>
+              <div className="min-w-0">
                 <h1 className="text-sm font-bold text-white">Poste de Coupe</h1>
-                <p className="text-[10px] text-gray-500">PDF + XML FSTLINE — LMT 65 / DT / Renfort Acier</p>
+                <p className="text-[10px] text-gray-500 truncate">PDF + XML FSTLINE — LMT 65 / DT / Renfort Acier</p>
               </div>
             </div>
-            <button onClick={startImport}
-              className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-lg">
-              <Upload size={14} /> Importer PDF ou XML
-            </button>
+            <div className="flex items-center gap-2 shrink-0">
+              <div className="flex bg-[#1c1e24] border border-[#2a2d35] rounded-lg p-0.5">
+                <button onClick={() => setView('today')}
+                  className={`px-3 py-1.5 text-[11px] font-semibold rounded transition-colors ${
+                    view === 'today' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'
+                  }`}>
+                  <Calendar size={11} className="inline mr-1 -mt-0.5" /> Aujourd'hui
+                </button>
+                <button onClick={() => setView('all')}
+                  className={`px-3 py-1.5 text-[11px] font-semibold rounded transition-colors ${
+                    view === 'all' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'
+                  }`}>
+                  Toutes commandes
+                </button>
+              </div>
+              {isAdmin && (
+                <button onClick={startImport}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-lg">
+                  <Upload size={14} /> Importer
+                </button>
+              )}
+            </div>
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto px-4 py-6 max-w-5xl mx-auto w-full space-y-4">
-          <div className="relative max-w-md">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Chercher commande ou chantier..."
-              className="w-full pl-9 pr-3 py-2 bg-[#1c1e24] border border-[#2a2d35] rounded-lg text-xs text-white placeholder-gray-600 outline-none" />
-          </div>
-
-          {filtered.length === 0 && (
-            <div className="text-center py-16 text-gray-500 text-sm">
-              Aucune commande. Cliquez sur « Importer PDF ou XML » pour démarrer.
+        {view === 'today' ? (
+          <OperatorTodayView
+            commandes={commandes}
+            currentMachine={currentMachine}
+            setCurrentMachine={setCurrentMachine}
+            search={search}
+            setSearch={setSearch}
+            userNom={userNom}
+            onOpenCommande={(id) => setSelectedId(id)}
+            onChangeStatut={changeStatut}
+            onViewPdf={(dataUrl, filename) => setPdfViewer({ dataUrl, filename })}
+            onViewPieces={(machine, opt) => setPiecesView({ machine, optim: opt })}
+          />
+        ) : (
+          <main className="flex-1 overflow-y-auto px-4 py-6 max-w-5xl mx-auto w-full space-y-4">
+            <div className="relative max-w-md">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Chercher commande ou chantier..."
+                className="w-full pl-9 pr-3 py-2 bg-[#1c1e24] border border-[#2a2d35] rounded-lg text-xs text-white placeholder-gray-600 outline-none" />
             </div>
-          )}
 
-          {filtered.map(c => {
-            const nbOptims = Object.keys(c.optimisations).length;
-            const nbCoupes = Object.values(c.optimisations).filter(o => o?.statut === 'coupe').length;
-            const nbAnomalies = Object.values(c.optimisations).filter(o => o && STATUT_ANOMALIE.includes(o.statut)).length;
-            const nbEnvoyees = Object.values(c.optimisations).filter(o => o?.envoyeeAtelier).length;
-            return (
-              <button key={c.id} onClick={() => setSelectedId(c.id)}
-                className="w-full bg-[#181a20] border border-[#2a2d35] rounded-xl p-4 text-left hover:border-[#404550] transition-colors">
-                <div className="flex items-center justify-between">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <Scissors size={14} className="text-gray-500 shrink-0" />
-                      <span className="text-sm font-bold text-white truncate">{c.nom}</span>
-                      <span className="text-[10px] text-gray-500 font-mono">{c.ref}</span>
+            {filtered.length === 0 && (
+              <div className="text-center py-16 text-gray-500 text-sm">
+                Aucune commande. {isAdmin ? 'Cliquez sur « Importer » pour démarrer.' : 'Demande au manager d\'importer une optimisation.'}
+              </div>
+            )}
+
+            {filtered.map(c => {
+              const nbOptims = Object.keys(c.optimisations).length;
+              const nbCoupes = Object.values(c.optimisations).filter(o => o?.statut === 'coupe').length;
+              const nbAnomalies = Object.values(c.optimisations).filter(o => o && STATUT_ANOMALIE.includes(o.statut)).length;
+              const nbEnvoyees = Object.values(c.optimisations).filter(o => o?.envoyeeAtelier).length;
+              return (
+                <button key={c.id} onClick={() => setSelectedId(c.id)}
+                  className="w-full bg-[#181a20] border border-[#2a2d35] rounded-xl p-4 text-left hover:border-[#404550] transition-colors">
+                  <div className="flex items-center justify-between">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <Scissors size={14} className="text-gray-500 shrink-0" />
+                        <span className="text-sm font-bold text-white truncate">{c.nom}</span>
+                        <span className="text-[10px] text-gray-500 font-mono">{c.ref}</span>
+                      </div>
+                      <div className="flex items-center gap-2 mt-2">
+                        {MACHINES.map(m => {
+                          const opt = c.optimisations[m.id];
+                          return (
+                            <span key={m.id}
+                              className={`text-[9px] px-2 py-0.5 rounded border ${
+                                opt ? STATUT_STYLE[opt.statut] : 'bg-[#1c1e24] text-gray-600 border-[#2a2d35]'
+                              }`}>
+                              {m.label}{opt ? ` · ${STATUT_LABEL[opt.statut]}` : ' · —'}
+                            </span>
+                          );
+                        })}
+                      </div>
+                      <div className="flex items-center gap-3 text-[10px] text-gray-500 mt-2">
+                        <span>{c.date}</span>
+                        <span>{nbOptims}/3 optim.</span>
+                        {nbEnvoyees > 0 && <span className="text-blue-400">{nbEnvoyees} envoyée{nbEnvoyees > 1 ? 's' : ''}</span>}
+                        {nbCoupes > 0 && <span className="text-green-400">{nbCoupes} coupée{nbCoupes > 1 ? 's' : ''}</span>}
+                        {nbAnomalies > 0 && <span className="text-red-400">{nbAnomalies} anomalie{nbAnomalies > 1 ? 's' : ''}</span>}
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2 mt-2">
-                      {MACHINES.map(m => {
-                        const opt = c.optimisations[m.id];
-                        return (
-                          <span key={m.id}
-                            className={`text-[9px] px-2 py-0.5 rounded border ${
-                              opt ? STATUT_STYLE[opt.statut] : 'bg-[#1c1e24] text-gray-600 border-[#2a2d35]'
-                            }`}>
-                            {m.label}{opt ? ` · ${STATUT_LABEL[opt.statut]}` : ' · —'}
-                          </span>
-                        );
-                      })}
-                    </div>
-                    <div className="flex items-center gap-3 text-[10px] text-gray-500 mt-2">
-                      <span>{c.date}</span>
-                      <span>{nbOptims}/3 optim.</span>
-                      {nbEnvoyees > 0 && <span className="text-blue-400">{nbEnvoyees} envoyée{nbEnvoyees > 1 ? 's' : ''}</span>}
-                      {nbCoupes > 0 && <span className="text-green-400">{nbCoupes} coupée{nbCoupes > 1 ? 's' : ''}</span>}
-                      {nbAnomalies > 0 && <span className="text-red-400">{nbAnomalies} anomalie{nbAnomalies > 1 ? 's' : ''}</span>}
-                    </div>
+                    <ChevronRight size={16} className="text-gray-600 shrink-0 ml-2" />
                   </div>
-                  <ChevronRight size={16} className="text-gray-600 shrink-0 ml-2" />
-                </div>
-              </button>
-            );
-          })}
-        </main>
+                </button>
+              );
+            })}
+          </main>
+        )}
 
         {importState && (
           <ImportModal payload={importState} commandes={commandes} isAdmin={isAdmin}
@@ -447,6 +490,12 @@ export function PosteCoupe({ onBack }: Props) {
             onConfirm={handleImportConfirm} />
         )}
         {pdfViewer && <PdfViewerModal {...pdfViewer} onClose={() => setPdfViewer(null)} />}
+        {piecesView && (
+          <PiecesModal
+            machine={MACHINES.find(m => m.id === piecesView.machine)!}
+            optim={piecesView.optim}
+            onClose={() => setPiecesView(null)} />
+        )}
       </div>
     );
   }
@@ -1013,5 +1062,277 @@ function PiecesModal({ machine, optim, onClose }: {
         </div>
       </div>
     </div>
+  );
+}
+
+// ── Vue Opérateur « Aujourd'hui » ───────────────────────────────────
+
+interface TaskItem {
+  commande: Commande;
+  optim: OptimisationMachine;
+  machine: Machine;
+}
+
+function OperatorTodayView({
+  commandes, currentMachine, setCurrentMachine, search, setSearch,
+  userNom, onOpenCommande, onChangeStatut, onViewPdf, onViewPieces,
+}: {
+  commandes: Commande[];
+  currentMachine: Machine | null;
+  setCurrentMachine: (m: Machine | null) => void;
+  search: string;
+  setSearch: (s: string) => void;
+  userNom: string;
+  onOpenCommande: (id: string) => void;
+  onChangeStatut: (commandeId: string, machine: Machine, statut: StatutMachine) => void;
+  onViewPdf: (dataUrl: string, filename: string) => void;
+  onViewPieces: (machine: Machine, optim: FstlineOptim) => void;
+}) {
+  const today = new Date().toISOString().slice(0, 10);
+
+  const buckets = useMemo(() => {
+    const aPreparer: TaskItem[] = [];
+    const aCouper: TaskItem[] = [];
+    const aRefaire: TaskItem[] = [];
+    const bloque: TaskItem[] = [];
+    if (!currentMachine) return { aPreparer, aCouper, aRefaire, bloque };
+    const q = search.trim().toLowerCase();
+    for (const c of commandes) {
+      if (q && !c.nom.toLowerCase().includes(q) && !c.ref.toLowerCase().includes(q)) continue;
+      const optim = c.optimisations[currentMachine];
+      if (!optim || !optim.envoyeeAtelier) continue;
+      if (optim.dateAssignee && optim.dateAssignee > today) continue;
+      const item: TaskItem = { commande: c, optim, machine: currentMachine };
+      if (optim.statut === 'a_faire') aPreparer.push(item);
+      else if (optim.statut === 'prepare') aCouper.push(item);
+      else if (optim.statut === 'barre_a_refaire' || optim.statut === 'piece_a_refaire') aRefaire.push(item);
+      else if (optim.statut === 'barre_manquante' || optim.statut === 'non_conforme') bloque.push(item);
+    }
+    const byDate = (a: TaskItem, b: TaskItem) => (a.optim.dateAssignee ?? '').localeCompare(b.optim.dateAssignee ?? '');
+    aPreparer.sort(byDate); aCouper.sort(byDate); aRefaire.sort(byDate); bloque.sort(byDate);
+    return { aPreparer, aCouper, aRefaire, bloque };
+  }, [commandes, currentMachine, search, today]);
+
+  const todayCount = useMemo(() => {
+    if (!currentMachine) return 0;
+    let n = 0;
+    for (const c of commandes) {
+      const optim = c.optimisations[currentMachine];
+      if (!optim || optim.statut !== 'coupe') continue;
+      const events = getEvents(optim);
+      const lastStatutChange = [...events].reverse().find(e => e.type === 'statut_change');
+      if (lastStatutChange && lastStatutChange.userNom === userNom && lastStatutChange.date.slice(0, 10) === today) n++;
+    }
+    return n;
+  }, [commandes, currentMachine, userNom, today]);
+
+  return (
+    <main className="flex-1 overflow-y-auto px-4 py-6 max-w-5xl mx-auto w-full space-y-5">
+      {/* Sélection machine */}
+      <div className="bg-[#181a20] border border-[#2a2d35] rounded-xl p-4">
+        <p className="text-[10px] text-gray-500 mb-2 uppercase tracking-wide">Tu travailles sur</p>
+        <div className="grid grid-cols-3 gap-2">
+          {MACHINES.map(m => {
+            const active = currentMachine === m.id;
+            return (
+              <button key={m.id} onClick={() => setCurrentMachine(active ? null : m.id)}
+                className={`px-3 py-3 rounded-lg border text-sm font-semibold transition-all flex items-center justify-center gap-2 ${
+                  active ? 'bg-blue-600/30 text-white border-blue-500' : 'bg-[#1c1e24] text-gray-400 border-[#2a2d35] hover:border-[#404550]'
+                }`}>
+                <div className="w-3 h-3 rounded" style={{ backgroundColor: m.color }} />
+                {m.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {!currentMachine && (
+        <div className="text-center py-10 text-gray-500 text-sm">
+          Choisis ta machine pour voir ce que tu dois faire aujourd'hui.
+        </div>
+      )}
+
+      {currentMachine && (
+        <>
+          <div className="relative max-w-md">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Chercher commande (réf ou chantier)..."
+              className="w-full pl-9 pr-3 py-2 bg-[#1c1e24] border border-[#2a2d35] rounded-lg text-xs text-white placeholder-gray-600 outline-none" />
+          </div>
+
+          <TaskSection
+            title="À préparer" icon={<Layers size={14} />} accent="amber"
+            items={buckets.aPreparer} emptyLabel="Rien à préparer."
+            primaryAction={{ label: 'Marquer préparé', icon: <Check size={12} />, statut: 'prepare' }}
+            onAction={onChangeStatut} onOpen={onOpenCommande} onViewPdf={onViewPdf} onViewPieces={onViewPieces} />
+
+          <TaskSection
+            title="À couper" icon={<Scissors size={14} />} accent="green"
+            items={buckets.aCouper} emptyLabel="Rien à couper."
+            primaryAction={{ label: 'Marquer coupé', icon: <Check size={12} />, statut: 'coupe' }}
+            onAction={onChangeStatut} onOpen={onOpenCommande} onViewPdf={onViewPdf} onViewPieces={onViewPieces} />
+
+          <TaskSection
+            title="À refaire" icon={<RotateCcw size={14} />} accent="orange"
+            items={buckets.aRefaire} emptyLabel="Rien à refaire ✓"
+            primaryAction={{ label: 'Reprendre', icon: <RotateCcw size={12} />, statut: 'prepare' }}
+            onAction={onChangeStatut} onOpen={onOpenCommande} onViewPdf={onViewPdf} onViewPieces={onViewPieces} />
+
+          {buckets.bloque.length > 0 && (
+            <TaskSection
+              title="Bloqué — manager à prévenir" icon={<AlertTriangle size={14} />} accent="red"
+              items={buckets.bloque} emptyLabel="—"
+              primaryAction={null}
+              onAction={onChangeStatut} onOpen={onOpenCommande} onViewPdf={onViewPdf} onViewPieces={onViewPieces} />
+          )}
+
+          <div className="text-center py-3 text-[11px] text-gray-500 border-t border-[#2a2d35]">
+            ✓ Aujourd'hui · {todayCount} commande{todayCount > 1 ? 's' : ''} coupée{todayCount > 1 ? 's' : ''} par toi sur {MACHINES.find(m => m.id === currentMachine)?.label}
+          </div>
+        </>
+      )}
+    </main>
+  );
+}
+
+// ── Section de tâches ───────────────────────────────────────────────
+
+function TaskSection({
+  title, icon, accent, items, emptyLabel, primaryAction,
+  onAction, onOpen, onViewPdf, onViewPieces,
+}: {
+  title: string;
+  icon: React.ReactNode;
+  accent: 'amber' | 'green' | 'orange' | 'red';
+  items: TaskItem[];
+  emptyLabel: string;
+  primaryAction: { label: string; icon: React.ReactNode; statut: StatutMachine } | null;
+  onAction: (commandeId: string, machine: Machine, statut: StatutMachine) => void;
+  onOpen: (id: string) => void;
+  onViewPdf: (dataUrl: string, filename: string) => void;
+  onViewPieces: (machine: Machine, optim: FstlineOptim) => void;
+}) {
+  const accentClass = {
+    amber: 'border-amber-500/30 bg-amber-500/5',
+    green: 'border-green-500/30 bg-green-500/5',
+    orange: 'border-orange-500/30 bg-orange-500/5',
+    red: 'border-red-500/40 bg-red-500/5',
+  }[accent];
+  const titleClass = {
+    amber: 'text-amber-300',
+    green: 'text-green-400',
+    orange: 'text-orange-300',
+    red: 'text-red-300',
+  }[accent];
+
+  return (
+    <section className={`border rounded-xl ${accentClass}`}>
+      <div className="px-4 py-2.5 border-b border-[#2a2d35] flex items-center justify-between">
+        <h2 className={`text-xs font-bold uppercase tracking-wide flex items-center gap-2 ${titleClass}`}>
+          {icon} {title}
+        </h2>
+        <span className="text-[11px] text-gray-500">{items.length}</span>
+      </div>
+      {items.length === 0 ? (
+        <div className="px-4 py-4 text-center text-[11px] text-gray-500">{emptyLabel}</div>
+      ) : (
+        <ul className="divide-y divide-[#2a2d35]">
+          {items.map(it => (
+            <TaskRow key={it.commande.id + it.machine}
+              item={it} primaryAction={primaryAction}
+              onAction={onAction} onOpen={onOpen} onViewPdf={onViewPdf} onViewPieces={onViewPieces} />
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+// ── Une ligne de tâche ──────────────────────────────────────────────
+
+function TaskRow({
+  item, primaryAction, onAction, onOpen, onViewPdf, onViewPieces,
+}: {
+  item: TaskItem;
+  primaryAction: { label: string; icon: React.ReactNode; statut: StatutMachine } | null;
+  onAction: (commandeId: string, machine: Machine, statut: StatutMachine) => void;
+  onOpen: (id: string) => void;
+  onViewPdf: (dataUrl: string, filename: string) => void;
+  onViewPieces: (machine: Machine, optim: FstlineOptim) => void;
+}) {
+  const { commande, optim, machine } = item;
+  const [showAnomalie, setShowAnomalie] = useState(false);
+  const hasPdf = !!optim.pdfDataUrl;
+  const hasXml = !!optim.parsedOptim;
+
+  return (
+    <li className="px-4 py-3">
+      <div className="flex items-start justify-between gap-3">
+        <button onClick={() => onOpen(commande.id)} className="text-left min-w-0 flex-1 hover:opacity-80">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-bold text-white">{commande.nom}</span>
+            <span className="text-[10px] text-gray-500 font-mono">{commande.ref}</span>
+            {optim.dateAssignee && (
+              <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-300 border border-blue-500/30">
+                <Calendar size={9} className="inline mr-0.5 -mt-0.5" />
+                {new Date(optim.dateAssignee).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })}
+              </span>
+            )}
+          </div>
+          <div className="text-[10px] text-gray-500 mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+            {hasPdf && <span><FileText size={9} className="inline mr-0.5 text-blue-400" /> PDF</span>}
+            {hasXml && optim.parsedOptim && (
+              <span><FileCode2 size={9} className="inline mr-0.5 text-purple-400" />
+                {optim.parsedOptim.totalBarres} barres · {optim.parsedOptim.totalPieces} pièces
+              </span>
+            )}
+            {STATUT_ANOMALIE.includes(optim.statut) && (
+              <span className="text-red-400">⚠ {STATUT_LABEL[optim.statut]}</span>
+            )}
+            {optim.notes && <span className="italic text-gray-400 truncate max-w-md">« {optim.notes} »</span>}
+          </div>
+        </button>
+
+        <div className="flex items-center gap-1 shrink-0">
+          {hasPdf && (
+            <button onClick={() => onViewPdf(optim.pdfDataUrl!, optim.pdfFilename ?? 'doc.pdf')}
+              className="px-2 py-1.5 bg-[#252830] hover:bg-[#2f323a] text-gray-300 text-[10px] rounded">
+              <FileText size={11} />
+            </button>
+          )}
+          {hasXml && optim.parsedOptim && (
+            <button onClick={() => onViewPieces(machine, optim.parsedOptim!)}
+              className="px-2 py-1.5 bg-[#252830] hover:bg-[#2f323a] text-purple-300 text-[10px] rounded">
+              <Layers size={11} />
+            </button>
+          )}
+          {primaryAction && (
+            <button onClick={() => onAction(commande.id, machine, primaryAction.statut)}
+              className="flex items-center gap-1 px-3 py-1.5 bg-green-600 hover:bg-green-500 text-white text-[11px] font-semibold rounded">
+              {primaryAction.icon} {primaryAction.label}
+            </button>
+          )}
+          <button onClick={() => setShowAnomalie(s => !s)} title="Déclarer un problème"
+            className={`px-2 py-1.5 text-[11px] rounded ${showAnomalie ? 'bg-orange-600 text-white' : 'bg-[#252830] hover:bg-orange-500/30 text-orange-300'}`}>
+            <AlertTriangle size={11} />
+          </button>
+        </div>
+      </div>
+
+      {showAnomalie && (
+        <div className="mt-2 pt-2 border-t border-[#2a2d35]">
+          <p className="text-[10px] text-gray-500 mb-1.5">Type d'anomalie :</p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1">
+            {STATUT_ANOMALIE.map(s => (
+              <button key={s} onClick={() => { onAction(commande.id, machine, s); setShowAnomalie(false); }}
+                className={`px-2 py-1.5 text-[10px] font-medium rounded border ${STATUT_STYLE[s]} hover:brightness-125`}>
+                {STATUT_LABEL[s]}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </li>
   );
 }
