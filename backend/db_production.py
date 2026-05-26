@@ -5,12 +5,15 @@ from db import get_conn
 def create_lot(data: dict):
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute("""
-            INSERT INTO production_lots (id, reference, semaine, commande_ids, commande_refs, total_pieces, total_we, notes)
+            INSERT INTO production_lots (id, reference, semaine, commande_ids, commande_refs,
+                total_pieces, total_we, notes, glass_optim, we_optim)
             VALUES (%(id)s, %(reference)s, %(semaine)s, %(commande_ids)s::jsonb, %(commande_refs)s::jsonb,
-                    %(total_pieces)s, %(total_we)s, %(notes)s)
+                    %(total_pieces)s, %(total_we)s, %(notes)s, %(glass_optim)s::jsonb, %(we_optim)s::jsonb)
         """, {**data,
               'commande_ids': json.dumps(data.get('commande_ids', [])),
-              'commande_refs': json.dumps(data.get('commande_refs', []))})
+              'commande_refs': json.dumps(data.get('commande_refs', [])),
+              'glass_optim': json.dumps(data.get('glass_optim', [])),
+              'we_optim': json.dumps(data.get('we_optim', []))})
         conn.commit()
 
 
@@ -117,6 +120,13 @@ def update_lot_matieres(lot_id: str, matieres: dict):
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute("UPDATE production_lots SET lot_matieres = %s::jsonb WHERE id = %s",
                     (json.dumps(matieres), lot_id))
+        conn.commit()
+
+
+def update_preparation(lot_id: str, preparation: dict):
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute("UPDATE production_lots SET preparation = %s::jsonb WHERE id = %s",
+                    (json.dumps(preparation), lot_id))
         conn.commit()
 
 
