@@ -23,12 +23,13 @@ interface Lot {
   id: string; reference: string; semaine: string; date_creation: string;
   commande_refs: string[]; total_pieces: number; total_we: number; statut: string;
   pieces?: Piece[]; we_pieces?: WEPiece[];
+  lot_matieres?: Record<string, string>;
 }
 
 interface Piece {
   id: string; commande_ref: string; vitrage_ref: string; largeur: number; hauteur: number;
   composition: string; face: string; material: string; machine: string; plaque_no: number;
-  statut: string; operateur: string; date_coupe: string | null; date_assemblage: string | null;
+  lot_verre: string; statut: string; operateur: string; date_coupe: string | null; date_assemblage: string | null;
 }
 
 interface WEPiece {
@@ -68,7 +69,7 @@ export function ProductionView({ onBack }: { onBack: () => void }) {
   const [lots, setLots] = useState<Lot[]>([]);
   const [selectedLot, setSelectedLot] = useState<Lot | null>(null);
   const [stats, setStats] = useState<Stats | null>(null);
-  const [tab, setTab] = useState<'verre' | 'we' | 'stats'>('verre');
+  const [tab, setTab] = useState<'verre' | 'we' | 'lots' | 'stats'>('verre');
   const [filtreMachine, setFiltreMachine] = useState<string>('');
   const [filtreStatut, setFiltreStatut] = useState<string>('');
   const [filtreCommande, setFiltreCommande] = useState<string>('');
@@ -185,12 +186,12 @@ export function ProductionView({ onBack }: { onBack: () => void }) {
 
           {/* Tabs */}
           <div className="flex gap-1 border-b border-[#2a2d35]">
-            {(['verre', 'we', 'stats'] as const).map(t => (
+            {(['verre', 'we', 'lots', 'stats'] as const).map(t => (
               <button key={t} onClick={() => setTab(t)}
                 className={`px-4 py-2 text-sm border-b-2 transition-colors ${tab === t
                   ? 'border-amber-500 text-amber-400 font-semibold'
                   : 'border-transparent text-gray-500 hover:text-gray-300'}`}>
-                {t === 'verre' ? `Verre (${pieces.length})` : t === 'we' ? `WE (${wePieces.length})` : 'Productivite'}
+                {t === 'verre' ? `Verre (${pieces.length})` : t === 'we' ? `WE (${wePieces.length})` : t === 'lots' ? 'Lots matieres' : 'Productivite'}
               </button>
             ))}
           </div>
@@ -298,6 +299,11 @@ export function ProductionView({ onBack }: { onBack: () => void }) {
           )}
 
           {/* Stats tab */}
+          {/* Lots matieres */}
+          {tab === 'lots' && selectedLot && (
+            <LotMatieresTab lotId={selectedLot.id} pieces={pieces} lotMatieres={selectedLot.lot_matieres || {}} onReload={() => loadLotDetail(selectedLot)} />
+          )}
+
           {tab === 'stats' && stats && (
             <div className="space-y-4">
               <h4 className="text-sm font-semibold text-gray-300">Coupes par jour</h4>
@@ -322,6 +328,112 @@ export function ProductionView({ onBack }: { onBack: () => void }) {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Lot Matieres Tab ─────────────────────────────────────────────────
+
+const MATIERES_GLOBALES = [
+  { key: 'intercalaire', label: 'Intercalaire / Warm Edge' },
+  { key: 'dessiccant', label: 'Dessiccant (tamis)' },
+  { key: 'masticButyl', label: 'Mastic butyl (1re barriere)' },
+  { key: 'masticPU', label: 'Mastic PU (2e barriere)' },
+  { key: 'gazArgon', label: 'Gaz argon' },
+];
+
+function LotMatieresTab({ lotId, pieces, lotMatieres, onReload }: {
+  lotId: string; pieces: Piece[]; lotMatieres: Record<string, string>; onReload: () => void;
+}) {
+  const [matieres, setMatieres] = useState(lotMatieres);
+  const [lotVerreInput, setLotVerreInput] = useState('');
+  const [selectedPlaques, setSelectedPlaques] = useState<Set<number>>(new Set());
+
+  const plaques = [...new Set(pieces.filter(p => p.plaque_no > 0).map(p => p.plaque_no))].sort((a, b) => a - b);
+  const plaqueLots = new Map<number, string>();
+  for (const p of pieces) {
+    if (p.plaque_no > 0 && p.lot_verre) plaqueLots.set(p.plaque_no, p.lot_verre);
+  }
+
+  const saveMatieres = async () => {
+    await patchJSON(`/api/production/lots/${lotId}/lot-matieres`, { matieres });
+    onReload();
+  };
+
+  const saveLotVerre = async () => {
+    if (selectedPlaques.size === 0 || !lotVerreInput) return;
+    await patchJSON(`/api/production/lots/${lotId}/lot-verre`, { plaque_nos: [...selectedPlaques], lot_verre: lotVerreInput });
+    setLotVerreInput('');
+    setSelectedPlaques(new Set());
+    onReload();
+  };
+
+  const togglePlaque = (n: number) => {
+    setSelectedPlaques(prev => {
+      const next = new Set(prev);
+      if (next.has(n)) next.delete(n); else next.add(n);
+      return next;
+    });
+  };
+
+  const selectAllPlaques = () => {
+    if (selectedPlaques.size === plaques.length) setSelectedPlaques(new Set());
+    else setSelectedPlaques(new Set(plaques));
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Lot verre par plaque */}
+      <div>
+        <h4 className="text-sm font-semibold text-gray-300 mb-3">Lot verre par plaque</h4>
+        <div className="flex items-center gap-3 mb-3">
+          <input value={lotVerreInput} onChange={e => setLotVerreInput(e.target.value)}
+            placeholder="N° lot verre fournisseur" className="bg-[#14161d] border border-[#2a2d35] rounded px-3 py-2 text-sm text-white w-60 focus:border-blue-500 outline-none" />
+          <button onClick={selectAllPlaques} className="text-xs text-gray-400 hover:text-white px-2 py-1 border border-[#2a2d35] rounded">
+            {selectedPlaques.size === plaques.length ? 'Deselect' : 'Tout'}
+          </button>
+          <button onClick={saveLotVerre} disabled={selectedPlaques.size === 0 || !lotVerreInput}
+            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs rounded disabled:opacity-30 transition-colors">
+            Appliquer aux {selectedPlaques.size} plaque(s)
+          </button>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
+          {plaques.map(n => {
+            const lot = plaqueLots.get(n) || '';
+            const mat = pieces.find(p => p.plaque_no === n)?.material || '';
+            return (
+              <button key={n} onClick={() => togglePlaque(n)}
+                className={`p-3 rounded-lg border text-left transition-colors ${
+                  selectedPlaques.has(n) ? 'border-blue-500 bg-blue-500/10' : 'border-[#2a2d35] bg-[#181a20]'}`}>
+                <div className="text-xs font-semibold text-white">Plaque {n}</div>
+                <div className="text-[10px] text-gray-500">{mat}</div>
+                {lot ? (
+                  <div className="text-[10px] text-green-400 mt-1">Lot: {lot}</div>
+                ) : (
+                  <div className="text-[10px] text-red-400 mt-1">Pas de lot</div>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Matieres globales */}
+      <div>
+        <h4 className="text-sm font-semibold text-gray-300 mb-3">Matieres communes (tout le lot)</h4>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {MATIERES_GLOBALES.map(m => (
+            <div key={m.key} className="bg-[#181a20] rounded-lg p-3 border border-[#2a2d35]">
+              <label className="text-xs text-gray-400 block mb-1">{m.label}</label>
+              <input value={matieres[m.key] || ''} onChange={e => setMatieres({ ...matieres, [m.key]: e.target.value })}
+                placeholder="N° lot" className="bg-[#14161d] border border-[#2a2d35] rounded px-3 py-1.5 text-sm text-white w-full focus:border-blue-500 outline-none" />
+            </div>
+          ))}
+        </div>
+        <button onClick={saveMatieres} className="mt-3 px-4 py-2 bg-green-600 hover:bg-green-500 text-white text-xs rounded-lg transition-colors">
+          Sauvegarder matieres
+        </button>
+      </div>
     </div>
   );
 }
