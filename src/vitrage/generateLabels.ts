@@ -1,4 +1,5 @@
 import { PDFDocument, StandardFonts, rgb, PDFPage, PDFFont } from 'pdf-lib';
+import QRCode from 'qrcode';
 import type { Vitrage, OptimizedPlate, AverySettings } from './types';
 import { DEFAULT_AVERY } from './types';
 
@@ -11,6 +12,17 @@ const COLS = 3;
 const ROWS = 8;
 const PER_PAGE = COLS * ROWS;
 const TOP_MARGIN = 8.5 * MM;
+
+const QR_SIZE = 13 * MM;
+
+async function embedQR(doc: PDFDocument, text: string): Promise<Awaited<ReturnType<typeof doc.embedPng>> | null> {
+  try {
+    const dataUrl = await QRCode.toDataURL(text, { width: 120, margin: 0, errorCorrectionLevel: 'M' });
+    const base64 = dataUrl.split(',')[1];
+    const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+    return await doc.embedPng(bytes);
+  } catch { return null; }
+}
 
 function labelOrigin(slot: number): { x: number; y: number } {
   const col = slot % COLS;
@@ -46,6 +58,14 @@ export async function generateLabelsA(
   const padT = settings.paddingTop * MM;
   const maxW = LABEL_W - (settings.paddingLeft + settings.paddingRight) * MM;
 
+  const qrCache = new Map<string, Awaited<ReturnType<typeof doc.embedPng>>>();
+  async function getQR(text: string) {
+    if (qrCache.has(text)) return qrCache.get(text)!;
+    const img = await embedQR(doc, text);
+    if (img) qrCache.set(text, img);
+    return img;
+  }
+
   const totalPages = Math.ceil(vitrages.length / PER_PAGE);
   for (let pi = 0; pi < totalPages; pi++) {
     const page = doc.addPage([A4_W, A4_H]);
@@ -57,8 +77,11 @@ export async function generateLabelsA(
       const lx = x + padL;
       let ly = y + LABEL_H - padT;
 
+      const qr = await getQR(`ISULA|${commandeLabel}|${v.reference}|${v.largeur}x${v.hauteur}`);
+      if (qr) page.drawImage(qr, { x: x + LABEL_W - settings.paddingRight * MM - QR_SIZE, y: y + LABEL_H - padT - QR_SIZE, width: QR_SIZE, height: QR_SIZE });
+
       drawText(page, 'ISULA', lx, ly - 8, bold, 7);
-      drawText(page, v.variante, lx + maxW * 0.7, ly - 8, bold, 9, rgb(0.8, 0, 0));
+      drawText(page, v.variante, lx + maxW * 0.55, ly - 8, bold, 9, rgb(0.8, 0, 0));
       ly -= 12;
       drawText(page, commandeLabel, lx, ly - 7, bold, 7, rgb(0, 0, 0), maxW);
       ly -= 11;

@@ -5,6 +5,8 @@ import type {
   OptimizedPlate,
   GlassOptimResult,
   GlassSettings,
+  Remnant,
+  RemnantClass,
 } from './types';
 import { DEFAULT_GLASS } from './types';
 
@@ -113,13 +115,33 @@ function guillotineSplit(
   return result;
 }
 
+function classifyRemnant(w: number, h: number): RemnantClass {
+  const minDim = Math.min(w, h);
+  const maxDim = Math.max(w, h);
+  if (minDim < 50) return 'poussiere';
+  if (minDim < 250 || maxDim < 300) return 'interdit';
+  if (minDim < 300) return 'surveiller';
+  return 'stockable';
+}
+
+function analyzeRemnants(freeRects: FreeRect[]): Remnant[] {
+  return freeRects
+    .filter(r => r.w > 1 && r.h > 1)
+    .map(r => ({
+      x: r.x, y: r.y, w: Math.round(r.w), h: Math.round(r.h),
+      classe: classifyRemnant(r.w, r.h),
+    }));
+}
+
 function packPlate(
   pieces: GlassPiece[],
   plateWidth: number,
   plateHeight: number,
   cuttingGap: number,
-): { placed: PlacedPiece[]; remaining: GlassPiece[] } {
-  const freeRects: FreeRect[] = [{ x: 0, y: 0, w: plateWidth, h: plateHeight }];
+  edgeTrimMargin: number,
+): { placed: PlacedPiece[]; remaining: GlassPiece[]; remnants: Remnant[] } {
+  const m = edgeTrimMargin;
+  const freeRects: FreeRect[] = [{ x: m, y: m, w: plateWidth - 2 * m, h: plateHeight - 2 * m }];
   const placed: PlacedPiece[] = [];
   const remaining: GlassPiece[] = [];
 
@@ -151,7 +173,7 @@ function packPlate(
     freeRects.splice(fit.rectIndex, 1, ...newRects);
   }
 
-  return { placed, remaining };
+  return { placed, remaining, remnants: analyzeRemnants(freeRects) };
 }
 
 /** Runs 2D guillotine bin-packing to optimize glass cutting across standard plates, grouped by material. */
@@ -159,7 +181,7 @@ export function optimizeGlass(
   vitrages: Vitrage[],
   settings: GlassSettings = DEFAULT_GLASS,
 ): GlassOptimResult[] {
-  const { plateWidth, plateHeight, cuttingGap } = settings;
+  const { plateWidth, plateHeight, cuttingGap, edgeTrimMargin } = settings;
   const allPieces = extractGlassPieces(vitrages);
 
   const groups = new Map<string, GlassPiece[]>();
@@ -183,11 +205,12 @@ export function optimizeGlass(
     let remaining = sorted;
 
     while (remaining.length > 0) {
-      const { placed, remaining: leftover } = packPlate(
+      const { placed, remaining: leftover, remnants } = packPlate(
         remaining,
         plateWidth,
         plateHeight,
         cuttingGap,
+        edgeTrimMargin,
       );
 
       if (placed.length === 0) {
@@ -208,8 +231,10 @@ export function optimizeGlass(
             material,
             plateWidth,
             plateHeight,
-            pieces: [{ ...p, x: 0, y: 0, rotated }],
+            pieces: [{ ...p, x: edgeTrimMargin, y: edgeTrimMargin, rotated }],
             utilisation: (usedArea / plateArea) * 100,
+            remnants: [],
+            hasInterdit: false,
           });
         }
         break;
@@ -229,6 +254,8 @@ export function optimizeGlass(
         plateHeight,
         pieces: placed,
         utilisation: (usedArea / plateArea) * 100,
+        remnants,
+        hasInterdit: remnants.some(r => r.classe === 'interdit'),
       });
 
       remaining = leftover;

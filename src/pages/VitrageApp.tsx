@@ -381,14 +381,24 @@ function PlatePreview({ plate }: { plate: OptimizedPlate }) {
   const scale = 180 / Math.max(plate.plateWidth, plate.plateHeight);
   const w = plate.plateWidth * scale;
   const h = plate.plateHeight * scale;
+  const remnantColors: Record<string, string> = {
+    poussiere: '#333', interdit: '#ef4444', surveiller: '#f59e0b', stockable: '#22c55e',
+  };
 
   return (
-    <div className="bg-[#14161d] rounded p-3">
+    <div className={`bg-[#14161d] rounded p-3 ${plate.hasInterdit ? 'border border-red-500/50' : ''}`}>
       <div className="text-xs text-gray-400 mb-2">
         Plaque {plate.numero} — {plate.plateWidth}x{plate.plateHeight} — <span className="text-green-400">{plate.utilisation.toFixed(0)}%</span> — {plate.pieces.length} pcs
+        {plate.hasInterdit && <span className="text-red-400 ml-2">Chute interdite</span>}
       </div>
       <svg viewBox={`0 0 ${w + 4} ${h + 4}`} className="w-full" style={{ maxHeight: 160 }}>
         <rect x={2} y={2} width={w} height={h} fill="#1e2028" stroke="#333" strokeWidth={0.5} />
+        {(plate.remnants ?? []).map((r, i) => (
+          <rect key={`r${i}`} x={2 + r.x * scale} y={2 + r.y * scale}
+            width={r.w * scale} height={r.h * scale}
+            fill={remnantColors[r.classe]} opacity={0.15}
+            stroke={remnantColors[r.classe]} strokeWidth={0.3} strokeDasharray="2,1" />
+        ))}
         {plate.pieces.map((p, i) => {
           const pw = (p.rotated ? p.height : p.width) * scale;
           const ph = (p.rotated ? p.width : p.height) * scale;
@@ -405,6 +415,17 @@ function PlatePreview({ plate }: { plate: OptimizedPlate }) {
           );
         })}
       </svg>
+      {(plate.remnants ?? []).filter(r => r.classe !== 'poussiere').length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-1">
+          {(plate.remnants ?? []).filter(r => r.classe !== 'poussiere').map((r, i) => (
+            <span key={i} className={`text-[9px] px-1 rounded ${
+              r.classe === 'interdit' ? 'bg-red-500/20 text-red-400' :
+              r.classe === 'surveiller' ? 'bg-amber-500/20 text-amber-400' :
+              'bg-green-500/20 text-green-400'
+            }`}>{r.w}x{r.h}</span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -571,6 +592,7 @@ function TabSettings({ avery, we, glass, onAvery, onWE, onGlass }: {
           {numInput('Largeur (mm)', glass.plateWidth, v => onGlass({ ...glass, plateWidth: v }))}
           {numInput('Hauteur (mm)', glass.plateHeight, v => onGlass({ ...glass, plateHeight: v }))}
           {numInput('Trait de scie (mm)', glass.cuttingGap, v => onGlass({ ...glass, cuttingGap: v }))}
+          {numInput('Marge rive (mm)', glass.edgeTrimMargin ?? 15, v => onGlass({ ...glass, edgeTrimMargin: v }))}
         </div>
       </div>
       <div>
