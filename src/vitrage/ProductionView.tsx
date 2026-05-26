@@ -927,8 +927,20 @@ function AtelierView({ lots, semaine, poste, onSelectPoste, onBack, loadLotDetai
                   </div>
                   <button onClick={() => setSelectedPieceIdx(null)} className="text-gray-500 hover:text-white text-xl px-2">✕</button>
                 </div>
-                {isNC ? (
-                  <div className="text-red-400 text-xl font-bold text-center py-2">⚠ {dbPiece?.statut === 'nc' ? 'NON CONFORME' : 'CASSE'} — A REFAIRE</div>
+                {isNC && dbPiece ? (
+                  <div>
+                    <div className="text-red-400 text-xl font-bold text-center py-2 mb-3">⚠ {dbPiece.statut === 'nc' ? 'NON CONFORME' : 'CASSE'} — A REFAIRE</div>
+                    <div className="flex gap-3 justify-center">
+                      <button onClick={async () => { await patchJSON(`/api/production/pieces/${dbPiece.id}`, { statut: 'a_couper', operateur: '' }); setSelectedPieceIdx(null); onReload(); }}
+                        className="px-5 py-3 bg-green-700 hover:bg-green-600 text-white text-base font-bold rounded-xl active:scale-95">
+                        REMETTRE OK
+                      </button>
+                      <button onClick={async () => { await patchJSON(`/api/production/pieces/${dbPiece.id}`, { statut: 'coupe', operateur: '' }); setSelectedPieceIdx(null); onReload(); }}
+                        className="px-5 py-3 bg-cyan-700 hover:bg-cyan-600 text-white text-base font-bold rounded-xl active:scale-95">
+                        DEJA RECOUPE
+                      </button>
+                    </div>
+                  </div>
                 ) : dbPiece ? (
                   <div className="flex gap-3 justify-center">
                     <button onClick={() => { setEditCompo({ pieceId: dbPiece.id, original: dbPiece.material, current: dbPiece.material }); }}
