@@ -13,6 +13,7 @@ const ROLES = [
 ];
 
 const ALL_APPS = [
+  { id: 'isula-vitrage', label: 'ISULA VITRAGE' },
   { id: 'reception_matiere', label: 'Reception Matiere' },
   { id: 'poste_coupe', label: 'Poste de Coupe' },
   { id: 'gc', label: 'Configurateur GC' },
