@@ -100,6 +100,14 @@ def update_piece_statut(piece_id: str, statut: str, operateur: str = ''):
         conn.commit()
 
 
+def update_piece_material(piece_id: str, material: str, composition: str, notes: str):
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            "UPDATE production_pieces SET material = %s, composition = %s, notes = %s WHERE id = %s",
+            (material, composition, notes, piece_id))
+        conn.commit()
+
+
 def update_we_statut(piece_id: str, statut: str, operateur: str = ''):
     with get_conn() as conn, conn.cursor() as cur:
         extra = ", date_coupe = NOW()" if statut == 'coupe' else ""

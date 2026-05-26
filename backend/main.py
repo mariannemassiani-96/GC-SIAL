@@ -258,7 +258,10 @@ def api_delete_lot(lot_id: str):
 
 @app.patch("/api/production/pieces/{piece_id}")
 def api_update_piece(piece_id: str, data: dict = Body(...)):
-    dbp.update_piece_statut(piece_id, data.get('statut', ''), data.get('operateur', ''))
+    if 'material' in data:
+        dbp.update_piece_material(piece_id, data['material'], data.get('composition', ''), data.get('notes', ''))
+    if 'statut' in data:
+        dbp.update_piece_statut(piece_id, data['statut'], data.get('operateur', ''))
     return {"ok": True}
 
 
