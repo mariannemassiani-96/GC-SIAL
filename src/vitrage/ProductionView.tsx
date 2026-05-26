@@ -416,6 +416,8 @@ function AtelierView({ lots, semaine, poste, onSelectPoste, onBack, loadLotDetai
   const [plateIdx, setPlateIdx] = useState(0);
   const [selectedMaterial, setSelectedMaterial] = useState<string | null>(null);
   const [editCompo, setEditCompo] = useState<{ pieceId: string; original: string; current: string } | null>(null);
+  const [weMode, setWeMode] = useState<'barres' | 'liste'>('barres');
+  const [weBarIdx, setWeBarIdx] = useState(0);
 
   if (!poste) {
     return (
@@ -527,9 +529,6 @@ function AtelierView({ lots, semaine, poste, onSelectPoste, onBack, loadLotDetai
 
   // ── Poste COUPE WE ──
   if (poste === 'we') {
-    const [weMode, setWeMode] = useState<'barres' | 'liste'>('barres');
-    const [weBarIdx, setWeBarIdx] = useState(0);
-
     const barres = new Map<number, WEPiece[]>();
     for (const wp of wePieces) {
       const arr = barres.get(wp.barre_no) || [];
