@@ -51,6 +51,19 @@ export async function login(email: string, password: string): Promise<User> {
   return data.user;
 }
 
+export async function loginPin(nom: string, pin: string): Promise<User> {
+  const data = await request<LoginResponse>('POST', '/api/auth/login-pin', { nom, pin });
+  token = data.token;
+  localStorage.setItem('sial_token', data.token);
+  localStorage.setItem('sial_user', JSON.stringify(data.user));
+  return data.user;
+}
+
+export async function fetchPinUsers(): Promise<string[]> {
+  const res = await fetch(`${API_URL}/api/auth/pin-users`);
+  return res.json();
+}
+
 export function logout() {
   token = null;
   localStorage.removeItem('sial_token');
@@ -108,7 +121,7 @@ export async function createUser(data: { email: string; password: string; nom: s
   return request('POST', '/api/users', data);
 }
 
-export async function updateUser(id: number, data: Partial<{ nom: string; role: string; apps_autorisees: string[]; actif: boolean; password: string }>): Promise<void> {
+export async function updateUser(id: number, data: Partial<{ nom: string; role: string; apps_autorisees: string[]; actif: boolean; password: string; pin: string; pin_enabled: boolean }>): Promise<void> {
   await request('PUT', `/api/users/${id}`, data);
 }
 

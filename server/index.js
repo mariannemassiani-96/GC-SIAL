@@ -35,6 +35,22 @@ app.post('/api/auth/login', (req, res) => {
   res.json({ token, user: { id: user.id, email: user.email, nom: user.nom, role: user.role, apps_autorisees: JSON.parse(user.apps_autorisees || '[]') } });
 });
 
+app.post('/api/auth/login-pin', (req, res) => {
+  const { nom, pin } = req.body;
+  if (!nom || !pin || pin.length !== 4) return res.status(400).json({ error: 'Prenom et PIN 4 chiffres requis' });
+  const users = db.prepare('SELECT * FROM users WHERE actif = 1 AND pin_enabled = 1').all();
+  const user = users.find(u => u.nom.toLowerCase().trim() === nom.toLowerCase().trim() && u.pin === pin);
+  if (!user) return res.status(401).json({ error: 'Prenom ou PIN incorrect' });
+  const token = generateToken(user);
+  db.prepare('INSERT INTO activity_log (user_id, action) VALUES (?, ?)').run(user.id, 'login-pin');
+  res.json({ token, user: { id: user.id, email: user.email, nom: user.nom, role: user.role, apps_autorisees: JSON.parse(user.apps_autorisees || '[]') } });
+});
+
+app.get('/api/auth/pin-users', (req, res) => {
+  const users = db.prepare('SELECT nom FROM users WHERE actif = 1 AND pin_enabled = 1').all();
+  res.json(users.map(u => u.nom));
+});
+
 app.get('/api/auth/me', authMiddleware, (req, res) => {
   const user = db.prepare('SELECT id, email, nom, role, apps_autorisees FROM users WHERE id = ?').get(req.user.id);
   if (!user) return res.status(404).json({ error: 'Utilisateur non trouve' });
@@ -46,8 +62,8 @@ app.get('/api/auth/me', authMiddleware, (req, res) => {
 // ══════════════════════════════════════════════════════════════
 
 app.get('/api/users', authMiddleware, adminOnly, (req, res) => {
-  const users = db.prepare('SELECT id, email, nom, role, apps_autorisees, actif, created_at FROM users').all();
-  res.json(users.map(u => ({ ...u, apps_autorisees: JSON.parse(u.apps_autorisees || '[]') })));
+  const users = db.prepare('SELECT id, email, nom, role, apps_autorisees, actif, pin, pin_enabled, created_at FROM users').all();
+  res.json(users.map(u => ({ ...u, apps_autorisees: JSON.parse(u.apps_autorisees || '[]'), pin_enabled: !!u.pin_enabled })));
 });
 
 app.post('/api/users', authMiddleware, adminOnly, (req, res) => {
@@ -64,7 +80,7 @@ app.post('/api/users', authMiddleware, adminOnly, (req, res) => {
 });
 
 app.put('/api/users/:id', authMiddleware, adminOnly, (req, res) => {
-  const { nom, role, apps_autorisees, actif, password } = req.body;
+  const { nom, role, apps_autorisees, actif, password, pin, pin_enabled } = req.body;
   const updates = [];
   const params = [];
   if (nom !== undefined) { updates.push('nom = ?'); params.push(nom); }
@@ -72,6 +88,8 @@ app.put('/api/users/:id', authMiddleware, adminOnly, (req, res) => {
   if (apps_autorisees !== undefined) { updates.push('apps_autorisees = ?'); params.push(JSON.stringify(apps_autorisees)); }
   if (actif !== undefined) { updates.push('actif = ?'); params.push(actif ? 1 : 0); }
   if (password) { updates.push('password = ?'); params.push(hashPassword(password)); }
+  if (pin !== undefined) { updates.push('pin = ?'); params.push(pin || null); }
+  if (pin_enabled !== undefined) { updates.push('pin_enabled = ?'); params.push(pin_enabled ? 1 : 0); }
   if (updates.length === 0) return res.status(400).json({ error: 'Rien a mettre a jour' });
   params.push(req.params.id);
   db.prepare(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`).run(...params);
