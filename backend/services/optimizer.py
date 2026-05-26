@@ -114,42 +114,54 @@ def _try_fill_at_height(
     gap: float,
     can_rotate: bool,
 ) -> list[tuple[GlassPiece, bool, float, float, float]] | None:
-    """Try filling a strip of given height, picking pieces that maximize width coverage."""
-    placed: list[tuple[GlassPiece, bool, float, float, float]] = []
-    used_ids: set[str] = set()
-    cursor_x = 0.0
+    """Try filling a strip, preferring narrower orientations to fit more pieces."""
+    best_placed: list[tuple[GlassPiece, bool, float, float, float]] | None = None
 
-    while cursor_x < strip_w - 1:
-        remaining_w = strip_w - cursor_x
-        best_piece = None
-        best_pw = 0.0
-        best_ph = 0.0
-        best_rot = False
-        best_waste = float('inf')
+    for prefer_narrow in [True, False]:
+        placed: list[tuple[GlassPiece, bool, float, float, float]] = []
+        used_ids: set[str] = set()
+        cursor_x = 0.0
 
-        for p in pieces:
-            if p.id in used_ids:
-                continue
-            for rot in [False, True] if _can_rotate(p, can_rotate) else [False]:
-                pw, ph = _piece_dims(p, rot)
-                if pw > remaining_w + 0.1 or ph > strip_h + 0.1:
+        while cursor_x < strip_w - 1:
+            remaining_w = strip_w - cursor_x
+            best_piece = None
+            best_pw = 0.0
+            best_ph = 0.0
+            best_rot = False
+
+            for p in pieces:
+                if p.id in used_ids:
                     continue
-                waste = remaining_w - pw
-                if pw > best_pw or (pw == best_pw and ph > best_ph):
-                    best_piece = p
-                    best_pw = pw
-                    best_ph = ph
-                    best_rot = rot
-                    best_waste = waste
+                for rot in [False, True] if _can_rotate(p, can_rotate) else [False]:
+                    pw, ph = _piece_dims(p, rot)
+                    if pw > remaining_w + 0.1 or ph > strip_h + 0.1:
+                        continue
+                    if best_piece is None:
+                        best_piece, best_pw, best_ph, best_rot = p, pw, ph, rot
+                    elif prefer_narrow:
+                        if pw < best_pw or (pw == best_pw and ph > best_ph):
+                            best_piece, best_pw, best_ph, best_rot = p, pw, ph, rot
+                    else:
+                        if pw > best_pw or (pw == best_pw and ph > best_ph):
+                            best_piece, best_pw, best_ph, best_rot = p, pw, ph, rot
 
-        if not best_piece:
-            break
+            if not best_piece:
+                break
 
-        placed.append((best_piece, best_rot, cursor_x, best_pw, best_ph))
-        used_ids.add(best_piece.id)
-        cursor_x += best_pw + gap
+            placed.append((best_piece, best_rot, cursor_x, best_pw, best_ph))
+            used_ids.add(best_piece.id)
+            cursor_x += best_pw + gap
 
-    return placed if placed else None
+        if placed:
+            if best_placed is None or len(placed) > len(best_placed):
+                best_placed = placed
+            elif len(placed) == len(best_placed):
+                area_new = sum(w * h for _, _, _, w, h in placed)
+                area_old = sum(w * h for _, _, _, w, h in best_placed)
+                if area_new > area_old:
+                    best_placed = placed
+
+    return best_placed
 
 
 # ── Sort strategies ──────────────────────────────────────────────────
