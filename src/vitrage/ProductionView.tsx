@@ -529,6 +529,16 @@ function AtelierView({ lots, semaine, poste, onSelectPoste, onBack, loadLotDetai
 
   // ── Poste COUPE WE ──
   if (poste === 'we') {
+    if (wePieces.length === 0) {
+      return (
+        <div className="fixed inset-0 bg-[#0a0c10] flex flex-col items-center justify-center z-50">
+          <p className="text-gray-400 text-2xl mb-2">Aucune coupe intercalaire dans ce lot</p>
+          <p className="text-gray-600 text-base mb-8">{selectedLot.reference} — {selectedLot.total_we} WE enregistrees</p>
+          <button onClick={() => setSelectedLot(null)} className="px-8 py-4 bg-gray-700 text-white text-lg rounded-xl active:scale-95">← Retour aux lots</button>
+        </div>
+      );
+    }
+
     const barres = new Map<number, WEPiece[]>();
     for (const wp of wePieces) {
       const arr = barres.get(wp.barre_no) || [];
