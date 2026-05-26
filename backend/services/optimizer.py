@@ -275,10 +275,9 @@ def _run_packing(
         for pc, x, y, rot in placed_raw:
             if flipped:
                 x, y = y, x
-            pw, ph = _piece_dims(pc, rot)
             placed_pieces.append(PlacedPiece(
                 id=pc.id, vitrage_ref=pc.vitrage_ref,
-                width=pw, height=ph,
+                width=pc.width, height=pc.height,
                 material=pc.material, face=pc.face,
                 no_rotation=pc.no_rotation, treatment=pc.treatment,
                 x=x + edge_margin, y=y + edge_margin,
@@ -333,6 +332,12 @@ def _compute_guillotine_remnants(
         return [Remnant(x=0, y=0, w=usable_w, h=usable_h,
                         classe=_classify_remnant(usable_w, usable_h))]
 
+    def _eff_w(p: PlacedPiece) -> float:
+        return p.height if p.rotated else p.width
+
+    def _eff_h(p: PlacedPiece) -> float:
+        return p.width if p.rotated else p.height
+
     strips: dict[float, list[PlacedPiece]] = {}
     for p in pieces:
         strips.setdefault(round(p.y, 1), []).append(p)
@@ -341,7 +346,7 @@ def _compute_guillotine_remnants(
 
     for strip_y in sorted(strips.keys()):
         strip_pcs = sorted(strips[strip_y], key=lambda p: p.x)
-        strip_h = max(p.height for p in strip_pcs)
+        strip_h = max(_eff_h(p) for p in strip_pcs)
 
         cursor_x = 0.0
         for p in strip_pcs:
@@ -350,7 +355,7 @@ def _compute_guillotine_remnants(
                     x=cursor_x, y=strip_y, w=p.x - cursor_x, h=strip_h,
                     classe=_classify_remnant(p.x - cursor_x, strip_h),
                 ))
-            cursor_x = p.x + p.width
+            cursor_x = p.x + _eff_w(p)
 
         if cursor_x < usable_w - 0.5:
             remnants.append(Remnant(
@@ -358,7 +363,7 @@ def _compute_guillotine_remnants(
                 classe=_classify_remnant(usable_w - cursor_x, strip_h),
             ))
 
-    max_y = max(p.y + p.height for p in pieces)
+    max_y = max(p.y + _eff_h(p) for p in pieces)
     if max_y < usable_h - 0.5:
         remnants.append(Remnant(
             x=0, y=max_y, w=usable_w, h=usable_h - max_y,
