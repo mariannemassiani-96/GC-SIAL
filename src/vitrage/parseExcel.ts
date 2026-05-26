@@ -91,6 +91,7 @@ function extractLotInfo(data: unknown[][]): string {
 function rowToVitrages(
   row: unknown[],
   colMap: Map<number, Field>,
+  chantier?: string,
 ): Vitrage[] {
   const get = (f: Field): string => {
     for (const [idx, field] of colMap.entries()) {
@@ -117,7 +118,8 @@ function rowToVitrages(
   if (largeur === 0 && hauteur === 0) return [];
 
   const position = get('position');
-  const reference = position ? `${position}_${refRaw}` : refRaw;
+  const chantierLabel = chantier ? chantier.replace(/\s+/g, '_') : '';
+  const reference = position && chantierLabel ? `${position}_${chantierLabel}` : position ? `${position}_${refRaw}` : refRaw;
   const couleur = get('couleur') || '012 (Noir)';
   const { outer, inner, epaisseur } = compositionRaw ? parseVitrageSpec(compositionRaw) : { outer: '', inner: '', epaisseur: 10 };
   const qte = parseInt(get('qte')) || 1;
@@ -136,7 +138,7 @@ function rowToVitrages(
   return result;
 }
 
-export async function parseExcelFile(file: File): Promise<ParseResult> {
+export async function parseExcelFile(file: File, chantier?: string): Promise<ParseResult> {
   const buffer = await file.arrayBuffer();
   const wb = XLSX.read(buffer, { type: 'array' });
   const sheetName = wb.SheetNames[0];
@@ -183,7 +185,7 @@ export async function parseExcelFile(file: File): Promise<ParseResult> {
     }
 
     dataRows++;
-    const vs = rowToVitrages(row, colMap);
+    const vs = rowToVitrages(row, colMap, chantier);
     if (vs.length > 0) vitrages.push(...vs);
     else skipped++;
   }
