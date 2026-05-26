@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo } from 'react';
 import type {
   Commande, Vitrage, IsulaStore, AverySettings, WESettings, GlassSettings,
-  CommandeStatut, WEGroupe, GlassOptimResult, OptimizedPlate,
+  CommandeStatut, WEGroupe, GlassOptimResult, OptimizedPlate, LotFabrication, EMPTY_LOT,
 } from '../vitrage/types';
 import { STATUT_LABELS, STATUT_COLORS } from '../vitrage/types';
 import { parseVitrageSpec } from '../vitrage/parseVitrageSpec';
@@ -12,6 +12,15 @@ import { generateLabelsA, generateLabelsB, generateLabelsC } from '../vitrage/ge
 import { generateFicheWE } from '../vitrage/generateFicheWE';
 import { loadStore, saveStore, addCommande, updateCommande, deleteCommande } from '../vitrage/store';
 import { v4 as uuid } from 'uuid';
+
+function getISOWeek(date: Date): string {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + 3 - ((d.getDay() + 6) % 7));
+  const week1 = new Date(d.getFullYear(), 0, 4);
+  const weekNum = 1 + Math.round(((d.getTime() - week1.getTime()) / 86400000 - 3 + ((week1.getDay() + 6) % 7)) / 7);
+  return `S${String(weekNum).padStart(2, '0')}-${d.getFullYear()}`;
+}
 
 function download(blob: Blob, name: string) {
   const url = URL.createObjectURL(blob);
@@ -135,7 +144,7 @@ function Dashboard({ commandes, onSelect, onNew, onDelete, onBatch }: {
 
 // ── Order Detail ─────────────────────────────────────────────────────
 
-const TABS = ['Import', 'Vitrages', 'Optim Verre', 'Warm Edge', 'Etiquettes', 'Parametres'] as const;
+const TABS = ['Import', 'Vitrages', 'Optim Verre', 'Warm Edge', 'Etiquettes', 'Lots & Tracabilite', 'Parametres'] as const;
 
 function OrderDetail({ commande, onUpdate, onBack, avery, we, glass, onAvery, onWE, onGlass }: {
   commande: Commande;
@@ -154,7 +163,7 @@ function OrderDetail({ commande, onUpdate, onBack, avery, we, glass, onAvery, on
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-4 flex-wrap">
         <button onClick={onBack} className="text-gray-500 hover:text-white text-sm">&larr; Retour</button>
         <input value={c.reference} onChange={e => onUpdate({ reference: e.target.value })}
           className="bg-transparent text-xl font-bold text-white border-b border-transparent hover:border-[#2a2d35] focus:border-blue-500 outline-none px-1" />
@@ -165,6 +174,18 @@ function OrderDetail({ commande, onUpdate, onBack, avery, we, glass, onAvery, on
           {Object.entries(STATUT_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
         </select>
         <span className="text-xs text-gray-500 ml-auto">{c.vitrages.length} vitrages — {c.dateCreation}</span>
+      </div>
+      <div className="flex items-center gap-6 text-xs">
+        <div className="flex items-center gap-2">
+          <span className="text-gray-500">Sem. fabrication :</span>
+          <input value={c.semaineFabrication ?? ''} onChange={e => onUpdate({ semaineFabrication: e.target.value })}
+            placeholder={getISOWeek(new Date())} className="bg-[#1e2028] border border-[#2a2d35] rounded px-2 py-1 text-white w-24" />
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-gray-500">Sem. livraison :</span>
+          <input value={c.semaineLivraison ?? ''} onChange={e => onUpdate({ semaineLivraison: e.target.value })}
+            placeholder={getISOWeek(new Date())} className="bg-[#1e2028] border border-[#2a2d35] rounded px-2 py-1 text-white w-24" />
+        </div>
       </div>
 
       {/* Tabs */}
@@ -183,7 +204,8 @@ function OrderDetail({ commande, onUpdate, onBack, avery, we, glass, onAvery, on
       {tab === 3 && <TabWE results={weResult} />}
       {tab === 4 && <TabExport vitrages={c.vitrages} allPlates={allPlates} weResult={weResult}
         commandeLabel={`${c.reference} — ${c.client}`} avery={avery} we={we} />}
-      {tab === 5 && <TabSettings avery={avery} we={we} glass={glass} onAvery={onAvery} onWE={onWE} onGlass={onGlass} />}
+      {tab === 5 && <TabLots lot={c.lotFabrication ?? { ...EMPTY_LOT }} onUpdate={l => onUpdate({ lotFabrication: l })} />}
+      {tab === 6 && <TabSettings avery={avery} we={we} glass={glass} onAvery={onAvery} onWE={onWE} onGlass={onGlass} />}
     </div>
   );
 }
@@ -468,6 +490,51 @@ function TabExport({ vitrages, allPlates, weResult, commandeLabel, avery, we }: 
   );
 }
 
+// ── Tab: Lots & Tracabilite ───────────────────────────────────────────
+
+const LOT_FIELDS: { key: keyof LotFabrication; label: string; placeholder: string }[] = [
+  { key: 'verreExt', label: 'Verre exterieur', placeholder: 'N° lot fournisseur' },
+  { key: 'verreInt', label: 'Verre interieur', placeholder: 'N° lot fournisseur' },
+  { key: 'intercalaire', label: 'Intercalaire / Warm Edge', placeholder: 'N° lot' },
+  { key: 'dessiccant', label: 'Dessiccant (tamis)', placeholder: 'N° lot + date ouverture' },
+  { key: 'masticButyl', label: 'Mastic butyl (1re barriere)', placeholder: 'N° lot' },
+  { key: 'masticPU', label: 'Mastic PU (2e barriere)', placeholder: 'N° lot' },
+  { key: 'gazArgon', label: 'Gaz argon', placeholder: 'N° lot bouteille' },
+];
+
+function TabLots({ lot, onUpdate }: { lot: LotFabrication; onUpdate: (l: LotFabrication) => void }) {
+  return (
+    <div className="space-y-4">
+      <div className="text-sm text-gray-400">
+        Tracabilite CEKAL — enregistrer les N° de lot des matieres premieres utilisees pour ce lot de fabrication.
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {LOT_FIELDS.map(f => (
+          <div key={f.key} className="bg-[#181a20] rounded-lg p-4 border border-[#2a2d35]">
+            <label className="text-xs text-gray-400 block mb-1.5">{f.label}</label>
+            <input
+              value={(lot[f.key] as string) ?? ''}
+              onChange={e => onUpdate({ ...lot, [f.key]: e.target.value })}
+              placeholder={f.placeholder}
+              className="bg-[#14161d] border border-[#2a2d35] rounded px-3 py-2 text-sm text-white w-full focus:border-blue-500 outline-none"
+            />
+          </div>
+        ))}
+      </div>
+      <div className="bg-[#181a20] rounded-lg p-4 border border-[#2a2d35]">
+        <label className="text-xs text-gray-400 block mb-1.5">Notes / observations</label>
+        <textarea
+          value={lot.notes ?? ''}
+          onChange={e => onUpdate({ ...lot, notes: e.target.value })}
+          placeholder="Remarques, conditions de stockage, NC detectees..."
+          rows={3}
+          className="bg-[#14161d] border border-[#2a2d35] rounded px-3 py-2 text-sm text-white w-full resize-y focus:border-blue-500 outline-none"
+        />
+      </div>
+    </div>
+  );
+}
+
 // ── Tab: Settings ────────────────────────────────────────────────────
 
 function TabSettings({ avery, we, glass, onAvery, onWE, onGlass }: {
@@ -605,13 +672,17 @@ export function VitrageApp({ onBack }: { onBack: () => void }) {
   }, []);
 
   const handleNew = () => {
+    const now = new Date();
     const cmd: Commande = {
       id: uuid(),
-      reference: `CMD-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`,
+      reference: `CMD-${now.toISOString().slice(0, 10).replace(/-/g, '')}`,
       client: '',
-      dateCreation: new Date().toISOString().slice(0, 10),
+      dateCreation: now.toISOString().slice(0, 10),
+      semaineFabrication: '',
+      semaineLivraison: '',
       statut: 'en_attente',
       vitrages: [],
+      lotFabrication: { ...EMPTY_LOT },
       notes: '',
     };
     setStore(s => addCommande(s, cmd));
