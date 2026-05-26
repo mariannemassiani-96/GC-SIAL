@@ -42,6 +42,7 @@ interface Piece {
   id: string; commande_ref: string; vitrage_ref: string; largeur: number; hauteur: number;
   composition: string; face: string; material: string; machine: string; plaque_no: number;
   lot_verre: string; statut: string; operateur: string; date_coupe: string | null; date_assemblage: string | null;
+  notes: string;
 }
 
 interface WEPiece {
@@ -78,7 +79,7 @@ async function patchJSON(path: string, body: unknown) {
 
 export function ProductionView({ onBack }: { onBack: () => void }) {
   const [modeAtelier, setModeAtelier] = useState(false);
-  const [poste, setPoste] = useState<'' | 'lisec' | 'bottero' | 'assemblage'>('');
+  const [poste, setPoste] = useState<'' | 'preparation' | 'lisec' | 'bottero' | 'we' | 'assemblage'>('');
   const [semaine, setSemaine] = useState(getISOWeek(new Date()));
   const [lots, setLots] = useState<Lot[]>([]);
   const [selectedLot, setSelectedLot] = useState<Lot | null>(null);
@@ -405,8 +406,8 @@ export function ProductionView({ onBack }: { onBack: () => void }) {
 // ── Mode Atelier (plein écran tactile) ───────────────────────────────
 
 function AtelierView({ lots, semaine, poste, onSelectPoste, onBack, loadLotDetail, selectedLot, setSelectedLot, onReload }: {
-  lots: Lot[]; semaine: string; poste: '' | 'lisec' | 'bottero' | 'assemblage';
-  onSelectPoste: (p: '' | 'lisec' | 'bottero' | 'assemblage') => void;
+  lots: Lot[]; semaine: string; poste: '' | 'preparation' | 'lisec' | 'bottero' | 'we' | 'assemblage';
+  onSelectPoste: (p: '' | 'preparation' | 'lisec' | 'bottero' | 'we' | 'assemblage') => void;
   onBack: () => void;
   loadLotDetail: (lot: Lot) => void; selectedLot: Lot | null;
   setSelectedLot: (l: Lot | null) => void;
@@ -423,8 +424,10 @@ function AtelierView({ lots, semaine, poste, onSelectPoste, onBack, loadLotDetai
         <h1 className="text-4xl font-black text-white">ISULA VITRAGE</h1>
         <p className="text-xl text-gray-400">{semaine}</p>
         <div className="grid grid-cols-1 gap-6 w-full max-w-md px-8">
-          {([['lisec', 'COUPE LISEC', 'bg-blue-700 hover:bg-blue-600'],
+          {([['preparation', 'PREPARATION PLAQUES', 'bg-cyan-700 hover:bg-cyan-600'],
+             ['lisec', 'COUPE LISEC', 'bg-blue-700 hover:bg-blue-600'],
              ['bottero', 'COUPE BOTTERO', 'bg-green-700 hover:bg-green-600'],
+             ['we', 'COUPE INTERCALAIRE', 'bg-amber-700 hover:bg-amber-600'],
              ['assemblage', 'ASSEMBLAGE', 'bg-purple-700 hover:bg-purple-600']] as const).map(([id, label, cls]) => (
             <button key={id} onClick={() => onSelectPoste(id)}
               className={`${cls} text-white text-2xl font-bold py-8 rounded-2xl transition-colors shadow-lg active:scale-95`}>
@@ -470,7 +473,259 @@ function AtelierView({ lots, semaine, poste, onSelectPoste, onBack, loadLotDetai
     );
   }
 
-  // ── Construire toutes les plaques ──
+  const wePieces = selectedLot.we_pieces ?? [];
+
+  // ── Poste PREPARATION ──
+  if (poste === 'preparation') {
+    const plateCounts = new Map<string, Set<number>>();
+    for (const p of pieces) {
+      if (p.plaque_no > 0) {
+        const set = plateCounts.get(p.material) || new Set();
+        set.add(p.plaque_no);
+        plateCounts.set(p.material, set);
+      }
+    }
+    const materials = [...plateCounts.entries()].map(([mat, plaques]) => ({ material: mat, count: plaques.size }));
+    const savedPrep = selectedLot.preparation || {};
+
+    return (
+      <div className="fixed inset-0 bg-[#0a0c10] flex flex-col z-50">
+        <div className="flex items-center gap-4 p-4 bg-[#14161d] border-b border-[#2a2d35]">
+          <button onClick={() => setSelectedLot(null)} className="text-gray-400 hover:text-white text-lg px-3 py-2">← Lots</button>
+          <span className="text-xl font-bold text-white flex-1">{selectedLot.reference}</span>
+          <span className="text-base text-cyan-400 font-bold">PREPARATION</span>
+        </div>
+        <div className="flex-1 overflow-auto p-6 max-w-2xl mx-auto w-full">
+          <h2 className="text-2xl font-black text-white mb-6">PLAQUES A PREPARER</h2>
+          {materials.map(m => {
+            const prep = savedPrep[m.material];
+            const isReady = prep?.ready ?? false;
+            return (
+              <div key={m.material} className={`flex items-center gap-4 p-5 rounded-2xl border mb-3 transition-colors ${
+                isReady ? 'bg-green-900/20 border-green-500/30' : 'bg-[#181a20] border-[#2a2d35]'}`}>
+                <button onClick={async () => {
+                  const newPrep = { ...savedPrep, [m.material]: { needed: m.count, ready: !isReady, nc_qty: prep?.nc_qty ?? 0, nc_notes: prep?.nc_notes ?? '' } };
+                  await patchJSON(`/api/production/lots/${selectedLot.id}/preparation`, { preparation: newPrep });
+                  onReload();
+                }} className={`w-12 h-12 rounded-xl border-2 flex items-center justify-center text-2xl transition-colors active:scale-90 ${
+                  isReady ? 'bg-green-600 border-green-400 text-white' : 'bg-[#14161d] border-gray-600 text-gray-600'}`}>
+                  {isReady ? '✓' : ''}
+                </button>
+                <div className="flex-1">
+                  <div className="text-xl font-bold text-white">{m.count} plaque{m.count > 1 ? 's' : ''}</div>
+                  <div className="text-lg text-amber-400">{m.material}</div>
+                  <div className="text-sm text-gray-500">3210 x 2550</div>
+                </div>
+                {isReady && <span className="text-green-400 text-2xl font-bold">PRET</span>}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  // ── Poste COUPE WE ──
+  if (poste === 'we') {
+    const [weMode, setWeMode] = useState<'barres' | 'liste'>('barres');
+    const [weBarIdx, setWeBarIdx] = useState(0);
+
+    const barres = new Map<number, WEPiece[]>();
+    for (const wp of wePieces) {
+      const arr = barres.get(wp.barre_no) || [];
+      arr.push(wp);
+      barres.set(wp.barre_no, arr);
+    }
+    const barreNos = [...barres.keys()].sort((a, b) => a - b);
+    const bIdx = Math.min(weBarIdx, Math.max(0, barreNos.length - 1));
+    const currentBarre = barreNos[bIdx];
+    const barrePieces = barres.get(currentBarre) || [];
+    const allBarreCut = barrePieces.every(p => p.statut === 'coupe');
+
+    return (
+      <div className="fixed inset-0 bg-[#0a0c10] flex flex-col z-50">
+        <div className="flex items-center gap-4 p-4 bg-[#14161d] border-b border-[#2a2d35]">
+          <button onClick={() => setSelectedLot(null)} className="text-gray-400 hover:text-white text-lg px-3 py-2">← Lots</button>
+          <span className="text-xl font-bold text-white flex-1">{selectedLot.reference}</span>
+          <div className="flex gap-2">
+            <button onClick={() => setWeMode('barres')} className={`px-3 py-1 rounded text-sm ${weMode === 'barres' ? 'bg-amber-600 text-white' : 'bg-gray-800 text-gray-400'}`}>Barre/barre</button>
+            <button onClick={() => setWeMode('liste')} className={`px-3 py-1 rounded text-sm ${weMode === 'liste' ? 'bg-amber-600 text-white' : 'bg-gray-800 text-gray-400'}`}>Liste</button>
+          </div>
+        </div>
+
+        {weMode === 'barres' && barreNos.length > 0 ? (
+          <div className="flex-1 flex flex-col">
+            <div className="flex-1 flex items-center gap-2 px-2">
+              <button onClick={() => setWeBarIdx(Math.max(0, bIdx - 1))} disabled={bIdx === 0}
+                className="text-6xl text-white hover:text-amber-400 disabled:text-gray-800 px-2 select-none active:scale-90 shrink-0">◀</button>
+              <div className="flex-1 flex flex-col items-center gap-4">
+                <div className="text-center">
+                  <div className="text-3xl font-black text-white">Barre {currentBarre}</div>
+                  <div className="text-lg text-amber-400">{barrePieces[0]?.epaisseur}mm — {barrePieces[0]?.couleur}</div>
+                  <div className="text-base text-gray-500">{bIdx + 1} / {barreNos.length} — {barrePieces.length} coupes</div>
+                </div>
+                <div className="w-full max-w-xl">
+                  <table className="w-full text-base">
+                    <thead><tr className="text-gray-400 border-b border-gray-700">
+                      <th className="text-left py-2 px-2">N</th>
+                      <th className="text-left py-2 px-2">Reference</th>
+                      <th className="text-left py-2 px-2">Cote</th>
+                      <th className="text-right py-2 px-2">Longueur</th>
+                      <th className="text-center py-2 px-2">Statut</th>
+                    </tr></thead>
+                    <tbody>
+                      {barrePieces.map((wp, i) => (
+                        <tr key={wp.id} className="border-b border-gray-800">
+                          <td className="py-2 px-2 text-amber-400 font-bold">{i + 1}</td>
+                          <td className="py-2 px-2 text-white">{wp.vitrage_ref}</td>
+                          <td className="py-2 px-2 text-gray-300">{wp.cote}</td>
+                          <td className="py-2 px-2 text-white text-right font-mono text-lg">{wp.longueur} mm</td>
+                          <td className="py-2 px-2 text-center">
+                            {wp.statut === 'coupe' ? (
+                              <span className="text-green-400 font-bold">✓</span>
+                            ) : (
+                              <button onClick={async () => {
+                                await patchJSON(`/api/production/we/${wp.id}`, { statut: 'coupe', operateur: '' });
+                                onReload();
+                              }} className="px-3 py-1 bg-amber-600 hover:bg-amber-500 text-white text-sm rounded active:scale-95">
+                                Couper
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <button onClick={() => setWeBarIdx(Math.min(barreNos.length - 1, bIdx + 1))} disabled={bIdx >= barreNos.length - 1}
+                className="text-6xl text-white hover:text-amber-400 disabled:text-gray-800 px-2 select-none active:scale-90 shrink-0">▶</button>
+            </div>
+            <div className="p-4 bg-[#14161d] border-t border-[#2a2d35] flex justify-center gap-6">
+              {!allBarreCut && (
+                <button onClick={async () => {
+                  for (const wp of barrePieces) {
+                    if (wp.statut !== 'coupe') await patchJSON(`/api/production/we/${wp.id}`, { statut: 'coupe', operateur: '' });
+                  }
+                  onReload();
+                }} className="px-12 py-5 rounded-2xl text-xl font-black bg-amber-600 hover:bg-amber-500 text-white shadow-lg active:scale-95">
+                  TOUTE LA BARRE COUPEE
+                </button>
+              )}
+              {allBarreCut && bIdx < barreNos.length - 1 && (
+                <button onClick={() => setWeBarIdx(bIdx + 1)}
+                  className="px-12 py-5 rounded-2xl text-xl font-black bg-green-600 hover:bg-green-500 text-white shadow-lg active:scale-95">
+                  ✓ SUIVANTE ▶
+                </button>
+              )}
+            </div>
+          </div>
+        ) : weMode === 'liste' ? (
+          <div className="flex-1 overflow-auto p-4">
+            <table className="w-full text-sm">
+              <thead><tr className="text-gray-400 border-b border-[#2a2d35]">
+                <th className="text-left py-2 px-2">Barre</th>
+                <th className="text-left py-2 px-2">Reference</th>
+                <th className="text-right py-2 px-2">Longueur</th>
+                <th className="text-left py-2 px-2">Cote</th>
+                <th className="text-left py-2 px-2">Ep.</th>
+                <th className="text-center py-2 px-2">Statut</th>
+              </tr></thead>
+              <tbody>
+                {wePieces.map(wp => (
+                  <tr key={wp.id} className="border-b border-gray-800">
+                    <td className="py-1 px-2 text-white font-bold">B{wp.barre_no}</td>
+                    <td className="py-1 px-2 text-gray-300">{wp.vitrage_ref}</td>
+                    <td className="py-1 px-2 text-white text-right font-mono">{wp.longueur}</td>
+                    <td className="py-1 px-2 text-gray-400">{wp.cote}</td>
+                    <td className="py-1 px-2 text-gray-400">{wp.epaisseur}mm</td>
+                    <td className="py-1 px-2 text-center">
+                      {wp.statut === 'coupe' ? <span className="text-green-400">✓</span> : (
+                        <button onClick={async () => {
+                          await patchJSON(`/api/production/we/${wp.id}`, { statut: 'coupe', operateur: '' });
+                          onReload();
+                        }} className="px-2 py-1 bg-amber-600 text-white text-xs rounded active:scale-95">Couper</button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="text-gray-500 text-xl text-center py-20">Aucune coupe WE dans ce lot</p>
+        )}
+      </div>
+    );
+  }
+
+  // ── Poste ASSEMBLAGE ──
+  if (poste === 'assemblage') {
+    const vitrageGroups = new Map<string, Piece[]>();
+    for (const p of pieces) {
+      const key = `${p.vitrage_ref}`;
+      const arr = vitrageGroups.get(key) || [];
+      arr.push(p);
+      vitrageGroups.set(key, arr);
+    }
+
+    const vitrages = [...vitrageGroups.entries()].map(([ref, pcs]) => {
+      const allAssembled = pcs.every(p => p.statut === 'assemble');
+      const allCut = pcs.every(p => p.statut === 'coupe' || p.statut === 'assemble');
+      return { ref, pieces: pcs, allAssembled, allCut, commande: pcs[0]?.commande_ref || '' };
+    });
+
+    const totalVitrages = vitrages.length;
+    const doneVitrages = vitrages.filter(v => v.allAssembled).length;
+
+    return (
+      <div className="fixed inset-0 bg-[#0a0c10] flex flex-col z-50">
+        <div className="flex items-center gap-4 p-4 bg-[#14161d] border-b border-[#2a2d35]">
+          <button onClick={() => setSelectedLot(null)} className="text-gray-400 hover:text-white text-lg px-3 py-2">← Lots</button>
+          <span className="text-xl font-bold text-white flex-1">{selectedLot.reference}</span>
+          <span className="text-lg text-purple-400 font-bold">{doneVitrages}/{totalVitrages} assembles</span>
+        </div>
+        <div className="flex-1 overflow-auto p-4 max-w-2xl mx-auto w-full">
+          <h2 className="text-2xl font-black text-white mb-4">VITRAGES A ASSEMBLER</h2>
+          <div className="space-y-2">
+            {vitrages.map(v => (
+              <div key={v.ref} className={`p-4 rounded-xl border transition-colors ${
+                v.allAssembled ? 'bg-green-900/20 border-green-500/30' :
+                v.allCut ? 'bg-[#181a20] border-amber-500/30' : 'bg-[#181a20] border-[#2a2d35] opacity-50'}`}>
+                <div className="flex items-center gap-4">
+                  <div className="flex-1">
+                    <div className="text-lg font-bold text-white">{v.ref}</div>
+                    <div className="text-sm text-gray-400">{v.commande} — {v.pieces.length} verres ({v.pieces.map(p => p.face).join('+')})</div>
+                    <div className="text-xs text-gray-500">
+                      {v.pieces.map(p => `${p.material} ${p.largeur}x${p.hauteur}`).join(' + ')}
+                    </div>
+                  </div>
+                  {v.allAssembled ? (
+                    <span className="text-green-400 text-2xl font-bold">✓ ASSEMBLE</span>
+                  ) : v.allCut ? (
+                    <button onClick={async () => {
+                      for (const p of v.pieces) {
+                        if (p.statut !== 'assemble') {
+                          await patchJSON(`/api/production/pieces/${p.id}`, { statut: 'assemble', operateur: '' });
+                        }
+                      }
+                      onReload();
+                    }} className="px-6 py-3 bg-purple-600 hover:bg-purple-500 text-white text-base font-bold rounded-xl active:scale-95 shadow-lg">
+                      ASSEMBLER
+                    </button>
+                  ) : (
+                    <span className="text-gray-500 text-sm">Verres non coupes</span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Construire toutes les plaques (postes LISEC/BOTTERO) ──
   const glassOptim = selectedLot.glass_optim || [];
   const allPlatesRaw: OptimPlate[] = [];
   for (const r of glassOptim) {
