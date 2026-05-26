@@ -200,7 +200,10 @@ export function PosteCoupe({ onBack }: Props) {
   const handleSendToAtelier = useCallback((commandeId: string) => {
     const c = commandes.find(x => x.id === commandeId);
     if (!c) return;
-    upsert({ ...c, statut: 'envoyee' });
+    const updated = { ...c, statut: 'envoyee' as const };
+    upsert(updated);
+    // Sync to global dashboard (fire-and-forget)
+    syncCoupeToGlobal(updated);
   }, [commandes, upsert]);
 
   // ── Update cut statut in a commande ──
@@ -228,13 +231,16 @@ export function PosteCoupe({ onBack }: Props) {
       bars: newBars,
     };
 
-    upsert({
+    const updated = {
       ...c,
       machines: {
         ...c.machines,
         [machine]: { ...md, fstlineJob: newJob },
       },
-    });
+    };
+    upsert(updated);
+    // Sync to global dashboard (fire-and-forget)
+    syncCoupeToGlobal(updated);
   }, [commandes, upsert, user]);
 
   // ── Mark entire bar as cut ──
@@ -258,13 +264,16 @@ export function PosteCoupe({ onBack }: Props) {
     });
 
     const newJob: FstJob = { ...md.fstlineJob, bars: newBars };
-    upsert({
+    const updated = {
       ...c,
       machines: {
         ...c.machines,
         [machine]: { ...md, fstlineJob: newJob },
       },
-    });
+    };
+    upsert(updated);
+    // Sync to global dashboard (fire-and-forget)
+    syncCoupeToGlobal(updated);
   }, [commandes, upsert, user]);
 
   // ── Mode Atelier ──
