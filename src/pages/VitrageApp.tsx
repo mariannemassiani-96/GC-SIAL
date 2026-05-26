@@ -44,6 +44,7 @@ function Dashboard({ commandes, onSelect, onNew, onDelete, onBatch }: {
   onBatch: (ids: string[]) => void;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [filtre, setFiltre] = useState<CommandeStatut | 'all'>('all');
   const stats = useMemo(() => {
     const s = { total: commandes.length, en_attente: 0, en_cours: 0, terminee: 0, livree: 0, totalVitrages: 0 };
     for (const c of commandes) { s[c.statut]++; s.totalVitrages += c.vitrages.length; }
@@ -98,6 +99,17 @@ function Dashboard({ commandes, onSelect, onNew, onDelete, onBatch }: {
         ))}
       </div>
 
+      {/* Filtre statut */}
+      <div className="flex gap-2">
+        {(['all', 'en_attente', 'en_cours', 'terminee', 'livree'] as const).map(s => (
+          <button key={s} onClick={() => setFiltre(s)}
+            className={`text-xs px-3 py-1 rounded transition-colors ${filtre === s
+              ? 'bg-blue-600 text-white' : 'bg-[#181a20] text-gray-400 hover:text-white border border-[#2a2d35]'}`}>
+            {s === 'all' ? 'Toutes' : STATUT_LABELS[s]} ({s === 'all' ? commandes.length : commandes.filter(c => c.statut === s).length})
+          </button>
+        ))}
+      </div>
+
       {commandes.length === 0 ? (
         <p className="text-gray-500 text-sm text-center py-12">Aucune commande. Cliquez sur "+ Nouvelle commande" pour commencer.</p>
       ) : (
@@ -111,14 +123,18 @@ function Dashboard({ commandes, onSelect, onNew, onDelete, onBatch }: {
                 </th>
                 <th className="text-left py-2 px-3">Reference</th>
                 <th className="text-left py-2 px-3">Client</th>
-                <th className="text-left py-2 px-3">Date</th>
+                <th className="text-left py-2 px-2">Fab.</th>
+                <th className="text-left py-2 px-2">Livr.</th>
                 <th className="text-left py-2 px-3">Statut</th>
                 <th className="text-right py-2 px-3">Vitrages</th>
                 <th className="text-right py-2 px-3"></th>
               </tr>
             </thead>
             <tbody>
-              {[...commandes].sort((a, b) => b.dateCreation.localeCompare(a.dateCreation)).map(c => (
+              {[...commandes]
+                .filter(c => filtre === 'all' || c.statut === filtre)
+                .sort((a, b) => b.dateCreation.localeCompare(a.dateCreation))
+                .map(c => (
                 <tr key={c.id} className={`border-b border-[#1e2028] hover:bg-[#1e2028] cursor-pointer ${selected.has(c.id) ? 'bg-amber-600/10' : ''}`}
                   onClick={() => onSelect(c.id)}>
                   <td className="py-2.5 px-2" onClick={e => toggleSelect(c.id, e)}>
@@ -126,7 +142,8 @@ function Dashboard({ commandes, onSelect, onNew, onDelete, onBatch }: {
                   </td>
                   <td className="py-2.5 px-3 text-white font-mono">{c.reference}</td>
                   <td className="py-2.5 px-3 text-gray-300">{c.client}</td>
-                  <td className="py-2.5 px-3 text-gray-400">{c.dateCreation}</td>
+                  <td className="py-2.5 px-2 text-xs text-blue-400">{c.semaineFabrication || '—'}</td>
+                  <td className="py-2.5 px-2 text-xs text-green-400">{c.semaineLivraison || '—'}</td>
                   <td className="py-2.5 px-3">
                     <span className={`text-xs px-2 py-0.5 rounded border ${STATUT_COLORS[c.statut]}`}>
                       {STATUT_LABELS[c.statut]}
@@ -358,8 +375,16 @@ function TabVitrages({ vitrages, onUpdate }: { vitrages: Vitrage[]; onUpdate: (v
 function TabGlass({ results }: { results: GlassOptimResult[] }) {
   if (results.length === 0) return <p className="text-gray-500 text-sm">Importez des vitrages pour voir l'optimisation.</p>;
 
+  const totalInterdit = results.reduce((s, r) => s + r.plates.filter(p => p.hasInterdit).length, 0);
+
   return (
     <div className="space-y-6">
+      <div className="flex items-center gap-4 text-xs">
+        <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-green-500/30 border border-green-500/50" /> Stockable (&gt;300mm)</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-amber-500/30 border border-amber-500/50" /> Surveiller (250-300)</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-red-500/30 border border-red-500/50" /> Interdit (50-250)</span>
+        {totalInterdit > 0 && <span className="text-red-400 font-semibold ml-4">{totalInterdit} plaque(s) avec chutes interdites</span>}
+      </div>
       {results.map((r, i) => (
         <div key={i} className="bg-[#181a20] rounded-lg p-4 border border-[#2a2d35]">
           <div className="flex items-center justify-between mb-3">

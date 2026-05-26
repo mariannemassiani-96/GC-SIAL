@@ -18,6 +18,11 @@ interface FreeRect {
 }
 
 /** Extracts two glass pieces per vitrage: one EXT (outer glass) and one INT (inner glass). */
+function hasCoating(material: string): boolean {
+  const m = material.toLowerCase();
+  return m.includes('fe') || m.includes('sp') || m.includes('cool') || m.includes('solar');
+}
+
 export function extractGlassPieces(vitrages: Vitrage[]): GlassPiece[] {
   const pieces: GlassPiece[] = [];
   for (const v of vitrages) {
@@ -28,6 +33,7 @@ export function extractGlassPieces(vitrages: Vitrage[]): GlassPiece[] {
       height: v.hauteur,
       material: v.outerGlass,
       face: 'EXT',
+      noRotation: hasCoating(v.outerGlass),
     });
     pieces.push({
       vitrageId: v.id,
@@ -36,6 +42,7 @@ export function extractGlassPieces(vitrages: Vitrage[]): GlassPiece[] {
       height: v.hauteur,
       material: v.innerGlass,
       face: 'INT',
+      noRotation: hasCoating(v.innerGlass),
     });
   }
   return pieces;
@@ -45,6 +52,7 @@ function findBestFit(
   freeRects: FreeRect[],
   pw: number,
   ph: number,
+  noRotation = false,
 ): { rectIndex: number; rotated: boolean } | null {
   let bestIndex = -1;
   let bestRotated = false;
@@ -54,7 +62,7 @@ function findBestFit(
   for (let i = 0; i < freeRects.length; i++) {
     const r = freeRects[i];
 
-    for (const rot of [false, true]) {
+    for (const rot of noRotation ? [false] : [false, true]) {
       const w = rot ? ph : pw;
       const h = rot ? pw : ph;
 
@@ -149,7 +157,7 @@ function packPlate(
     const pw = piece.width + cuttingGap;
     const ph = piece.height + cuttingGap;
 
-    const fit = findBestFit(freeRects, pw, ph);
+    const fit = findBestFit(freeRects, pw, ph, piece.noRotation);
     if (!fit) {
       remaining.push(piece);
       continue;

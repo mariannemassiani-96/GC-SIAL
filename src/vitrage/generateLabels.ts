@@ -119,6 +119,7 @@ function splitVitrages(vitrages: Vitrage[]): SplitLabel[] {
 function drawSplitLabel(
   page: PDFPage, label: SplitLabel, slot: number, commandeLabel: string,
   font: PDFFont, bold: PDFFont, settings: AverySettings,
+  qrImg?: Awaited<ReturnType<PDFDocument['embedPng']>> | null,
 ) {
   const { x, y } = labelOrigin(slot);
   const padL = settings.paddingLeft * MM;
@@ -129,9 +130,11 @@ function drawSplitLabel(
   let ly = y + LABEL_H - padT;
   const faceColor = label.face === 'EXT' ? rgb(0.8, 0, 0) : rgb(0, 0.2, 0.8);
 
+  if (qrImg) page.drawImage(qrImg, { x: x + LABEL_W - settings.paddingRight * MM - QR_SIZE, y: y + LABEL_H - padT - QR_SIZE, width: QR_SIZE, height: QR_SIZE });
+
   drawText(page, 'ISULA', lx, ly - 8, bold, 7);
   drawText(page, `[${label.face}]`, lx + maxW * 0.5, ly - 8, bold, 8, faceColor);
-  drawText(page, v.variante, lx + maxW * 0.85, ly - 8, bold, 7, rgb(0.5, 0, 0));
+  drawText(page, v.variante, lx + maxW * 0.75, ly - 8, bold, 7, rgb(0.5, 0, 0));
   ly -= 12;
   drawText(page, commandeLabel, lx, ly - 6, bold, 6, rgb(0, 0, 0), maxW);
   ly -= 9;
@@ -151,13 +154,20 @@ export async function generateLabelsB(
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
   const labels = splitVitrages(vitrages);
+  const qrCache = new Map<string, Awaited<ReturnType<typeof doc.embedPng>>>();
   const totalPages = Math.ceil(labels.length / PER_PAGE);
   for (let pi = 0; pi < totalPages; pi++) {
     const page = doc.addPage([A4_W, A4_H]);
     for (let s = 0; s < PER_PAGE; s++) {
       const li = pi * PER_PAGE + s;
       if (li >= labels.length) break;
-      drawSplitLabel(page, labels[li], s, commandeLabel, font, bold, settings);
+      const l = labels[li];
+      const qrKey = `${l.vitrage.reference}|${l.face}`;
+      if (!qrCache.has(qrKey)) {
+        const img = await embedQR(doc, `ISULA|${commandeLabel}|${l.vitrage.reference}|${l.face}|${l.vitrage.largeur}x${l.vitrage.hauteur}`);
+        if (img) qrCache.set(qrKey, img);
+      }
+      drawSplitLabel(page, l, s, commandeLabel, font, bold, settings, qrCache.get(qrKey));
     }
   }
   const bytes = await doc.save();
@@ -226,6 +236,7 @@ export async function generateLabelsC(
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
   const labels = buildCutOrderLabels(vitrages, plates);
+  const qrCache = new Map<string, Awaited<ReturnType<typeof doc.embedPng>>>();
   const totalPages = Math.ceil(labels.length / PER_PAGE);
   for (let pi = 0; pi < totalPages; pi++) {
     const page = doc.addPage([A4_W, A4_H]);
@@ -236,7 +247,13 @@ export async function generateLabelsC(
       if (label.type === 'plaque' && label.plate) {
         drawPlateSeparator(page, label.plate, s, bold);
       } else if (label.splitLabel) {
-        drawSplitLabel(page, label.splitLabel, s, commandeLabel, font, bold, settings);
+        const v = label.splitLabel.vitrage;
+        const qrKey = `${v.reference}|${label.splitLabel.face}`;
+        if (!qrCache.has(qrKey)) {
+          const img = await embedQR(doc, `ISULA|${commandeLabel}|${v.reference}|${label.splitLabel.face}|${v.largeur}x${v.hauteur}`);
+          if (img) qrCache.set(qrKey, img);
+        }
+        drawSplitLabel(page, label.splitLabel, s, commandeLabel, font, bold, settings, qrCache.get(qrKey));
       }
     }
   }
