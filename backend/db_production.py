@@ -5,12 +5,15 @@ from db import get_conn
 def create_lot(data: dict):
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute("""
-            INSERT INTO production_lots (id, reference, semaine, commande_ids, commande_refs, total_pieces, total_we, notes)
+            INSERT INTO production_lots (id, reference, semaine, commande_ids, commande_refs,
+                total_pieces, total_we, notes, glass_optim, we_optim)
             VALUES (%(id)s, %(reference)s, %(semaine)s, %(commande_ids)s::jsonb, %(commande_refs)s::jsonb,
-                    %(total_pieces)s, %(total_we)s, %(notes)s)
+                    %(total_pieces)s, %(total_we)s, %(notes)s, %(glass_optim)s::jsonb, %(we_optim)s::jsonb)
         """, {**data,
               'commande_ids': json.dumps(data.get('commande_ids', [])),
-              'commande_refs': json.dumps(data.get('commande_refs', []))})
+              'commande_refs': json.dumps(data.get('commande_refs', [])),
+              'glass_optim': json.dumps(data.get('glass_optim', [])),
+              'we_optim': json.dumps(data.get('we_optim', []))})
         conn.commit()
 
 
@@ -97,6 +100,14 @@ def update_piece_statut(piece_id: str, statut: str, operateur: str = ''):
         conn.commit()
 
 
+def update_piece_material(piece_id: str, material: str, composition: str, notes: str):
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            "UPDATE production_pieces SET material = %s, composition = %s, notes = %s WHERE id = %s",
+            (material, composition, notes, piece_id))
+        conn.commit()
+
+
 def update_we_statut(piece_id: str, statut: str, operateur: str = ''):
     with get_conn() as conn, conn.cursor() as cur:
         extra = ", date_coupe = NOW()" if statut == 'coupe' else ""
@@ -117,6 +128,37 @@ def update_lot_matieres(lot_id: str, matieres: dict):
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute("UPDATE production_lots SET lot_matieres = %s::jsonb WHERE id = %s",
                     (json.dumps(matieres), lot_id))
+        conn.commit()
+
+
+def update_preparation(lot_id: str, preparation: dict):
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute("UPDATE production_lots SET preparation = %s::jsonb WHERE id = %s",
+                    (json.dumps(preparation), lot_id))
+        conn.commit()
+
+
+def update_lot_statut(lot_id: str, statut: str):
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute("UPDATE production_lots SET statut = %s WHERE id = %s", (statut, lot_id))
+        conn.commit()
+
+
+def get_pieces_by_commande(commande_ref: str):
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute("""
+            SELECT p.*, l.reference as lot_reference, l.lot_matieres
+            FROM production_pieces p
+            JOIN production_lots l ON p.lot_id = l.id
+            WHERE p.commande_ref = %s
+            ORDER BY p.vitrage_ref, p.face
+        """, (commande_ref,))
+        return [dict(r) for r in cur.fetchall()]
+
+
+def update_piece_notes(piece_id: str, notes: str):
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute("UPDATE production_pieces SET notes = %s WHERE id = %s", (notes, piece_id))
         conn.commit()
 
 
@@ -144,4 +186,38 @@ def get_stats(lot_id: str | None = None, semaine: str | None = None):
         """.replace("AND", "WHERE" if not where else "AND"), params)
         daily = [dict(r) for r in cur.fetchall()]
 
-        return {"pieces": piece_stats, "we": we_stats, "daily_cuts": daily}
+        # Daily assemblies
+        cur.execute(f"""
+            SELECT DATE(date_assemblage) as jour, COUNT(*) as nb
+            FROM production_pieces {where} AND date_assemblage IS NOT NULL
+            GROUP BY DATE(date_assemblage) ORDER BY jour
+        """.replace("AND", "WHERE" if not where else "AND"), params)
+        daily_assemblies = [dict(r) for r in cur.fetchall()]
+
+        # Per-lot progress
+        lot_progress = []
+        lot_where = ""
+        lot_params: list = []
+        if semaine:
+            lot_where = "WHERE semaine = %s"
+            lot_params = [semaine]
+        elif lot_id:
+            lot_where = "WHERE id = %s"
+            lot_params = [lot_id]
+        cur.execute(f"SELECT id, reference, total_pieces, total_we FROM production_lots {lot_where} ORDER BY date_creation DESC", lot_params)
+        for lot_row in cur.fetchall():
+            lid = lot_row['id']
+            cur.execute("SELECT statut, COUNT(*) as nb FROM production_pieces WHERE lot_id = %s GROUP BY statut", (lid,))
+            p_stats = {r['statut']: r['nb'] for r in cur.fetchall()}
+            cur.execute("SELECT statut, COUNT(*) as nb FROM production_we WHERE lot_id = %s GROUP BY statut", (lid,))
+            w_stats = {r['statut']: r['nb'] for r in cur.fetchall()}
+            lot_progress.append({
+                'id': lid,
+                'reference': lot_row['reference'],
+                'total_pieces': lot_row['total_pieces'],
+                'total_we': lot_row['total_we'],
+                'pieces': p_stats,
+                'we': w_stats,
+            })
+
+        return {"pieces": piece_stats, "we": we_stats, "daily_cuts": daily, "daily_assemblies": daily_assemblies, "lot_progress": lot_progress}

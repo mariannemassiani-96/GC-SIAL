@@ -16,11 +16,11 @@ function normalise(name: string): string {
   return name.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[\s_\-.()/]+/g, '');
 }
 
-type Field = 'reference' | 'variante' | 'largeur' | 'hauteur' | 'dimensions' | 'composition' | 'couleur' | 'qte' | 'ug' | 'gaz';
+type Field = 'reference' | 'position' | 'largeur' | 'hauteur' | 'dimensions' | 'composition' | 'couleur' | 'qte' | 'ug' | 'gaz';
 
 const FIELD_PATTERNS: Record<Field, RegExp[]> = {
   reference: [/^code$/, /^ref/, /^proto/, /^repere/, /^designation/, /^nom/, /^piece/, /^id$/],
-  variante: [/^v$/, /^v[12]/, /^variante/],
+  position: [/^pos/, /^n°$/, /^num/],
   largeur: [/^largeur/, /^larg/, /^l$/, /^width/, /^w$/],
   hauteur: [/^hauteur/, /^haut/, /^h$/, /^height/],
   dimensions: [/^dim/, /^taille/, /^size/, /^lxh/],
@@ -91,6 +91,7 @@ function extractLotInfo(data: unknown[][]): string {
 function rowToVitrages(
   row: unknown[],
   colMap: Map<number, Field>,
+  chantier?: string,
 ): Vitrage[] {
   const get = (f: Field): string => {
     for (const [idx, field] of colMap.entries()) {
@@ -116,9 +117,9 @@ function rowToVitrages(
 
   if (largeur === 0 && hauteur === 0) return [];
 
-  const reference = refRaw;
-  const varianteRaw = get('variante').toUpperCase();
-  const variante: 'V1' | 'V2' = varianteRaw === 'V2' ? 'V2' : 'V1';
+  const position = get('position');
+  const chantierLabel = chantier ? chantier.replace(/\s+/g, '_') : '';
+  const reference = position && chantierLabel ? `${position}_${chantierLabel}` : position ? `${position}_${refRaw}` : refRaw;
   const couleur = get('couleur') || '012 (Noir)';
   const { outer, inner, epaisseur } = compositionRaw ? parseVitrageSpec(compositionRaw) : { outer: '', inner: '', epaisseur: 10 };
   const qte = parseInt(get('qte')) || 1;
@@ -128,7 +129,7 @@ function rowToVitrages(
   const result: Vitrage[] = [];
   for (let i = 0; i < qte; i++) {
     result.push({
-      id: uuid(), reference, variante, largeur, hauteur,
+      id: uuid(), reference, variante: 'V1', largeur, hauteur,
       composition: compositionRaw, intercalaireEpaisseur: epaisseur,
       intercalaireCouleur: couleur, outerGlass: outer, innerGlass: inner,
       ug, gazType,
@@ -137,7 +138,7 @@ function rowToVitrages(
   return result;
 }
 
-export async function parseExcelFile(file: File): Promise<ParseResult> {
+export async function parseExcelFile(file: File, chantier?: string): Promise<ParseResult> {
   const buffer = await file.arrayBuffer();
   const wb = XLSX.read(buffer, { type: 'array' });
   const sheetName = wb.SheetNames[0];
@@ -184,7 +185,7 @@ export async function parseExcelFile(file: File): Promise<ParseResult> {
     }
 
     dataRows++;
-    const vs = rowToVitrages(row, colMap);
+    const vs = rowToVitrages(row, colMap, chantier);
     if (vs.length > 0) vitrages.push(...vs);
     else skipped++;
   }

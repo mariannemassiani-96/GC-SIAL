@@ -258,7 +258,10 @@ def api_delete_lot(lot_id: str):
 
 @app.patch("/api/production/pieces/{piece_id}")
 def api_update_piece(piece_id: str, data: dict = Body(...)):
-    dbp.update_piece_statut(piece_id, data.get('statut', ''), data.get('operateur', ''))
+    if 'material' in data:
+        dbp.update_piece_material(piece_id, data['material'], data.get('composition', ''), data.get('notes', ''))
+    if 'statut' in data:
+        dbp.update_piece_statut(piece_id, data['statut'], data.get('operateur', ''))
     return {"ok": True}
 
 
@@ -278,6 +281,28 @@ def api_update_lot_verre(lot_id: str, data: dict = Body(...)):
 def api_update_lot_matieres(lot_id: str, data: dict = Body(...)):
     dbp.update_lot_matieres(lot_id, data.get('matieres', {}))
     return {"ok": True}
+
+
+@app.patch("/api/production/lots/{lot_id}/preparation")
+def api_update_preparation(lot_id: str, data: dict = Body(...)):
+    dbp.update_preparation(lot_id, data.get('preparation', {}))
+    return {"ok": True}
+
+
+@app.patch("/api/production/lots/{lot_id}/statut")
+def api_update_lot_statut(lot_id: str, data: dict = Body(...)):
+    dbp.update_lot_statut(lot_id, data.get('statut', ''))
+    return {"ok": True}
+
+
+@app.get("/api/production/pieces/by-commande/{commande_ref}")
+def api_pieces_by_commande(commande_ref: str):
+    rows = dbp.get_pieces_by_commande(commande_ref)
+    for r in rows:
+        for k in list(r.keys()):
+            if hasattr(r[k], 'isoformat'):
+                r[k] = r[k].isoformat()
+    return rows
 
 
 @app.get("/api/production/stats")

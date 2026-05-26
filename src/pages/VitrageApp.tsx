@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import type {
   Commande, Vitrage, AverySettings, WESettings, GlassSettings,
-  CommandeStatut, WEGroupe, GlassOptimResult, OptimizedPlate, LotFabrication,
+  CommandeStatut, WEGroupe, GlassOptimResult, OptimizedPlate,
 } from '../vitrage/types';
 import {
   EMPTY_LOT, DEFAULT_AVERY, DEFAULT_WE, DEFAULT_GLASS, STATUT_LABELS, STATUT_COLORS,
@@ -18,8 +18,11 @@ import { generateEtiquettesCE, generateEtiquettesAtelier, generateEtiquettesPost
 import { generateOptimVerrePDF } from '../vitrage/generateOptimPDF';
 import {
   fetchCommandes, insertCommande, patchCommande, removeCommande,
-  fetchSettings, saveSettings, type Settings,
+  fetchSettings, type Settings,
+  fetchGlassProducts, upsertGlassProduct, deleteGlassProduct,
+  fetchStockPlates, upsertStockPlate, deleteStockPlate,
 } from '../vitrage/store';
+import type { GlassProduct, StockPlate } from '../vitrage/types';
 import { v4 as uuid } from 'uuid';
 
 function getISOWeek(date: Date): string {
@@ -40,12 +43,13 @@ function download(blob: Blob, name: string) {
 
 // ── Dashboard ────────────────────────────────────────────────────────
 
-function Dashboard({ commandes, onSelect, onNew, onDelete, onBatch, onProduction }: {
+function Dashboard({ commandes, onSelect, onNew, onDelete, onBatch, onProduction, onStock }: {
   commandes: Commande[];
   onSelect: (id: string) => void;
   onNew: () => void;
   onDelete: (id: string) => void;
   onBatch: (ids: string[]) => void;
+  onStock: () => void;
   onProduction: () => void;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -83,6 +87,9 @@ function Dashboard({ commandes, onSelect, onNew, onDelete, onBatch, onProduction
               Envoyer en coupe ({selected.size} cmd — {selectedVitrages} vitrages)
             </button>
           )}
+          <button onClick={onStock} className="px-4 py-2 bg-purple-700 hover:bg-purple-600 text-white text-sm rounded-lg transition-colors">
+            Catalogue & Stock
+          </button>
           <button onClick={onProduction} className="px-4 py-2 bg-green-700 hover:bg-green-600 text-white text-sm rounded-lg transition-colors">
             Production
           </button>
@@ -263,21 +270,15 @@ function useOptimization(vitrages: Vitrage[], glass: GlassSettings) {
 
 // ── Order Detail ─────────────────────────────────────────────────────
 
-const TABS = ['Import', 'Vitrages', 'Optim Verre', 'Warm Edge', 'Etiquettes', 'Lots & Tracabilite', 'Parametres'] as const;
+const TABS = ['Import', 'Vitrages', 'Tracabilite'] as const;
 
-function OrderDetail({ commande, onUpdate, onBack, avery, we, glass, onAvery, onWE, onGlass }: {
+function OrderDetail({ commande, onUpdate, onBack }: {
   commande: Commande;
   onUpdate: (patch: Partial<Commande>) => void;
   onBack: () => void;
-  avery: AverySettings; we: WESettings; glass: GlassSettings;
-  onAvery: (s: AverySettings) => void; onWE: (s: WESettings) => void; onGlass: (s: GlassSettings) => void;
 }) {
   const [tab, setTab] = useState(0);
   const c = commande;
-
-  const weResult = useMemo(() => c.vitrages.length > 0 ? optimizeWE(c.vitrages, we) : [], [c.vitrages, we]);
-  const { glassResult, loading: optimLoading, backend: usingBackend } = useOptimization(c.vitrages, glass);
-  const allPlates = useMemo(() => glassResult.flatMap(g => g.plates), [glassResult]);
 
   return (
     <div className="space-y-4">
@@ -317,21 +318,16 @@ function OrderDetail({ commande, onUpdate, onBack, avery, we, glass, onAvery, on
         ))}
       </div>
 
-      {tab === 0 && <TabImport vitrages={c.vitrages} onUpdate={v => onUpdate({ vitrages: v })} onSetRef={ref => onUpdate({ reference: ref })} />}
+      {tab === 0 && <TabImport vitrages={c.vitrages} onUpdate={v => onUpdate({ vitrages: v })} onSetRef={ref => onUpdate({ reference: ref })} chantier={c.client} />}
       {tab === 1 && <TabVitrages vitrages={c.vitrages} onUpdate={v => onUpdate({ vitrages: v })} />}
-      {tab === 2 && <TabGlass results={glassResult} loading={optimLoading} backend={usingBackend} commandeLabel={`${c.reference} — ${c.client}`} />}
-      {tab === 3 && <TabWE results={weResult} commandeLabel={`${c.reference} — ${c.client}`} we={we} />}
-      {tab === 4 && <TabExport vitrages={c.vitrages} allPlates={allPlates} weResult={weResult}
-        commandeLabel={`${c.reference} — ${c.client}`} commande={c} avery={avery} we={we} />}
-      {tab === 5 && <TabLots lot={c.lotFabrication ?? { ...EMPTY_LOT }} onUpdate={l => onUpdate({ lotFabrication: l })} />}
-      {tab === 6 && <TabSettings avery={avery} we={we} glass={glass} onAvery={onAvery} onWE={onWE} onGlass={onGlass} />}
+      {tab === 2 && <TabTracabilite commandeRef={c.reference} />}
     </div>
   );
 }
 
 // ── Tab: Import ──────────────────────────────────────────────────────
 
-function TabImport({ vitrages, onUpdate, onSetRef }: { vitrages: Vitrage[]; onUpdate: (v: Vitrage[]) => void; onSetRef?: (ref: string) => void }) {
+function TabImport({ vitrages, onUpdate, onSetRef, chantier }: { vitrages: Vitrage[]; onUpdate: (v: Vitrage[]) => void; onSetRef?: (ref: string) => void; chantier?: string }) {
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
   const [loading, setLoading] = useState(false);
@@ -368,7 +364,7 @@ function TabImport({ vitrages, onUpdate, onSetRef }: { vitrages: Vitrage[]; onUp
         const text = await file.text();
         result = parseCSVText(text);
       } else {
-        result = await parseExcelFile(file);
+        result = await parseExcelFile(file, chantier);
       }
       handleResult(result, file.name);
     } catch (err) {
@@ -467,6 +463,124 @@ function TabVitrages({ vitrages, onUpdate }: { vitrages: Vitrage[]; onUpdate: (v
   );
 }
 
+// ── Tab: Tracabilite ────────────────────────────────────────────────
+
+interface TracaPiece {
+  id: string;
+  commande_ref: string;
+  vitrage_ref: string;
+  vitrage_id: string;
+  face: string;
+  material: string;
+  largeur: number;
+  hauteur: number;
+  lot_verre: string;
+  date_coupe: string | null;
+  date_assemblage: string | null;
+  lot_reference: string;
+  lot_matieres: Record<string, string> | null;
+}
+
+function TabTracabilite({ commandeRef }: { commandeRef: string }) {
+  const [pieces, setPieces] = useState<TracaPiece[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!commandeRef) return;
+    setLoading(true);
+    setError('');
+    const API_URL = import.meta.env.VITE_ISULA_API_URL as string || '';
+    fetch(`${API_URL}/api/production/pieces/by-commande/${encodeURIComponent(commandeRef)}`)
+      .then(res => {
+        if (!res.ok) throw new Error(`${res.status}`);
+        return res.json();
+      })
+      .then((data: TracaPiece[]) => setPieces(data))
+      .catch(err => setError(`Erreur: ${err.message}`))
+      .finally(() => setLoading(false));
+  }, [commandeRef]);
+
+  if (loading) return <p className="text-blue-400 text-sm">Chargement de la tracabilite...</p>;
+  if (error) return <p className="text-red-400 text-sm">{error}</p>;
+  if (pieces.length === 0) return <p className="text-gray-500 text-sm">Aucune donnee de production pour cette commande. La commande doit etre dans un lot de production.</p>;
+
+  // Group by vitrage
+  const vitrageMap = new Map<string, TracaPiece[]>();
+  for (const p of pieces) {
+    const key = p.vitrage_id || p.vitrage_ref;
+    const arr = vitrageMap.get(key) || [];
+    arr.push(p);
+    vitrageMap.set(key, arr);
+  }
+
+  // Get lot_matieres from first piece that has it
+  const lotMatieres = pieces.find(p => p.lot_matieres)?.lot_matieres || null;
+
+  return (
+    <div className="space-y-4">
+      <h4 className="text-sm font-semibold text-gray-300">Tracabilite - {commandeRef}</h4>
+
+      {lotMatieres && Object.keys(lotMatieres).length > 0 && (
+        <div className="bg-[#181a20] rounded-lg p-4 border border-[#2a2d35]">
+          <div className="text-xs font-semibold text-gray-400 mb-2">Matieres du lot</div>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+            {Object.entries(lotMatieres).map(([key, val]) => (
+              <div key={key} className="text-xs">
+                <span className="text-gray-500">{key}: </span>
+                <span className="text-white">{val || '-'}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="text-gray-400 border-b border-[#2a2d35]">
+              <th className="text-left py-2 px-2">Vitrage</th>
+              <th className="text-left py-2 px-2">Face</th>
+              <th className="text-left py-2 px-2">Materiau</th>
+              <th className="text-right py-2 px-2">Dimensions</th>
+              <th className="text-left py-2 px-2">Lot verre</th>
+              <th className="text-left py-2 px-2">Date coupe</th>
+              <th className="text-left py-2 px-2">Date assemblage</th>
+              <th className="text-left py-2 px-2">Lot production</th>
+            </tr>
+          </thead>
+          <tbody>
+            {[...vitrageMap.entries()].map(([, pcs]) =>
+              pcs.map((p, i) => (
+                <tr key={p.id} className={`border-b border-[#1e2028] ${i === 0 && pcs.length > 1 ? '' : ''}`}>
+                  {i === 0 && (
+                    <td rowSpan={pcs.length} className="py-1.5 px-2 text-white font-semibold align-top">
+                      {p.vitrage_ref}
+                    </td>
+                  )}
+                  <td className={`py-1.5 px-2 ${p.face === 'EXT' ? 'text-red-400' : 'text-blue-400'}`}>{p.face}</td>
+                  <td className="py-1.5 px-2 text-gray-300">{p.material}</td>
+                  <td className="py-1.5 px-2 text-white text-right">{p.largeur}x{p.hauteur}</td>
+                  <td className="py-1.5 px-2 text-green-400">{p.lot_verre || '-'}</td>
+                  <td className="py-1.5 px-2 text-gray-300">
+                    {p.date_coupe ? new Date(p.date_coupe).toLocaleDateString('fr-FR') : '-'}
+                  </td>
+                  <td className="py-1.5 px-2 text-gray-300">
+                    {p.date_assemblage ? new Date(p.date_assemblage).toLocaleDateString('fr-FR') : '-'}
+                  </td>
+                  {i === 0 && (
+                    <td rowSpan={pcs.length} className="py-1.5 px-2 text-gray-400 align-top">{p.lot_reference}</td>
+                  )}
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 // ── Tab: Glass Optimization ──────────────────────────────────────────
 
 function TabGlass({ results, loading, backend, commandeLabel }: { results: GlassOptimResult[]; loading?: boolean; backend?: boolean; commandeLabel?: string }) {
@@ -509,54 +623,52 @@ function TabGlass({ results, loading, backend, commandeLabel }: { results: Glass
 }
 
 function PlatePreview({ plate }: { plate: OptimizedPlate }) {
-  const scale = 180 / Math.max(plate.plateWidth, plate.plateHeight);
+  const pad = 30;
+  const inner = 200;
+  const scale = inner / Math.max(plate.plateWidth, plate.plateHeight);
   const w = plate.plateWidth * scale;
   const h = plate.plateHeight * scale;
-  const remnantColors: Record<string, string> = {
-    poussiere: '#333', interdit: '#ef4444', surveiller: '#f59e0b', stockable: '#22c55e',
-  };
+  const vw = w + pad * 2;
+  const vh = h + pad * 2;
 
   return (
-    <div className={`bg-[#14161d] rounded p-3 ${plate.hasInterdit ? 'border border-red-500/50' : ''}`}>
-      <div className="text-xs text-gray-400 mb-2">
-        Plaque {plate.numero} — {plate.plateWidth}x{plate.plateHeight} — <span className="text-green-400">{plate.utilisation.toFixed(0)}%</span> — {plate.pieces.length} pcs
-        {plate.hasInterdit && <span className="text-red-400 ml-2">Chute interdite</span>}
+    <div className={`bg-white rounded p-2 ${plate.hasInterdit ? 'border border-red-500' : 'border border-gray-300'}`}>
+      <div className="text-xs text-gray-700 mb-1 font-medium">
+        Plaque {plate.numero} — {plate.plateWidth}x{plate.plateHeight} — <span className="text-blue-700 font-bold">{plate.utilisation.toFixed(0)}%</span> — {plate.pieces.length} pcs
       </div>
-      <svg viewBox={`0 0 ${w + 4} ${h + 4}`} className="w-full" style={{ maxHeight: 160 }}>
-        <rect x={2} y={2} width={w} height={h} fill="#1e2028" stroke="#333" strokeWidth={0.5} />
-        {(plate.remnants ?? []).map((r, i) => (
-          <rect key={`r${i}`} x={2 + r.x * scale} y={2 + r.y * scale}
-            width={r.w * scale} height={r.h * scale}
-            fill={remnantColors[r.classe]} opacity={0.15}
-            stroke={remnantColors[r.classe]} strokeWidth={0.3} strokeDasharray="2,1" />
-        ))}
+      <svg viewBox={`0 0 ${vw} ${vh}`} className="w-full" style={{ maxHeight: 180 }}>
+        <rect x={pad} y={pad} width={w} height={h} fill="#FFD700" stroke="#000" strokeWidth={0.8} />
         {plate.pieces.map((p, i) => {
           const pw = (p.rotated ? p.height : p.width) * scale;
           const ph = (p.rotated ? p.width : p.height) * scale;
-          const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316', '#ec4899'];
+          const rx = pad + p.x * scale;
+          const ry = pad + p.y * scale;
+          const effW = p.rotated ? p.height : p.width;
+          const effH = p.rotated ? p.width : p.height;
+          const fs = Math.min(5, pw / 12, ph / 4);
+          const fills = ['#0000CC', '#2244AA', '#0033BB', '#1155CC', '#003399', '#2266BB', '#004488', '#1144AA'];
           return (
             <g key={i}>
-              <rect x={2 + p.x * scale} y={2 + p.y * scale} width={pw} height={ph}
-                fill={colors[i % colors.length]} opacity={0.3} stroke={colors[i % colors.length]} strokeWidth={0.5} />
-              <text x={2 + p.x * scale + pw / 2} y={2 + p.y * scale + ph / 2}
-                textAnchor="middle" dominantBaseline="middle" fill="white" fontSize={Math.min(pw, ph) > 15 ? 5 : 3}>
-                {p.vitrageRef}
+              <rect x={rx} y={ry} width={pw} height={ph}
+                fill={fills[i % fills.length]} stroke="#FFD700" strokeWidth={1.5} />
+              <text x={rx + pw / 2} y={ry + ph / 2 - (fs > 2 ? fs * 0.5 : 0)}
+                textAnchor="middle" dominantBaseline="middle" fill="#FFD700" fontSize={Math.max(fs, 4)} fontWeight="bold">
+                {i + 1}
               </text>
+              {fs > 2 && <text x={rx + pw / 2} y={ry + ph / 2 + fs * 0.3}
+                textAnchor="middle" dominantBaseline="middle" fill="white" fontSize={fs * 0.8}>
+                {p.vitrageRef}
+              </text>}
+              {fs > 2.5 && <text x={rx + pw / 2} y={ry + ph / 2 + fs * 1.1}
+                textAnchor="middle" dominantBaseline="middle" fill="#aac" fontSize={fs * 0.65}>
+                {effW}x{effH}
+              </text>}
             </g>
           );
         })}
+        <text x={pad + w / 2} y={vh - 4} textAnchor="middle" fill="#000" fontSize={7} fontWeight="bold">{plate.plateWidth}</text>
+        <text x={6} y={pad + h / 2} textAnchor="middle" fill="#000" fontSize={7} fontWeight="bold" transform={`rotate(-90,6,${pad + h / 2})`}>{plate.plateHeight}</text>
       </svg>
-      {(plate.remnants ?? []).filter(r => r.classe !== 'poussiere').length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-1">
-          {(plate.remnants ?? []).filter(r => r.classe !== 'poussiere').map((r, i) => (
-            <span key={i} className={`text-[9px] px-1 rounded ${
-              r.classe === 'interdit' ? 'bg-red-500/20 text-red-400' :
-              r.classe === 'surveiller' ? 'bg-amber-500/20 text-amber-400' :
-              'bg-green-500/20 text-green-400'
-            }`}>{r.w}x{r.h}</span>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
@@ -718,97 +830,6 @@ function TabExport({ vitrages, allPlates, weResult, commandeLabel, commande, ave
   );
 }
 
-// ── Tab: Lots & Tracabilite ───────────────────────────────────────────
-
-const LOT_FIELDS: { key: keyof LotFabrication; label: string; placeholder: string }[] = [
-  { key: 'verreExt', label: 'Verre exterieur', placeholder: 'N° lot fournisseur' },
-  { key: 'verreInt', label: 'Verre interieur', placeholder: 'N° lot fournisseur' },
-  { key: 'intercalaire', label: 'Intercalaire / Warm Edge', placeholder: 'N° lot' },
-  { key: 'dessiccant', label: 'Dessiccant (tamis)', placeholder: 'N° lot + date ouverture' },
-  { key: 'masticButyl', label: 'Mastic butyl (1re barriere)', placeholder: 'N° lot' },
-  { key: 'masticPU', label: 'Mastic PU (2e barriere)', placeholder: 'N° lot' },
-  { key: 'gazArgon', label: 'Gaz argon', placeholder: 'N° lot bouteille' },
-];
-
-function TabLots({ lot, onUpdate }: { lot: LotFabrication; onUpdate: (l: LotFabrication) => void }) {
-  return (
-    <div className="space-y-4">
-      <div className="text-sm text-gray-400">
-        Tracabilite CEKAL — enregistrer les N° de lot des matieres premieres utilisees pour ce lot de fabrication.
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {LOT_FIELDS.map(f => (
-          <div key={f.key} className="bg-[#181a20] rounded-lg p-4 border border-[#2a2d35]">
-            <label className="text-xs text-gray-400 block mb-1.5">{f.label}</label>
-            <input
-              value={(lot[f.key] as string) ?? ''}
-              onChange={e => onUpdate({ ...lot, [f.key]: e.target.value })}
-              placeholder={f.placeholder}
-              className="bg-[#14161d] border border-[#2a2d35] rounded px-3 py-2 text-sm text-white w-full focus:border-blue-500 outline-none"
-            />
-          </div>
-        ))}
-      </div>
-      <div className="bg-[#181a20] rounded-lg p-4 border border-[#2a2d35]">
-        <label className="text-xs text-gray-400 block mb-1.5">Notes / observations</label>
-        <textarea
-          value={lot.notes ?? ''}
-          onChange={e => onUpdate({ ...lot, notes: e.target.value })}
-          placeholder="Remarques, conditions de stockage, NC detectees..."
-          rows={3}
-          className="bg-[#14161d] border border-[#2a2d35] rounded px-3 py-2 text-sm text-white w-full resize-y focus:border-blue-500 outline-none"
-        />
-      </div>
-    </div>
-  );
-}
-
-// ── Tab: Settings ────────────────────────────────────────────────────
-
-function TabSettings({ avery, we, glass, onAvery, onWE, onGlass }: {
-  avery: AverySettings; we: WESettings; glass: GlassSettings;
-  onAvery: (s: AverySettings) => void; onWE: (s: WESettings) => void; onGlass: (s: GlassSettings) => void;
-}) {
-  const numInput = (label: string, value: number, onChange: (n: number) => void, step = 1) => (
-    <div>
-      <label className="text-xs text-gray-500 block mb-1">{label}</label>
-      <input type="number" step={step} value={value} onChange={e => onChange(parseFloat(e.target.value) || 0)}
-        className="bg-[#1e2028] border border-[#2a2d35] rounded px-2 py-1 text-sm text-white w-full" />
-    </div>
-  );
-
-  return (
-    <div className="space-y-6">
-      <div>
-        <h4 className="text-sm font-semibold text-gray-300 mb-2">Padding Avery (mm)</h4>
-        <div className="grid grid-cols-4 gap-3">
-          {numInput('Gauche', avery.paddingLeft, v => onAvery({ ...avery, paddingLeft: v }), 0.5)}
-          {numInput('Droite', avery.paddingRight, v => onAvery({ ...avery, paddingRight: v }), 0.5)}
-          {numInput('Haut', avery.paddingTop, v => onAvery({ ...avery, paddingTop: v }), 0.5)}
-          {numInput('Bas', avery.paddingBottom, v => onAvery({ ...avery, paddingBottom: v }), 0.5)}
-        </div>
-      </div>
-      <div>
-        <h4 className="text-sm font-semibold text-gray-300 mb-2">Plaques de verre</h4>
-        <div className="grid grid-cols-3 gap-3">
-          {numInput('Largeur (mm)', glass.plateWidth, v => onGlass({ ...glass, plateWidth: v }))}
-          {numInput('Hauteur (mm)', glass.plateHeight, v => onGlass({ ...glass, plateHeight: v }))}
-          {numInput('Trait de scie (mm)', glass.cuttingGap, v => onGlass({ ...glass, cuttingGap: v }))}
-          {numInput('Marge rive (mm)', glass.edgeTrimMargin ?? 15, v => onGlass({ ...glass, edgeTrimMargin: v }))}
-        </div>
-      </div>
-      <div>
-        <h4 className="text-sm font-semibold text-gray-300 mb-2">Warm Edge</h4>
-        <div className="grid grid-cols-3 gap-3">
-          {numInput('Barre (mm)', we.barreLength, v => onWE({ ...we, barreLength: v }))}
-          {numInput('Marge (mm)', we.marge, v => onWE({ ...we, marge: v }))}
-          {numInput('Trait de scie (mm)', we.kerf, v => onWE({ ...we, kerf: v }))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ── Batch View (multi-order) ─────────────────────────────────────────
 
 const BATCH_TABS = ['Vitrages', 'Optim Verre', 'Warm Edge', 'Etiquettes'] as const;
@@ -860,6 +881,7 @@ function BatchView({ commandes, onBack, avery, we, glass }: {
           commande_ids: commandes.map(c => c.id), commande_refs: commandes.map(c => c.reference),
           total_pieces: prodPieces.length, total_we: weProd.length, notes: '',
           pieces: prodPieces, we_pieces: weProd,
+          glass_optim: glassResult, we_optim: weResult,
         }),
       });
       alert(`Lot ${ref} cree avec ${prodPieces.length} pieces verre + ${weProd.length} WE`);
@@ -936,16 +958,223 @@ function BatchView({ commandes, onBack, avery, we, glass }: {
   );
 }
 
+// ── Stock & Catalogue ────────────────────────────────────────────────
+
+function StockView({ onBack }: { onBack: () => void }) {
+  const [tab, setTab] = useState(0);
+  const [products, setProducts] = useState<GlassProduct[]>([]);
+  const [plates, setPlates] = useState<StockPlate[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      const [p, s] = await Promise.all([fetchGlassProducts(), fetchStockPlates()]);
+      setProducts(p); setPlates(s); setLoading(false);
+    })();
+  }, []);
+
+  const [editProduct, setEditProduct] = useState<Partial<GlassProduct> | null>(null);
+  const [editPlate, setEditPlate] = useState<Partial<StockPlate> | null>(null);
+
+  const saveProduct = async () => {
+    if (!editProduct?.code) return;
+    await upsertGlassProduct(editProduct as GlassProduct);
+    setProducts(await fetchGlassProducts());
+    setEditProduct(null);
+  };
+
+  const savePlate = async () => {
+    if (!editPlate?.glass_code) return;
+    await upsertStockPlate(editPlate as StockPlate);
+    setPlates(await fetchStockPlates());
+    setEditPlate(null);
+  };
+
+  const delProduct = async (id: string) => {
+    if (!confirm('Supprimer ce verre ?')) return;
+    await deleteGlassProduct(id);
+    setProducts(await fetchGlassProducts());
+  };
+
+  const delPlate = async (id: string) => {
+    if (!confirm('Supprimer cette plaque ?')) return;
+    await deleteStockPlate(id);
+    setPlates(await fetchStockPlates());
+  };
+
+  const tabs = ['Catalogue verres', 'Stock plaques'];
+
+  if (loading) return <p className="text-gray-500 text-center py-12">Chargement...</p>;
+
+  return (
+    <div className="max-w-6xl mx-auto px-6 py-6">
+      <div className="flex items-center gap-4 mb-6">
+        <button onClick={onBack} className="text-sm text-gray-500 hover:text-white">← Retour</button>
+        <h2 className="text-xl font-bold text-white">Catalogue & Stock</h2>
+      </div>
+
+      <div className="flex gap-1 mb-6 border-b border-[#2a2d35]">
+        {tabs.map((t, i) => (
+          <button key={i} onClick={() => setTab(i)}
+            className={`px-4 py-2 text-sm transition-colors ${tab === i ? 'text-purple-400 border-b-2 border-purple-400' : 'text-gray-500 hover:text-white'}`}>
+            {t}
+          </button>
+        ))}
+      </div>
+
+      {tab === 0 && (
+        <div>
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-sm font-semibold text-gray-300">{products.length} verres</h3>
+            <button onClick={() => setEditProduct({ code: '', label: '', type: 'clair', epaisseur: 4, has_coating: false, coating_face: '', ug_default: 0, fournisseur: '', notes: '' })}
+              className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white text-sm rounded">+ Ajouter</button>
+          </div>
+
+          {editProduct && (
+            <div className="bg-[#181a20] rounded-lg p-4 border border-purple-500/30 mb-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                <input placeholder="Code *" value={editProduct.code ?? ''} onChange={e => setEditProduct({ ...editProduct, code: e.target.value })}
+                  className="bg-[#14161d] rounded px-2 py-1.5 text-white border border-[#2a2d35]" />
+                <input placeholder="Label" value={editProduct.label ?? ''} onChange={e => setEditProduct({ ...editProduct, label: e.target.value })}
+                  className="bg-[#14161d] rounded px-2 py-1.5 text-white border border-[#2a2d35]" />
+                <select value={editProduct.type ?? 'clair'} onChange={e => setEditProduct({ ...editProduct, type: e.target.value as GlassProduct['type'] })}
+                  className="bg-[#14161d] rounded px-2 py-1.5 text-white border border-[#2a2d35]">
+                  <option value="clair">Clair</option><option value="float">Float</option>
+                  <option value="couche">Couche</option><option value="trempe">Trempe</option>
+                  <option value="feuillete">Feuillete</option>
+                </select>
+                <input type="number" placeholder="Epaisseur" value={editProduct.epaisseur ?? 4} onChange={e => setEditProduct({ ...editProduct, epaisseur: +e.target.value })}
+                  className="bg-[#14161d] rounded px-2 py-1.5 text-white border border-[#2a2d35]" />
+                <label className="flex items-center gap-2 text-gray-300 col-span-2">
+                  <input type="checkbox" checked={editProduct.has_coating ?? false} onChange={e => setEditProduct({ ...editProduct, has_coating: e.target.checked })} />
+                  Couche (pas de rotation)
+                </label>
+                <input placeholder="Fournisseur" value={editProduct.fournisseur ?? ''} onChange={e => setEditProduct({ ...editProduct, fournisseur: e.target.value })}
+                  className="bg-[#14161d] rounded px-2 py-1.5 text-white border border-[#2a2d35]" />
+                <input type="number" step="0.1" placeholder="Ug" value={editProduct.ug_default ?? 0} onChange={e => setEditProduct({ ...editProduct, ug_default: +e.target.value })}
+                  className="bg-[#14161d] rounded px-2 py-1.5 text-white border border-[#2a2d35]" />
+              </div>
+              <div className="flex gap-2 mt-3">
+                <button onClick={saveProduct} className="px-3 py-1 bg-green-600 hover:bg-green-500 text-white text-sm rounded">Enregistrer</button>
+                <button onClick={() => setEditProduct(null)} className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded">Annuler</button>
+              </div>
+            </div>
+          )}
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead><tr className="text-gray-400 border-b border-[#2a2d35]">
+                <th className="text-left py-2 px-2">Code</th>
+                <th className="text-left py-2 px-2">Label</th>
+                <th className="text-left py-2 px-2">Type</th>
+                <th className="text-right py-2 px-2">Ep.</th>
+                <th className="text-center py-2 px-2">Couche</th>
+                <th className="text-left py-2 px-2">Fournisseur</th>
+                <th className="text-right py-2 px-2">Ug</th>
+                <th className="py-2 px-2 w-20"></th>
+              </tr></thead>
+              <tbody>
+                {products.map(p => (
+                  <tr key={p.id} className="border-b border-[#1e2028] hover:bg-[#1a1c24]">
+                    <td className="py-1.5 px-2 text-white font-medium">{p.code}</td>
+                    <td className="py-1.5 px-2 text-gray-300">{p.label}</td>
+                    <td className="py-1.5 px-2 text-gray-400">{p.type}</td>
+                    <td className="py-1.5 px-2 text-white text-right">{p.epaisseur}mm</td>
+                    <td className="py-1.5 px-2 text-center">{p.has_coating ? '●' : '—'}</td>
+                    <td className="py-1.5 px-2 text-gray-400">{p.fournisseur}</td>
+                    <td className="py-1.5 px-2 text-white text-right">{p.ug_default || '—'}</td>
+                    <td className="py-1.5 px-2 text-right">
+                      <button onClick={() => setEditProduct(p)} className="text-blue-400 hover:text-blue-300 text-xs mr-2">Modifier</button>
+                      <button onClick={() => delProduct(p.id)} className="text-red-400 hover:text-red-300 text-xs">Suppr.</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {tab === 1 && (
+        <div>
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-sm font-semibold text-gray-300">{plates.length} references en stock</h3>
+            <button onClick={() => setEditPlate({ glass_code: products[0]?.code ?? '', width: 3210, height: 2550, quantity: 1, emplacement: '', fournisseur: '', lot_fournisseur: '' })}
+              className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white text-sm rounded">+ Ajouter</button>
+          </div>
+
+          {editPlate && (
+            <div className="bg-[#181a20] rounded-lg p-4 border border-purple-500/30 mb-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                <select value={editPlate.glass_code ?? ''} onChange={e => setEditPlate({ ...editPlate, glass_code: e.target.value })}
+                  className="bg-[#14161d] rounded px-2 py-1.5 text-white border border-[#2a2d35]">
+                  {products.map(p => <option key={p.code} value={p.code}>{p.code}</option>)}
+                </select>
+                <input type="number" placeholder="Largeur" value={editPlate.width ?? 3210} onChange={e => setEditPlate({ ...editPlate, width: +e.target.value })}
+                  className="bg-[#14161d] rounded px-2 py-1.5 text-white border border-[#2a2d35]" />
+                <input type="number" placeholder="Hauteur" value={editPlate.height ?? 2550} onChange={e => setEditPlate({ ...editPlate, height: +e.target.value })}
+                  className="bg-[#14161d] rounded px-2 py-1.5 text-white border border-[#2a2d35]" />
+                <input type="number" placeholder="Quantite" value={editPlate.quantity ?? 1} onChange={e => setEditPlate({ ...editPlate, quantity: +e.target.value })}
+                  className="bg-[#14161d] rounded px-2 py-1.5 text-white border border-[#2a2d35]" />
+                <input placeholder="Emplacement" value={editPlate.emplacement ?? ''} onChange={e => setEditPlate({ ...editPlate, emplacement: e.target.value })}
+                  className="bg-[#14161d] rounded px-2 py-1.5 text-white border border-[#2a2d35]" />
+                <input placeholder="Fournisseur" value={editPlate.fournisseur ?? ''} onChange={e => setEditPlate({ ...editPlate, fournisseur: e.target.value })}
+                  className="bg-[#14161d] rounded px-2 py-1.5 text-white border border-[#2a2d35]" />
+                <input placeholder="Lot fournisseur" value={editPlate.lot_fournisseur ?? ''} onChange={e => setEditPlate({ ...editPlate, lot_fournisseur: e.target.value })}
+                  className="bg-[#14161d] rounded px-2 py-1.5 text-white border border-[#2a2d35]" />
+              </div>
+              <div className="flex gap-2 mt-3">
+                <button onClick={savePlate} className="px-3 py-1 bg-green-600 hover:bg-green-500 text-white text-sm rounded">Enregistrer</button>
+                <button onClick={() => setEditPlate(null)} className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded">Annuler</button>
+              </div>
+            </div>
+          )}
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead><tr className="text-gray-400 border-b border-[#2a2d35]">
+                <th className="text-left py-2 px-2">Verre</th>
+                <th className="text-right py-2 px-2">Dimensions</th>
+                <th className="text-right py-2 px-2">Quantite</th>
+                <th className="text-left py-2 px-2">Emplacement</th>
+                <th className="text-left py-2 px-2">Fournisseur</th>
+                <th className="text-left py-2 px-2">Lot</th>
+                <th className="py-2 px-2 w-20"></th>
+              </tr></thead>
+              <tbody>
+                {plates.map(p => (
+                  <tr key={p.id} className="border-b border-[#1e2028] hover:bg-[#1a1c24]">
+                    <td className="py-1.5 px-2 text-white font-medium">{p.glass_code}</td>
+                    <td className="py-1.5 px-2 text-white text-right">{p.width} x {p.height}</td>
+                    <td className="py-1.5 px-2 text-right"><span className={`font-bold ${p.quantity > 0 ? 'text-green-400' : 'text-red-400'}`}>{p.quantity}</span></td>
+                    <td className="py-1.5 px-2 text-gray-400">{p.emplacement}</td>
+                    <td className="py-1.5 px-2 text-gray-400">{p.fournisseur}</td>
+                    <td className="py-1.5 px-2 text-gray-400">{p.lot_fournisseur}</td>
+                    <td className="py-1.5 px-2 text-right">
+                      <button onClick={() => setEditPlate(p)} className="text-blue-400 hover:text-blue-300 text-xs mr-2">Modifier</button>
+                      <button onClick={() => delPlate(p.id)} className="text-red-400 hover:text-red-300 text-xs">Suppr.</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main App ─────────────────────────────────────────────────────────
 
-type ViewMode = { type: 'dashboard' } | { type: 'order'; id: string } | { type: 'batch'; ids: string[] } | { type: 'production' };
+type ViewMode = { type: 'home' } | { type: 'dashboard' } | { type: 'order'; id: string } | { type: 'batch'; ids: string[] } | { type: 'production' } | { type: 'production-atelier' } | { type: 'stock' };
 
 export function VitrageApp({ onBack }: { onBack: () => void }) {
   const [commandes, setCommandes] = useState<Commande[]>([]);
   const [settings, setSettingsState] = useState<Settings>({
     averySettings: DEFAULT_AVERY, weSettings: DEFAULT_WE, glassSettings: DEFAULT_GLASS,
   });
-  const [view, setView] = useState<ViewMode>({ type: 'dashboard' });
+  const [view, setView] = useState<ViewMode>({ type: 'home' });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const saveTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -1009,19 +1238,8 @@ export function VitrageApp({ onBack }: { onBack: () => void }) {
     }, 800);
   }, []);
 
-  const settingsTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const handleSettings = useCallback((patch: Partial<Settings>) => {
-    setSettingsState(prev => {
-      const next = { ...prev, ...patch };
-      clearTimeout(settingsTimer.current);
-      settingsTimer.current = setTimeout(async () => {
-        try { await saveSettings(next); } catch { /* ignore */ }
-      }, 1000);
-      return next;
-    });
-  }, []);
 
-  const goHome = () => { setView({ type: 'dashboard' }); reload(); };
+  const goHome = () => { setView({ type: 'home' }); reload(); };
 
   const renderContent = () => {
     if (loading) return <p className="text-gray-500 text-center py-12">Chargement...</p>;
@@ -1034,10 +1252,6 @@ export function VitrageApp({ onBack }: { onBack: () => void }) {
           commande={selected}
           onUpdate={patch => handleUpdate(view.id, patch)}
           onBack={goHome}
-          avery={settings.averySettings} we={settings.weSettings} glass={settings.glassSettings}
-          onAvery={a => handleSettings({ averySettings: a })}
-          onWE={w => handleSettings({ weSettings: w })}
-          onGlass={g => handleSettings({ glassSettings: g })}
         />
       );
     }
@@ -1055,6 +1269,43 @@ export function VitrageApp({ onBack }: { onBack: () => void }) {
     if (view.type === 'production') {
       return <ProductionView onBack={goHome} />;
     }
+    if (view.type === 'production-atelier') {
+      return <ProductionView onBack={goHome} startAtelier />;
+    }
+    if (view.type === 'stock') {
+      return <StockView onBack={goHome} />;
+    }
+    if (view.type === 'home') {
+      return (
+        <div className="max-w-2xl mx-auto py-16 px-6">
+          <h1 className="text-3xl font-black text-white text-center mb-2">ISULA VITRAGE</h1>
+          <p className="text-gray-500 text-center mb-10">Gestion commandes, optimisation coupe, production</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <button onClick={() => setView({ type: 'dashboard' })}
+              className="p-6 bg-blue-700 hover:bg-blue-600 text-white rounded-2xl text-left transition-colors active:scale-[0.98]">
+              <div className="text-xl font-bold">COMMANDES</div>
+              <div className="text-sm text-blue-200 mt-1">Import, vitrages, optimisation, lots de coupe</div>
+              <div className="text-xs text-blue-300 mt-2">{commandes.length} commande{commandes.length > 1 ? 's' : ''}</div>
+            </button>
+            <button onClick={() => setView({ type: 'stock' })}
+              className="p-6 bg-purple-700 hover:bg-purple-600 text-white rounded-2xl text-left transition-colors active:scale-[0.98]">
+              <div className="text-xl font-bold">CATALOGUE & STOCK</div>
+              <div className="text-sm text-purple-200 mt-1">Types de verre, stock plaques</div>
+            </button>
+            <button onClick={() => setView({ type: 'production' })}
+              className="p-6 bg-green-700 hover:bg-green-600 text-white rounded-2xl text-left transition-colors active:scale-[0.98]">
+              <div className="text-xl font-bold">PRODUCTION</div>
+              <div className="text-sm text-green-200 mt-1">Suivi lots, pieces, statistiques</div>
+            </button>
+            <button onClick={() => setView({ type: 'production-atelier' })}
+              className="p-6 bg-orange-600 hover:bg-orange-500 text-white rounded-2xl text-left transition-colors active:scale-[0.98]">
+              <div className="text-xl font-bold">MODE ATELIER</div>
+              <div className="text-sm text-orange-200 mt-1">Interface operateur plein ecran</div>
+            </button>
+          </div>
+        </div>
+      );
+    }
     return (
       <Dashboard
         commandes={commandes}
@@ -1063,6 +1314,7 @@ export function VitrageApp({ onBack }: { onBack: () => void }) {
         onDelete={handleDelete}
         onBatch={ids => setView({ type: 'batch', ids })}
         onProduction={() => setView({ type: 'production' })}
+        onStock={() => setView({ type: 'stock' })}
       />
     );
   };
