@@ -61,10 +61,21 @@ interface WEPiece {
   vitrage_ref: string; epaisseur: number; couleur: string; statut: string; operateur: string;
 }
 
+interface LotProgress {
+  id: string;
+  reference: string;
+  total_pieces: number;
+  total_we: number;
+  pieces: Record<string, number>;
+  we: Record<string, number>;
+}
+
 interface Stats {
   pieces: Record<string, number>;
   we: Record<string, number>;
   daily_cuts: { jour: string; nb: number }[];
+  daily_assemblies?: { jour: string; nb: number }[];
+  lot_progress?: LotProgress[];
 }
 
 function getISOWeek(date: Date): string {
@@ -95,7 +106,7 @@ export function ProductionView({ onBack, startAtelier }: { onBack: () => void; s
   const [lots, setLots] = useState<Lot[]>([]);
   const [selectedLot, setSelectedLot] = useState<Lot | null>(null);
   const [stats, setStats] = useState<Stats | null>(null);
-  const [tab, setTab] = useState<'verre' | 'we' | 'optim_verre' | 'optim_we' | 'preparation' | 'lots' | 'etiquettes' | 'stats'>('verre');
+  const [tab, setTab] = useState<'dashboard' | 'verre' | 'we' | 'optim_verre' | 'optim_we' | 'preparation' | 'lots' | 'etiquettes' | 'stats'>('dashboard');
   const [filtreMachine, setFiltreMachine] = useState<string>('');
   const [filtreStatut, setFiltreStatut] = useState<string>('');
   const [filtreCommande, setFiltreCommande] = useState<string>('');
@@ -239,6 +250,7 @@ export function ProductionView({ onBack, startAtelier }: { onBack: () => void; s
           {/* Tabs */}
           <div className="flex gap-1 border-b border-[#2a2d35] flex-wrap">
             {([
+              ['dashboard', 'Tableau de bord'],
               ['verre', `Verre (${pieces.length})`],
               ['we', `WE (${wePieces.length})`],
               ['optim_verre', 'Optim Verre'],
@@ -256,6 +268,11 @@ export function ProductionView({ onBack, startAtelier }: { onBack: () => void; s
               </button>
             ))}
           </div>
+
+          {/* Dashboard */}
+          {tab === 'dashboard' && stats && (
+            <DashboardTab stats={stats} semaine={semaine} />
+          )}
 
           {/* Filtres verre */}
           {tab === 'verre' && (
@@ -645,67 +662,13 @@ function AtelierView({ lots, semaine, poste, onSelectPoste, onBack, loadLotDetai
 
   // ── Poste ASSEMBLAGE ──
   if (poste === 'assemblage') {
-    const vitrageGroups = new Map<string, Piece[]>();
-    for (const p of pieces) {
-      const key = p.vitrage_id || `${p.vitrage_ref}_${p.id}`;
-      const arr = vitrageGroups.get(key) || [];
-      arr.push(p);
-      vitrageGroups.set(key, arr);
-    }
-
-    const vitrages = [...vitrageGroups.entries()].map(([vid, pcs]) => {
-      const allAssembled = pcs.every(p => p.statut === 'assemble');
-      const allCut = pcs.every(p => p.statut === 'coupe' || p.statut === 'assemble');
-      return { ref: pcs[0]?.vitrage_ref || vid, pieces: pcs, allAssembled, allCut, commande: pcs[0]?.commande_ref || '' };
-    });
-
-    const totalVitrages = vitrages.length;
-    const doneVitrages = vitrages.filter(v => v.allAssembled).length;
-
     return (
-      <div className="fixed inset-0 bg-[#0a0c10] flex flex-col z-50">
-        <div className="flex items-center gap-4 p-4 bg-[#14161d] border-b border-[#2a2d35]">
-          <button onClick={() => setSelectedLot(null)} className="text-gray-400 hover:text-white text-lg px-3 py-2">← Lots</button>
-          <span className="text-xl font-bold text-white flex-1">{selectedLot.reference}</span>
-          <span className="text-lg text-purple-400 font-bold">{doneVitrages}/{totalVitrages} assembles</span>
-        </div>
-        <div className="flex-1 overflow-auto p-4 max-w-2xl mx-auto w-full">
-          <h2 className="text-2xl font-black text-white mb-4">VITRAGES A ASSEMBLER</h2>
-          <div className="space-y-2">
-            {vitrages.map(v => (
-              <div key={v.ref} className={`p-4 rounded-xl border transition-colors ${
-                v.allAssembled ? 'bg-green-900/20 border-green-500/30' :
-                v.allCut ? 'bg-[#181a20] border-amber-500/30' : 'bg-[#181a20] border-[#2a2d35] opacity-50'}`}>
-                <div className="flex items-center gap-4">
-                  <div className="flex-1">
-                    <div className="text-lg font-bold text-white">{v.ref}</div>
-                    <div className="text-sm text-gray-400">{v.commande} — {v.pieces.length} verres ({v.pieces.map(p => p.face).join('+')})</div>
-                    <div className="text-xs text-gray-500">
-                      {v.pieces.map(p => `${p.material} ${p.largeur}x${p.hauteur}`).join(' + ')}
-                    </div>
-                  </div>
-                  {v.allAssembled ? (
-                    <span className="text-green-400 text-2xl font-bold">✓ ASSEMBLE</span>
-                  ) : v.allCut ? (
-                    <button onClick={async () => {
-                      for (const p of v.pieces) {
-                        if (p.statut !== 'assemble') {
-                          await patchJSON(`/api/production/pieces/${p.id}`, { statut: 'assemble', operateur: '' });
-                        }
-                      }
-                      onReload();
-                    }} className="px-6 py-3 bg-purple-600 hover:bg-purple-500 text-white text-base font-bold rounded-xl active:scale-95 shadow-lg">
-                      ASSEMBLER
-                    </button>
-                  ) : (
-                    <span className="text-gray-500 text-sm">Verres non coupes</span>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
+      <AssemblageView
+        selectedLot={selectedLot}
+        pieces={pieces}
+        onReload={onReload}
+        setSelectedLot={setSelectedLot}
+      />
     );
   }
 
@@ -1080,6 +1043,320 @@ function AtelierView({ lots, semaine, poste, onSelectPoste, onBack, loadLotDetai
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+
+// ── Dashboard Tab ───────────────────────────────────────────────────
+
+function DashboardTab({ stats, semaine }: { stats: Stats; semaine: string }) {
+  const totalPieces = Object.values(stats.pieces).reduce((a, b) => a + b, 0);
+  const cutPieces = (stats.pieces['coupe'] || 0) + (stats.pieces['assemble'] || 0) + (stats.pieces['a_assembler'] || 0);
+  const assembledPieces = stats.pieces['assemble'] || 0;
+  const totalWE = Object.values(stats.we).reduce((a, b) => a + b, 0);
+  const cutWE = stats.we['coupe'] || 0;
+  const ncPieces = (stats.pieces['nc'] || 0) + (stats.pieces['casse'] || 0);
+  const overallProgress = totalPieces > 0 ? Math.round((assembledPieces / totalPieces) * 100) : 0;
+
+  return (
+    <div className="space-y-6">
+      <h4 className="text-lg font-bold text-white">Tableau de bord - {semaine}</h4>
+
+      {/* Summary cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="bg-[#181a20] rounded-lg p-4 border border-[#2a2d35] text-center">
+          <div className="text-3xl font-black text-blue-400">{totalPieces}</div>
+          <div className="text-xs text-gray-500">Pieces totales</div>
+        </div>
+        <div className="bg-[#181a20] rounded-lg p-4 border border-[#2a2d35] text-center">
+          <div className="text-3xl font-black text-cyan-400">{cutPieces}</div>
+          <div className="text-xs text-gray-500">Coupees</div>
+        </div>
+        <div className="bg-[#181a20] rounded-lg p-4 border border-[#2a2d35] text-center">
+          <div className="text-3xl font-black text-green-400">{assembledPieces}</div>
+          <div className="text-xs text-gray-500">Assemblees</div>
+        </div>
+        <div className="bg-[#181a20] rounded-lg p-4 border border-[#2a2d35] text-center">
+          <div className="text-3xl font-black text-amber-400">{overallProgress}%</div>
+          <div className="text-xs text-gray-500">Progression</div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        <div className="bg-[#181a20] rounded-lg p-4 border border-[#2a2d35] text-center">
+          <div className="text-2xl font-bold text-amber-400">{totalWE}</div>
+          <div className="text-xs text-gray-500">WE total</div>
+        </div>
+        <div className="bg-[#181a20] rounded-lg p-4 border border-[#2a2d35] text-center">
+          <div className="text-2xl font-bold text-green-400">{cutWE}</div>
+          <div className="text-xs text-gray-500">WE coupes</div>
+        </div>
+        <div className="bg-[#181a20] rounded-lg p-4 border border-[#2a2d35] text-center">
+          <div className="text-2xl font-bold text-red-400">{ncPieces}</div>
+          <div className="text-xs text-gray-500">NC / Casse</div>
+        </div>
+      </div>
+
+      {/* Overall progress bar */}
+      <div className="bg-[#181a20] rounded-lg p-4 border border-[#2a2d35]">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-sm text-gray-400">Progression globale</span>
+          <span className="text-sm font-bold text-white">{overallProgress}%</span>
+        </div>
+        <div className="h-4 bg-gray-800 rounded-full overflow-hidden">
+          <div className="h-full rounded-full transition-all" style={{
+            width: `${overallProgress}%`,
+            background: overallProgress === 100 ? '#22c55e' : overallProgress > 50 ? '#eab308' : '#3b82f6',
+          }} />
+        </div>
+      </div>
+
+      {/* Per-lot progress */}
+      {stats.lot_progress && stats.lot_progress.length > 0 && (
+        <div>
+          <h4 className="text-sm font-semibold text-gray-300 mb-3">Progression par lot</h4>
+          <div className="space-y-3">
+            {stats.lot_progress.map(lot => {
+              const lotTotal = Object.values(lot.pieces).reduce((a, b) => a + b, 0);
+              const lotCut = (lot.pieces['coupe'] || 0) + (lot.pieces['assemble'] || 0) + (lot.pieces['a_assembler'] || 0);
+              const lotAssembled = lot.pieces['assemble'] || 0;
+              const lotNC = (lot.pieces['nc'] || 0) + (lot.pieces['casse'] || 0);
+              const pctCut = lotTotal > 0 ? Math.round((lotCut / lotTotal) * 100) : 0;
+              const pctAssembled = lotTotal > 0 ? Math.round((lotAssembled / lotTotal) * 100) : 0;
+              return (
+                <div key={lot.id} className="bg-[#181a20] rounded-lg p-4 border border-[#2a2d35]">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-bold text-white">{lot.reference}</span>
+                    <div className="flex gap-4 text-xs">
+                      <span className="text-gray-400">{lotTotal} pcs</span>
+                      {lotNC > 0 && <span className="text-red-400">{lotNC} NC/Casse</span>}
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-gray-500 w-16">Coupe</span>
+                      <div className="flex-1 h-2.5 bg-gray-800 rounded-full overflow-hidden">
+                        <div className="h-full bg-cyan-500 rounded-full transition-all" style={{ width: `${pctCut}%` }} />
+                      </div>
+                      <span className="text-[10px] text-gray-400 w-10 text-right">{pctCut}%</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-gray-500 w-16">Assemble</span>
+                      <div className="flex-1 h-2.5 bg-gray-800 rounded-full overflow-hidden">
+                        <div className="h-full bg-green-500 rounded-full transition-all" style={{ width: `${pctAssembled}%` }} />
+                      </div>
+                      <span className="text-[10px] text-gray-400 w-10 text-right">{pctAssembled}%</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Daily statistics */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <h4 className="text-sm font-semibold text-gray-300 mb-2">Coupes par jour</h4>
+          {stats.daily_cuts.length > 0 ? (
+            <div className="bg-[#181a20] rounded-lg p-4 border border-[#2a2d35]">
+              <div className="flex items-end gap-1 h-28">
+                {stats.daily_cuts.map((d, i) => {
+                  const max = Math.max(...stats.daily_cuts.map(x => x.nb));
+                  const h = max > 0 ? (d.nb / max) * 100 : 0;
+                  return (
+                    <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                      <span className="text-[9px] text-white">{d.nb}</span>
+                      <div className="w-full bg-cyan-500/60 rounded-t" style={{ height: `${h}%` }} />
+                      <span className="text-[8px] text-gray-500">{String(d.jour).slice(5)}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <p className="text-gray-500 text-xs">Aucune coupe enregistree.</p>
+          )}
+        </div>
+        <div>
+          <h4 className="text-sm font-semibold text-gray-300 mb-2">Assemblages par jour</h4>
+          {stats.daily_assemblies && stats.daily_assemblies.length > 0 ? (
+            <div className="bg-[#181a20] rounded-lg p-4 border border-[#2a2d35]">
+              <div className="flex items-end gap-1 h-28">
+                {stats.daily_assemblies.map((d, i) => {
+                  const max = Math.max(...(stats.daily_assemblies || []).map(x => x.nb));
+                  const h = max > 0 ? (d.nb / max) * 100 : 0;
+                  return (
+                    <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                      <span className="text-[9px] text-white">{d.nb}</span>
+                      <div className="w-full bg-green-500/60 rounded-t" style={{ height: `${h}%` }} />
+                      <span className="text-[8px] text-gray-500">{String(d.jour).slice(5)}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <p className="text-gray-500 text-xs">Aucun assemblage enregistre.</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+// ── Assemblage View (Atelier) ──────────────────────────────────────
+
+const MATIERES_JOUR_KEYS = [
+  { key: 'intercalaire', label: 'Intercalaire / WE' },
+  { key: 'dessiccant', label: 'Dessiccant' },
+  { key: 'masticButyl', label: 'Mastic butyl' },
+  { key: 'masticPU', label: 'Mastic PU' },
+  { key: 'gazArgon', label: 'Gaz argon' },
+] as const;
+
+function getLocalStorageMatieresKey(): string {
+  const today = new Date().toISOString().slice(0, 10);
+  return `isula_matieres_jour_${today}`;
+}
+
+function loadMatieresJour(): Record<string, string> {
+  try {
+    const raw = localStorage.getItem(getLocalStorageMatieresKey());
+    return raw ? JSON.parse(raw) : {};
+  } catch { return {}; }
+}
+
+function saveMatieresJour(matieres: Record<string, string>) {
+  localStorage.setItem(getLocalStorageMatieresKey(), JSON.stringify(matieres));
+}
+
+function AssemblageView({ selectedLot, pieces, onReload, setSelectedLot }: {
+  selectedLot: Lot;
+  pieces: Piece[];
+  onReload: () => void;
+  setSelectedLot: (l: Lot | null) => void;
+}) {
+  const [matieresJour, setMatieresJour] = useState<Record<string, string>>(loadMatieresJour);
+  const [showMatieres, setShowMatieres] = useState(false);
+
+  const updateMatiere = (key: string, value: string) => {
+    const updated = { ...matieresJour, [key]: value };
+    setMatieresJour(updated);
+    saveMatieresJour(updated);
+  };
+
+  const hasAllMatieres = MATIERES_JOUR_KEYS.every(m => matieresJour[m.key]?.trim());
+
+  const vitrageGroups = new Map<string, Piece[]>();
+  for (const p of pieces) {
+    const key = p.vitrage_id || `${p.vitrage_ref}_${p.id}`;
+    const arr = vitrageGroups.get(key) || [];
+    arr.push(p);
+    vitrageGroups.set(key, arr);
+  }
+
+  const vitrages = [...vitrageGroups.entries()].map(([vid, pcs]) => {
+    const allAssembled = pcs.every(p => p.statut === 'assemble');
+    const allCut = pcs.every(p => p.statut === 'coupe' || p.statut === 'assemble');
+    return { ref: pcs[0]?.vitrage_ref || vid, pieces: pcs, allAssembled, allCut, commande: pcs[0]?.commande_ref || '' };
+  });
+
+  const totalVitrages = vitrages.length;
+  const doneVitrages = vitrages.filter(v => v.allAssembled).length;
+
+  const handleAssemble = async (vitragePieces: Piece[]) => {
+    // Save lot_matieres on the lot if we have daily materials
+    if (hasAllMatieres) {
+      await patchJSON(`/api/production/lots/${selectedLot.id}/lot-matieres`, { matieres: matieresJour });
+    }
+    // Mark pieces as assembled
+    for (const p of vitragePieces) {
+      if (p.statut !== 'assemble') {
+        await patchJSON(`/api/production/pieces/${p.id}`, { statut: 'assemble', operateur: '' });
+      }
+    }
+    onReload();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-[#0a0c10] flex flex-col z-50">
+      <div className="flex items-center gap-4 p-4 bg-[#14161d] border-b border-[#2a2d35]">
+        <button onClick={() => setSelectedLot(null)} className="text-gray-400 hover:text-white text-lg px-3 py-2">← Lots</button>
+        <span className="text-xl font-bold text-white flex-1">{selectedLot.reference}</span>
+        <span className="text-lg text-purple-400 font-bold">{doneVitrages}/{totalVitrages} assembles</span>
+      </div>
+      <div className="flex-1 overflow-auto p-4 max-w-2xl mx-auto w-full">
+        {/* Matieres du jour section */}
+        <div className="mb-4">
+          <button onClick={() => setShowMatieres(!showMatieres)}
+            className={`w-full p-3 rounded-xl border text-left transition-colors ${
+              hasAllMatieres ? 'bg-green-900/20 border-green-500/30' : 'bg-amber-900/20 border-amber-500/30'}`}>
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-base font-bold text-white">MATIERES DU JOUR</span>
+                <span className="text-xs text-gray-400 ml-2">{new Date().toLocaleDateString('fr-FR')}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                {hasAllMatieres ? (
+                  <span className="text-green-400 text-sm font-bold">COMPLET</span>
+                ) : (
+                  <span className="text-amber-400 text-sm font-bold">A REMPLIR</span>
+                )}
+                <span className="text-gray-500">{showMatieres ? '▲' : '▼'}</span>
+              </div>
+            </div>
+          </button>
+          {showMatieres && (
+            <div className="mt-2 bg-[#181a20] rounded-xl border border-[#2a2d35] p-4 space-y-3">
+              {MATIERES_JOUR_KEYS.map(m => (
+                <div key={m.key} className="flex items-center gap-3">
+                  <label className="text-sm text-gray-400 w-32 shrink-0">{m.label}</label>
+                  <input
+                    value={matieresJour[m.key] || ''}
+                    onChange={e => updateMatiere(m.key, e.target.value)}
+                    placeholder="N° lot"
+                    className="flex-1 bg-[#14161d] border border-[#2a2d35] rounded-lg px-3 py-2 text-sm text-white focus:border-purple-500 outline-none"
+                  />
+                  {matieresJour[m.key]?.trim() && <span className="text-green-400 text-lg">OK</span>}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <h2 className="text-2xl font-black text-white mb-4">VITRAGES A ASSEMBLER</h2>
+        <div className="space-y-2">
+          {vitrages.map(v => (
+            <div key={v.ref} className={`p-4 rounded-xl border transition-colors ${
+              v.allAssembled ? 'bg-green-900/20 border-green-500/30' :
+              v.allCut ? 'bg-[#181a20] border-amber-500/30' : 'bg-[#181a20] border-[#2a2d35] opacity-50'}`}>
+              <div className="flex items-center gap-4">
+                <div className="flex-1">
+                  <div className="text-lg font-bold text-white">{v.ref}</div>
+                  <div className="text-sm text-gray-400">{v.commande} — {v.pieces.length} verres ({v.pieces.map(p => p.face).join('+')})</div>
+                  <div className="text-xs text-gray-500">
+                    {v.pieces.map(p => `${p.material} ${p.largeur}x${p.hauteur}`).join(' + ')}
+                  </div>
+                </div>
+                {v.allAssembled ? (
+                  <span className="text-green-400 text-2xl font-bold">ASSEMBLE</span>
+                ) : v.allCut ? (
+                  <button onClick={() => handleAssemble(v.pieces)}
+                    className="px-6 py-3 bg-purple-600 hover:bg-purple-500 text-white text-base font-bold rounded-xl active:scale-95 shadow-lg">
+                    ASSEMBLER
+                  </button>
+                ) : (
+                  <span className="text-gray-500 text-sm">Verres non coupes</span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
