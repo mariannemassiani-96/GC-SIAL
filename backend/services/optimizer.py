@@ -137,46 +137,38 @@ def _pack_material(
 ) -> list[OptimizedPlate]:
     """Run bin-packing for a single material group."""
 
-    # Sort pieces largest-first for better packing.
     sorted_pcs = sorted(group, key=lambda p: max(p.width, p.height), reverse=True)
+
+    any_can_rotate = any(not p.no_rotation for p in sorted_pcs)
 
     packer = rectpack.newPacker(
         mode=rectpack.PackingMode.Offline,
         pack_algo=rectpack.MaxRectsBssf,
-        rotation=False,  # We handle rotation manually.
+        rotation=any_can_rotate,
     )
 
-    # Provide enough bins (worst case: one bin per piece).
     for _ in range(len(sorted_pcs)):
         packer.add_bin(int(usable_w), int(usable_h))
 
-    # Build a lookup and track which pieces we pre-rotated.
     piece_map: dict[str, GlassPiece] = {}
-    rotated_ids: set[str] = set()
 
     for p in sorted_pcs:
         w, h = int(p.width + cutting_gap), int(p.height + cutting_gap)
-        if not p.no_rotation and h > w:
-            w, h = h, w
-            rotated_ids.add(p.id)
         packer.add_rect(w, h, rid=p.id)
         piece_map[p.id] = p
 
     packer.pack()
 
-    # Collect placed rectangles per bin.
-    # rect_list() -> list of (bin_index, x, y, w, h, rid)
     bins: dict[int, list[PlacedPiece]] = {}
     for b_idx, x, y, w, h, rid in packer.rect_list():
         pc = piece_map.get(rid)
         if not pc:
             continue
-        rotated = rid in rotated_ids
-        # Use original piece dimensions (not the gap-inflated rect dims).
-        pw = pc.width
-        ph = pc.height
-        if rotated:
-            pw, ph = ph, pw
+        orig_w = int(pc.width + cutting_gap)
+        orig_h = int(pc.height + cutting_gap)
+        rotated = (w == orig_h and h == orig_w) and (w != orig_w or h != orig_h)
+        pw = pc.height if rotated else pc.width
+        ph = pc.width if rotated else pc.height
         bins.setdefault(b_idx, []).append(PlacedPiece(
             id=pc.id, vitrage_ref=pc.vitrage_ref,
             width=pw, height=ph,
