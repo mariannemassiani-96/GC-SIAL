@@ -67,15 +67,18 @@ app.get('/api/users', authMiddleware, adminOnly, (req, res) => {
 });
 
 app.post('/api/users', authMiddleware, adminOnly, (req, res) => {
-  const { email, password, nom, role, apps_autorisees } = req.body;
-  if (!email || !password || !nom) return res.status(400).json({ error: 'email, password et nom requis' });
+  const { email, password, nom, role, apps_autorisees, pin, pin_enabled } = req.body;
+  if (!nom) return res.status(400).json({ error: 'Nom requis' });
+  const userEmail = email || `${nom.toLowerCase().replace(/\s+/g, '.')}@atelier.local`;
+  const userPassword = password || (pin ? pin : '0000');
   try {
-    const result = db.prepare('INSERT INTO users (email, password, nom, role, apps_autorisees) VALUES (?, ?, ?, ?, ?)').run(
-      email, hashPassword(password), nom, role || 'operateur', JSON.stringify(apps_autorisees || [])
+    const result = db.prepare('INSERT INTO users (email, password, nom, role, apps_autorisees, pin, pin_enabled) VALUES (?, ?, ?, ?, ?, ?, ?)').run(
+      userEmail, hashPassword(userPassword), nom, role || 'operateur', JSON.stringify(apps_autorisees || []),
+      pin || null, pin_enabled ? 1 : 0
     );
-    res.json({ id: result.lastInsertRowid, email, nom, role: role || 'operateur' });
+    res.json({ id: result.lastInsertRowid, email: userEmail, nom, role: role || 'operateur' });
   } catch (e) {
-    res.status(409).json({ error: 'Email deja utilise' });
+    res.status(409).json({ error: 'Utilisateur deja existant' });
   }
 });
 
