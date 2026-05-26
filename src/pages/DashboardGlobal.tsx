@@ -406,6 +406,133 @@ function ImportSlotCoupe({
   );
 }
 
+// ── Production Stats Section ────────────────────────────────────────
+
+function ProductionStatsSection({ cmdRef }: { cmdRef: string }) {
+  const [stats, setStats] = useState<{ poste: string; action: string; user_nom: string; count: number; first_at: string; last_at: string }[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    getProductionStatsByCommande(cmdRef)
+      .then(data => setStats(data))
+      .catch(() => setStats([]))
+      .finally(() => setLoading(false));
+  }, [cmdRef]);
+
+  if (loading) {
+    return (
+      <div className="px-5 py-4 border-b border-[#2a2d35]">
+        <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Temps & Productivite</h3>
+        <p className="text-xs text-gray-500">Chargement...</p>
+      </div>
+    );
+  }
+
+  if (stats.length === 0) {
+    return (
+      <div className="px-5 py-4 border-b border-[#2a2d35]">
+        <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Temps & Productivite</h3>
+        <p className="text-xs text-gray-500">Aucun evenement de production enregistre.</p>
+      </div>
+    );
+  }
+
+  // Group by poste
+  const byPoste = new Map<string, typeof stats>();
+  for (const s of stats) {
+    const list = byPoste.get(s.poste) || [];
+    list.push(s);
+    byPoste.set(s.poste, list);
+  }
+
+  const formatDate = (iso: string) => {
+    if (!iso) return '-';
+    const d = new Date(iso);
+    return d.toLocaleDateString('fr-FR') + ' ' + d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  };
+
+  const durationMinutes = (first: string, last: string) => {
+    if (!first || !last) return 0;
+    const diff = new Date(last).getTime() - new Date(first).getTime();
+    return Math.max(0, Math.round(diff / 60000));
+  };
+
+  const formatDuration = (mins: number) => {
+    if (mins < 60) return `${mins}min`;
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return `${h}h${m > 0 ? String(m).padStart(2, '0') : ''}`;
+  };
+
+  // Per-operator stats
+  const byOperator = new Map<string, { count: number; postes: Set<string> }>();
+  for (const s of stats) {
+    if (!s.user_nom) continue;
+    const entry = byOperator.get(s.user_nom) || { count: 0, postes: new Set<string>() };
+    entry.count += s.count;
+    entry.postes.add(s.poste);
+    byOperator.set(s.user_nom, entry);
+  }
+
+  return (
+    <div className="px-5 py-4 border-b border-[#2a2d35]">
+      <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Temps & Productivite</h3>
+
+      {/* Per-poste table */}
+      <div className="overflow-x-auto mb-4">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="text-gray-400 border-b border-[#2a2d35]">
+              <th className="text-left py-2 px-2">Poste</th>
+              <th className="text-left py-2 px-2">Debut</th>
+              <th className="text-left py-2 px-2">Fin</th>
+              <th className="text-right py-2 px-2">Duree</th>
+              <th className="text-right py-2 px-2">Pieces</th>
+              <th className="text-right py-2 px-2">Pcs/h</th>
+            </tr>
+          </thead>
+          <tbody>
+            {[...byPoste.entries()].map(([poste, rows]) => {
+              const totalCount = rows.reduce((a, r) => a + r.count, 0);
+              const firstAt = rows.reduce((min, r) => (!min || r.first_at < min ? r.first_at : min), '');
+              const lastAt = rows.reduce((max, r) => (!max || r.last_at > max ? r.last_at : max), '');
+              const durMins = durationMinutes(firstAt, lastAt);
+              const pcsPerHour = durMins > 0 ? Math.round(totalCount / (durMins / 60) * 10) / 10 : 0;
+
+              return (
+                <tr key={poste} className="border-b border-[#1e2028] hover:bg-[#1e2028]">
+                  <td className="py-1.5 px-2 text-amber-400 font-semibold">{poste}</td>
+                  <td className="py-1.5 px-2 text-gray-300">{formatDate(firstAt)}</td>
+                  <td className="py-1.5 px-2 text-gray-300">{formatDate(lastAt)}</td>
+                  <td className="py-1.5 px-2 text-white text-right font-mono">{formatDuration(durMins)}</td>
+                  <td className="py-1.5 px-2 text-white text-right font-bold">{totalCount}</td>
+                  <td className="py-1.5 px-2 text-green-400 text-right font-mono">{pcsPerHour > 0 ? pcsPerHour : '-'}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Per-operator stats */}
+      {byOperator.size > 0 && (
+        <div>
+          <h4 className="text-[10px] text-gray-500 uppercase mb-2">Par operateur</h4>
+          <div className="flex flex-wrap gap-2">
+            {[...byOperator.entries()].map(([nom, data]) => (
+              <div key={nom} className="bg-[#0f1117] border border-[#2a2d35] rounded-lg px-3 py-2">
+                <div className="text-xs font-semibold text-white">{nom}</div>
+                <div className="text-[10px] text-gray-400">{data.count} pieces - {[...data.postes].join(', ')}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Detail View ─────────────────────────────────────────────────────
 
 function DetailView({ cmd, onClose, onRefresh }: { cmd: CommandeGlobale; onClose: () => void; onRefresh: () => void }) {
@@ -689,6 +816,9 @@ function DetailView({ cmd, onClose, onRefresh }: { cmd: CommandeGlobale; onClose
           )}
         </div>
       </div>
+
+      {/* Temps & Productivite */}
+      <ProductionStatsSection cmdRef={cmd.ref} />
 
       {/* Modules detail */}
       <div className="divide-y divide-[#2a2d35]">
