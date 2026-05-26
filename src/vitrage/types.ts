@@ -127,11 +127,19 @@ export interface WESettings {
   kerf: number;
 }
 
+export interface PlateFormat {
+  width: number;
+  height: number;
+  label: string;
+}
+
 export interface GlassSettings {
   plateWidth: number;
   plateHeight: number;
   cuttingGap: number;
   edgeTrimMargin: number;
+  plateFormats: PlateFormat[];
+  minStripWidth: number;
 }
 
 export interface IsulaStore {
@@ -159,7 +167,48 @@ export const DEFAULT_GLASS: GlassSettings = {
   plateHeight: 2550,
   cuttingGap: 0,
   edgeTrimMargin: 15,
+  plateFormats: [
+    { width: 3210, height: 2550, label: 'Standard' },
+    { width: 4500, height: 3210, label: 'Jumbo' },
+  ],
+  minStripWidth: 20,
 };
+
+export interface GlassProduct {
+  id: string;
+  code: string;
+  label: string;
+  type: 'float' | 'feuillete' | 'trempe' | 'couche' | 'clair';
+  epaisseur: number;
+  has_coating: boolean;
+  coating_face: string;
+  ug_default: number;
+  fournisseur: string;
+  notes: string;
+}
+
+export interface StockPlate {
+  id: string;
+  glass_code: string;
+  width: number;
+  height: number;
+  quantity: number;
+  emplacement: string;
+  fournisseur: string;
+  lot_fournisseur: string;
+  date_reception: string;
+}
+
+export interface StockRemnant {
+  id: string;
+  glass_code: string;
+  width: number;
+  height: number;
+  quantity: number;
+  source_commande: string;
+  date_creation: string;
+  emplacement: string;
+}
 
 export const STATUT_LABELS: Record<CommandeStatut, string> = {
   en_attente: 'En attente',
