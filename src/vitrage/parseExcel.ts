@@ -16,7 +16,7 @@ function normalise(name: string): string {
   return name.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[\s_\-.()/]+/g, '');
 }
 
-type Field = 'reference' | 'variante' | 'largeur' | 'hauteur' | 'dimensions' | 'composition' | 'couleur' | 'qte';
+type Field = 'reference' | 'variante' | 'largeur' | 'hauteur' | 'dimensions' | 'composition' | 'couleur' | 'qte' | 'ug' | 'gaz';
 
 const FIELD_PATTERNS: Record<Field, RegExp[]> = {
   reference: [/^code$/, /^ref/, /^proto/, /^repere/, /^designation/, /^nom/, /^piece/, /^id$/],
@@ -27,6 +27,8 @@ const FIELD_PATTERNS: Record<Field, RegExp[]> = {
   composition: [/^compo/, /^vitrage/, /^spec/, /^verre/, /^glass/, /^description/],
   couleur: [/^couleur/, /^intercalaire/, /^color/, /^couleurintercalaire/],
   qte: [/^qt[eé]?$/, /^quantit/, /^qty/, /^nb/],
+  ug: [/^ug$/, /^coeff.*u/, /^u.*glass/],
+  gaz: [/^gaz$/, /^gas$/, /^argon/, /^typegaz/],
 };
 
 function matchField(header: string): Field | null {
@@ -120,6 +122,8 @@ function rowToVitrages(
   const couleur = get('couleur') || '012 (Noir)';
   const { outer, inner, epaisseur } = compositionRaw ? parseVitrageSpec(compositionRaw) : { outer: '', inner: '', epaisseur: 10 };
   const qte = parseInt(get('qte')) || 1;
+  const ug = get('ug') || '';
+  const gazType = get('gaz') || 'Argon';
 
   const result: Vitrage[] = [];
   for (let i = 0; i < qte; i++) {
@@ -127,6 +131,7 @@ function rowToVitrages(
       id: uuid(), reference, variante, largeur, hauteur,
       composition: compositionRaw, intercalaireEpaisseur: epaisseur,
       intercalaireCouleur: couleur, outerGlass: outer, innerGlass: inner,
+      ug, gazType,
     });
   }
   return result;

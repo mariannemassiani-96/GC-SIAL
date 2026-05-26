@@ -12,6 +12,7 @@ import { optimizeWE } from '../vitrage/optimizeWE';
 import { optimizeGlass } from '../vitrage/optimize2D';
 import { generateLabelsA, generateLabelsB, generateLabelsC } from '../vitrage/generateLabels';
 import { generateFicheWE } from '../vitrage/generateFicheWE';
+import { generateEtiquettesCE, generateEtiquettesAtelier, generateEtiquettesPostCoupe, generateEtiquettesWE } from '../vitrage/generateLabelsIndustrial';
 import {
   fetchCommandes, insertCommande, patchCommande, removeCommande,
   fetchSettings, saveSettings, type Settings,
@@ -225,7 +226,7 @@ function OrderDetail({ commande, onUpdate, onBack, avery, we, glass, onAvery, on
       {tab === 2 && <TabGlass results={glassResult} />}
       {tab === 3 && <TabWE results={weResult} />}
       {tab === 4 && <TabExport vitrages={c.vitrages} allPlates={allPlates} weResult={weResult}
-        commandeLabel={`${c.reference} — ${c.client}`} avery={avery} we={we} />}
+        commandeLabel={`${c.reference} — ${c.client}`} commande={c} avery={avery} we={we} />}
       {tab === 5 && <TabLots lot={c.lotFabrication ?? { ...EMPTY_LOT }} onUpdate={l => onUpdate({ lotFabrication: l })} />}
       {tab === 6 && <TabSettings avery={avery} we={we} glass={glass} onAvery={onAvery} onWE={onWE} onGlass={onGlass} />}
     </div>
@@ -285,7 +286,7 @@ function TabImport({ vitrages, onUpdate, onSetRef }: { vitrages: Vitrage[]; onUp
     onUpdate([...vitrages, {
       id: uuid(), reference: '', variante: 'V1', largeur: 0, hauteur: 0,
       composition: '', intercalaireEpaisseur: 10, intercalaireCouleur: '012 (Noir)',
-      outerGlass: '', innerGlass: '',
+      outerGlass: '', innerGlass: '', ug: '', gazType: 'Argon',
     }]);
   };
 
@@ -500,11 +501,12 @@ function TabWE({ results }: { results: WEGroupe[] }) {
 
 // ── Tab: Export / Generate ────────────────────────────────────────────
 
-function TabExport({ vitrages, allPlates, weResult, commandeLabel, avery, we }: {
+function TabExport({ vitrages, allPlates, weResult, commandeLabel, commande, avery, we }: {
   vitrages: Vitrage[]; allPlates: OptimizedPlate[]; weResult: WEGroupe[];
-  commandeLabel: string; avery: AverySettings; we: WESettings;
+  commandeLabel: string; commande?: Commande; avery: AverySettings; we: WESettings;
 }) {
   const [generating, setGenerating] = useState('');
+  const cmd = commande ?? { id: '', reference: commandeLabel, client: '', dateCreation: '', semaineFabrication: '', semaineLivraison: '', statut: 'en_attente' as const, vitrages, lotFabrication: EMPTY_LOT, notes: '' };
 
   const gen = async (type: string) => {
     setGenerating(type);
@@ -514,21 +516,28 @@ function TabExport({ vitrages, allPlates, weResult, commandeLabel, avery, we }: 
         case 'A': download(await generateLabelsA(vitrages, commandeLabel, avery), `${label}_A.pdf`); break;
         case 'B': download(await generateLabelsB(vitrages, commandeLabel, avery), `${label}_B.pdf`); break;
         case 'C': download(await generateLabelsC(vitrages, allPlates, commandeLabel, avery), `${label}_C.pdf`); break;
-        case 'WE': download(await generateFicheWE(weResult, commandeLabel, we), `${label}_WE.pdf`); break;
+        case 'WE_FICHE': download(await generateFicheWE(weResult, commandeLabel, we), `${label}_WE_fiche.pdf`); break;
+        case 'CE': download(await generateEtiquettesCE(vitrages, cmd), `${label}_CE.pdf`); break;
+        case 'ATELIER': download(await generateEtiquettesAtelier(vitrages, cmd), `${label}_atelier.pdf`); break;
+        case 'POST_COUPE': download(await generateEtiquettesPostCoupe(vitrages, allPlates, commandeLabel), `${label}_post_coupe.pdf`); break;
+        case 'WE_ETQ': download(await generateEtiquettesWE(weResult, commandeLabel), `${label}_WE_etiquettes.pdf`); break;
       }
     } catch (err) { alert(`Erreur : ${err}`); }
     setGenerating('');
   };
 
   const has = vitrages.length > 0;
+  const nbWE = weResult.reduce((s, g) => s + g.barres.reduce((sb, b) => sb + b.pieces.length, 0), 0);
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div className="space-y-4">
+      <h4 className="text-sm font-semibold text-gray-300">Etiquettes Avery (70x35mm)</h4>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
       {[
-        { id: 'A', title: 'Etiquettes assemblees', desc: `${vitrages.length} etiquettes`, color: 'blue', ok: has },
-        { id: 'B', title: 'Etiquettes EXT / INT', desc: `${vitrages.length * 2} etiquettes`, color: 'green', ok: has },
-        { id: 'C', title: 'Ordre de coupe', desc: `${allPlates.length} plaques`, color: 'purple', ok: has && allPlates.length > 0 },
-        { id: 'WE', title: 'Fiche Warm Edge', desc: `${weResult.reduce((s, g) => s + g.totalBarres, 0)} barres`, color: 'amber', ok: has },
+        { id: 'A', title: 'Assemblees', desc: `${vitrages.length} etq`, color: 'blue', ok: has },
+        { id: 'B', title: 'EXT / INT', desc: `${vitrages.length * 2} etq`, color: 'green', ok: has },
+        { id: 'C', title: 'Ordre coupe', desc: `${allPlates.length} plaques`, color: 'purple', ok: has && allPlates.length > 0 },
+        { id: 'WE_FICHE', title: 'Fiche WE', desc: `${weResult.reduce((s, g) => s + g.totalBarres, 0)} barres`, color: 'amber', ok: has },
       ].map(d => (
         <button key={d.id} onClick={() => gen(d.id)} disabled={!d.ok || !!generating}
           className={`text-left p-5 rounded-xl border-2 bg-[#181a20] transition-all ${
@@ -537,6 +546,23 @@ function TabExport({ vitrages, allPlates, weResult, commandeLabel, avery, we }: 
           <div className="text-xs text-gray-500 mt-1">{generating === d.id ? 'Generation...' : d.desc}</div>
         </button>
       ))}
+    </div>
+    <h4 className="text-sm font-semibold text-gray-300">Etiquettes industrielles</h4>
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+      {[
+        { id: 'CE', title: 'CE / CEKAL (100x70)', desc: `${vitrages.length} vitrages`, color: 'blue', ok: has },
+        { id: 'ATELIER', title: 'Fiche atelier (150x100)', desc: `+ checklist fab`, color: 'green', ok: has },
+        { id: 'POST_COUPE', title: 'Post-coupe (70x50)', desc: `${allPlates.reduce((s, p) => s + p.pieces.length, 0)} pieces`, color: 'purple', ok: has && allPlates.length > 0 },
+        { id: 'WE_ETQ', title: 'Etiq. WE (80x30)', desc: `${nbWE} pieces`, color: 'amber', ok: has && nbWE > 0 },
+      ].map(d => (
+        <button key={d.id} onClick={() => gen(d.id)} disabled={!d.ok || !!generating}
+          className={`text-left p-5 rounded-xl border-2 bg-[#181a20] transition-all ${
+            d.ok ? `border-${d.color}-500/30 hover:border-${d.color}-500/60 cursor-pointer` : 'border-[#2a2d35] opacity-40 cursor-not-allowed'}`}>
+          <div className={`text-sm font-semibold text-${d.color}-400`}>{d.title}</div>
+          <div className="text-xs text-gray-500 mt-1">{generating === d.id ? 'Generation...' : d.desc}</div>
+        </button>
+      ))}
+    </div>
     </div>
   );
 }

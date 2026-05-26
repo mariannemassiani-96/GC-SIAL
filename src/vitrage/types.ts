@@ -40,6 +40,8 @@ export interface Vitrage {
   intercalaireCouleur: string;
   outerGlass: string;
   innerGlass: string;
+  ug: string;
+  gazType: string;
 }
 
 export interface GlassPiece {
