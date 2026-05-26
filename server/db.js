@@ -45,4 +45,13 @@ db.exec(`
   );
 `);
 
+// ── Migrations idempotentes (ajout de colonnes sur DB existante) ────
+const userCols = db.prepare("PRAGMA table_info(users)").all().map(c => c.name);
+if (!userCols.includes('pin')) {
+  db.exec("ALTER TABLE users ADD COLUMN pin TEXT");
+}
+if (!userCols.includes('pin_login_enabled')) {
+  db.exec("ALTER TABLE users ADD COLUMN pin_login_enabled INTEGER DEFAULT 0");
+}
+
 module.exports = db;

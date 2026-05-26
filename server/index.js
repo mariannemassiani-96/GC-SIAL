@@ -35,6 +35,35 @@ app.post('/api/auth/login', (req, res) => {
   res.json({ token, user: { id: user.id, email: user.email, nom: user.nom, role: user.role, apps_autorisees: JSON.parse(user.apps_autorisees || '[]') } });
 });
 
+// Connexion opérateur atelier : prénom + PIN à 4 chiffres
+app.post('/api/auth/login-pin', (req, res) => {
+  const { nom, pin } = req.body;
+  if (!nom || !pin) return res.status(400).json({ error: 'Prénom et PIN requis' });
+  if (!/^\d{4}$/.test(String(pin))) return res.status(400).json({ error: 'Le PIN doit comporter 4 chiffres' });
+  const candidates = db.prepare(
+    "SELECT * FROM users WHERE LOWER(TRIM(nom)) = LOWER(TRIM(?)) AND pin_login_enabled = 1 AND actif = 1"
+  ).all(nom);
+  let matched = null;
+  for (const user of candidates) {
+    if (user.pin && checkPassword(String(pin), user.pin)) { matched = user; break; }
+  }
+  if (!matched) {
+    return res.status(401).json({ error: 'Prénom ou PIN incorrect' });
+  }
+  const token = generateToken(matched);
+  db.prepare('INSERT INTO activity_log (user_id, action) VALUES (?, ?)').run(matched.id, 'login_pin');
+  res.json({
+    token,
+    user: {
+      id: matched.id,
+      email: matched.email,
+      nom: matched.nom,
+      role: matched.role,
+      apps_autorisees: JSON.parse(matched.apps_autorisees || '[]'),
+    },
+  });
+});
+
 app.get('/api/auth/me', authMiddleware, (req, res) => {
   const user = db.prepare('SELECT id, email, nom, role, apps_autorisees FROM users WHERE id = ?').get(req.user.id);
   if (!user) return res.status(404).json({ error: 'Utilisateur non trouve' });
@@ -46,16 +75,25 @@ app.get('/api/auth/me', authMiddleware, (req, res) => {
 // ══════════════════════════════════════════════════════════════
 
 app.get('/api/users', authMiddleware, adminOnly, (req, res) => {
-  const users = db.prepare('SELECT id, email, nom, role, apps_autorisees, actif, created_at FROM users').all();
-  res.json(users.map(u => ({ ...u, apps_autorisees: JSON.parse(u.apps_autorisees || '[]') })));
+  const users = db.prepare('SELECT id, email, nom, role, apps_autorisees, actif, created_at, pin_login_enabled FROM users').all();
+  res.json(users.map(u => ({
+    ...u,
+    apps_autorisees: JSON.parse(u.apps_autorisees || '[]'),
+    pin_login_enabled: !!u.pin_login_enabled,
+  })));
 });
 
 app.post('/api/users', authMiddleware, adminOnly, (req, res) => {
-  const { email, password, nom, role, apps_autorisees } = req.body;
+  const { email, password, nom, role, apps_autorisees, pin, pin_login_enabled } = req.body;
   if (!email || !password || !nom) return res.status(400).json({ error: 'email, password et nom requis' });
+  if (pin_login_enabled && (!pin || !/^\d{4}$/.test(String(pin)))) {
+    return res.status(400).json({ error: 'PIN à 4 chiffres requis quand la connexion par PIN est activée' });
+  }
   try {
-    const result = db.prepare('INSERT INTO users (email, password, nom, role, apps_autorisees) VALUES (?, ?, ?, ?, ?)').run(
-      email, hashPassword(password), nom, role || 'operateur', JSON.stringify(apps_autorisees || [])
+    const result = db.prepare('INSERT INTO users (email, password, nom, role, apps_autorisees, pin, pin_login_enabled) VALUES (?, ?, ?, ?, ?, ?, ?)').run(
+      email, hashPassword(password), nom, role || 'operateur', JSON.stringify(apps_autorisees || []),
+      pin ? hashPassword(String(pin)) : null,
+      pin_login_enabled ? 1 : 0
     );
     res.json({ id: result.lastInsertRowid, email, nom, role: role || 'operateur' });
   } catch (e) {
@@ -64,7 +102,10 @@ app.post('/api/users', authMiddleware, adminOnly, (req, res) => {
 });
 
 app.put('/api/users/:id', authMiddleware, adminOnly, (req, res) => {
-  const { nom, role, apps_autorisees, actif, password } = req.body;
+  const { nom, role, apps_autorisees, actif, password, pin, pin_login_enabled } = req.body;
+  if (pin !== undefined && pin !== null && pin !== '' && !/^\d{4}$/.test(String(pin))) {
+    return res.status(400).json({ error: 'Le PIN doit comporter 4 chiffres' });
+  }
   const updates = [];
   const params = [];
   if (nom !== undefined) { updates.push('nom = ?'); params.push(nom); }
@@ -72,6 +113,8 @@ app.put('/api/users/:id', authMiddleware, adminOnly, (req, res) => {
   if (apps_autorisees !== undefined) { updates.push('apps_autorisees = ?'); params.push(JSON.stringify(apps_autorisees)); }
   if (actif !== undefined) { updates.push('actif = ?'); params.push(actif ? 1 : 0); }
   if (password) { updates.push('password = ?'); params.push(hashPassword(password)); }
+  if (pin !== undefined) { updates.push('pin = ?'); params.push(pin ? hashPassword(String(pin)) : null); }
+  if (pin_login_enabled !== undefined) { updates.push('pin_login_enabled = ?'); params.push(pin_login_enabled ? 1 : 0); }
   if (updates.length === 0) return res.status(400).json({ error: 'Rien a mettre a jour' });
   params.push(req.params.id);
   db.prepare(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`).run(...params);

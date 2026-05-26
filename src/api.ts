@@ -51,6 +51,14 @@ export async function login(email: string, password: string): Promise<User> {
   return data.user;
 }
 
+export async function loginPin(nom: string, pin: string): Promise<User> {
+  const data = await request<LoginResponse>('POST', '/api/auth/login-pin', { nom, pin });
+  token = data.token;
+  localStorage.setItem('sial_token', data.token);
+  localStorage.setItem('sial_user', JSON.stringify(data.user));
+  return data.user;
+}
+
 export function logout() {
   token = null;
   localStorage.removeItem('sial_token');
@@ -98,17 +106,34 @@ export async function bulkSave(app: string, collection: string, items: unknown[]
 export interface UserFull extends User {
   actif: boolean;
   created_at: string;
+  pin_login_enabled?: boolean;
 }
 
 export async function listUsers(): Promise<UserFull[]> {
   return request<UserFull[]>('GET', '/api/users');
 }
 
-export async function createUser(data: { email: string; password: string; nom: string; role: string; apps_autorisees: string[] }): Promise<{ id: number }> {
+export async function createUser(data: {
+  email: string;
+  password: string;
+  nom: string;
+  role: string;
+  apps_autorisees: string[];
+  pin?: string;
+  pin_login_enabled?: boolean;
+}): Promise<{ id: number }> {
   return request('POST', '/api/users', data);
 }
 
-export async function updateUser(id: number, data: Partial<{ nom: string; role: string; apps_autorisees: string[]; actif: boolean; password: string }>): Promise<void> {
+export async function updateUser(id: number, data: Partial<{
+  nom: string;
+  role: string;
+  apps_autorisees: string[];
+  actif: boolean;
+  password: string;
+  pin: string | null;
+  pin_login_enabled: boolean;
+}>): Promise<void> {
   await request('PUT', `/api/users/${id}`, data);
 }
 

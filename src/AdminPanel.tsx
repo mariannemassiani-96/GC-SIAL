@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { ArrowLeft, Save, Eye, EyeOff, UserPlus, Shield, Users } from 'lucide-react';
+import { ArrowLeft, Save, Eye, EyeOff, UserPlus, Shield, Users, KeyRound } from 'lucide-react';
 import { listUsers, createUser, updateUser, type UserFull } from './api';
 import { useAuth } from './AuthContext';
 
@@ -40,6 +40,8 @@ export function AdminPanel({ onBack }: Props) {
   const [formPassword, setFormPassword] = useState('');
   const [formRole, setFormRole] = useState('operateur');
   const [formApps, setFormApps] = useState<string[]>([...ALL_APPS.map(a => a.id)]);
+  const [formPinEnabled, setFormPinEnabled] = useState(false);
+  const [formPin, setFormPin] = useState('');
   const [showPwd, setShowPwd] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -64,6 +66,8 @@ export function AdminPanel({ onBack }: Props) {
     setFormRole(u.role);
     setFormApps(u.apps_autorisees ?? [...ALL_APPS.map(a => a.id)]);
     setFormPassword('');
+    setFormPinEnabled(!!u.pin_login_enabled);
+    setFormPin('');
     setShowNew(false);
   };
 
@@ -75,6 +79,8 @@ export function AdminPanel({ onBack }: Props) {
     setFormPassword('');
     setFormRole('operateur');
     setFormApps([...ALL_APPS.map(a => a.id)]);
+    setFormPinEnabled(false);
+    setFormPin('');
   };
 
   const toggleApp = (appId: string) => {
@@ -86,10 +92,15 @@ export function AdminPanel({ onBack }: Props) {
 
   const handleSaveNew = async () => {
     if (!formEmail || !formPassword || !formNom) { setError('Email, mot de passe et nom requis'); return; }
+    if (formPinEnabled && !/^\d{4}$/.test(formPin)) { setError('PIN à 4 chiffres requis quand la connexion par PIN est activée'); return; }
     setSaving(true);
     setError(null);
     try {
-      await createUser({ email: formEmail, password: formPassword, nom: formNom, role: formRole, apps_autorisees: formApps });
+      await createUser({
+        email: formEmail, password: formPassword, nom: formNom, role: formRole, apps_autorisees: formApps,
+        pin: formPinEnabled ? formPin : undefined,
+        pin_login_enabled: formPinEnabled,
+      });
       setShowNew(false);
       await load();
     } catch (e: unknown) {
@@ -101,11 +112,17 @@ export function AdminPanel({ onBack }: Props) {
 
   const handleSaveEdit = async () => {
     if (!editingId) return;
+    if (formPinEnabled && formPin && !/^\d{4}$/.test(formPin)) { setError('Le PIN doit comporter 4 chiffres'); return; }
     setSaving(true);
     setError(null);
     try {
-      const updates: Parameters<typeof updateUser>[1] = { nom: formNom, role: formRole, apps_autorisees: formApps };
+      const updates: Parameters<typeof updateUser>[1] = {
+        nom: formNom, role: formRole, apps_autorisees: formApps,
+        pin_login_enabled: formPinEnabled,
+      };
       if (formPassword) updates.password = formPassword;
+      if (formPin) updates.pin = formPin;
+      else if (!formPinEnabled) updates.pin = null;  // si on désactive, on efface le PIN
       await updateUser(editingId, updates);
       setEditingId(null);
       await load();
@@ -205,6 +222,36 @@ export function AdminPanel({ onBack }: Props) {
                   </div>
                 </div>
 
+                {/* Connexion par PIN (opérateur atelier) */}
+                <div className="border-t border-[#2a2d35] pt-4">
+                  <label className="flex items-center gap-2 cursor-pointer mb-2">
+                    <input type="checkbox" checked={formPinEnabled}
+                      onChange={e => setFormPinEnabled(e.target.checked)}
+                      className="cursor-pointer" />
+                    <KeyRound size={14} className="text-blue-400" />
+                    <span className="text-xs text-gray-300">Activer la connexion par PIN (prénom + 4 chiffres)</span>
+                  </label>
+                  {formPinEnabled && (
+                    <div className="ml-6 space-y-1">
+                      <label className="block text-[10px] text-gray-500">
+                        Code PIN à 4 chiffres {!showNew && '(laisser vide pour conserver l\'ancien)'}
+                      </label>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        pattern="\d{4}"
+                        maxLength={4}
+                        value={formPin}
+                        onChange={e => setFormPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                        placeholder="••••"
+                        className="w-32 bg-[#0f1117] border border-[#2a2d35] rounded-lg px-3 py-2 text-lg font-mono tracking-widest text-center text-white focus:outline-none focus:border-green-500/50" />
+                      <p className="text-[10px] text-gray-500">
+                        L'utilisateur pourra se connecter avec son prénom <span className="text-gray-300 font-semibold">« {formNom || '—'} »</span> et ce PIN.
+                      </p>
+                    </div>
+                  )}
+                </div>
+
                 <div className="flex gap-2 pt-2">
                   <button onClick={showNew ? handleSaveNew : handleSaveEdit} disabled={saving} className="flex items-center gap-1.5 px-4 py-2 bg-green-600 hover:bg-green-500 disabled:bg-green-600/50 text-white text-xs font-semibold rounded-lg transition-colors">
                     <Save size={14} /> {saving ? 'Enregistrement...' : 'Enregistrer'}
@@ -228,6 +275,11 @@ export function AdminPanel({ onBack }: Props) {
                         <span className={`text-[10px] px-2 py-0.5 rounded border ${getRoleStyle(u.role)}`}>
                           {ROLES.find(r => r.value === u.role)?.label ?? u.role}
                         </span>
+                        {u.pin_login_enabled && (
+                          <span className="text-[10px] px-2 py-0.5 rounded bg-blue-600/20 text-blue-300 border border-blue-500/30 flex items-center gap-1">
+                            <KeyRound size={9} /> PIN
+                          </span>
+                        )}
                         {!u.actif && <span className="text-[10px] px-2 py-0.5 rounded bg-red-600/20 text-red-400 border border-red-500/30">Desactive</span>}
                       </div>
                       <p className="text-xs text-gray-500 mt-0.5">{u.email}</p>
