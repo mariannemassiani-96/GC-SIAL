@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { generateEtiquettesCE, generateEtiquettesAtelier, generateEtiquettesPostCoupe, generateEtiquettesWE } from './generateLabelsIndustrial';
-import type { Vitrage, WEGroupe } from './types';
+import { generateLabelsA, generateLabelsB, generateLabelsC } from './generateLabels';
+import type { Vitrage, WEGroupe, AverySettings } from './types';
+import { DEFAULT_AVERY } from './types';
 
 const API = import.meta.env.VITE_ISULA_API_URL as string || '';
 
@@ -1392,6 +1394,9 @@ function EtiquettesTab({ pieces, wePieces, lotRef, weOptim }: {
       const vitrages = vitragesFromPieces();
       const label = lotRef.replace(/[^a-zA-Z0-9_-]/g, '_');
       switch (type) {
+        case 'A': download(await generateLabelsA(vitrages, lotRef, DEFAULT_AVERY), `${label}_avery_A.pdf`); break;
+        case 'B': download(await generateLabelsB(vitrages, lotRef, DEFAULT_AVERY), `${label}_avery_B.pdf`); break;
+        case 'C': download(await generateLabelsC(vitrages, [], lotRef, DEFAULT_AVERY), `${label}_avery_C.pdf`); break;
         case 'CE': download(await generateEtiquettesCE(vitrages, cmdInfo), `${label}_CE.pdf`); break;
         case 'ATELIER': download(await generateEtiquettesAtelier(vitrages, cmdInfo), `${label}_atelier.pdf`); break;
         case 'POST_COUPE': download(await generateEtiquettesPostCoupe(vitrages, [], lotRef), `${label}_post_coupe.pdf`); break;
@@ -1402,6 +1407,9 @@ function EtiquettesTab({ pieces, wePieces, lotRef, weOptim }: {
   };
 
   const buttons = [
+    { id: 'A', label: 'Avery A', desc: 'Ref + compo + dimensions', color: 'bg-gray-700 hover:bg-gray-600' },
+    { id: 'B', label: 'Avery B', desc: 'Ref + QR code', color: 'bg-gray-700 hover:bg-gray-600' },
+    { id: 'C', label: 'Avery C', desc: 'Ref + plaque + face', color: 'bg-gray-700 hover:bg-gray-600' },
     { id: 'CE', label: 'CE / CEKAL', desc: 'Conformite + tracabilite', color: 'bg-blue-700 hover:bg-blue-600' },
     { id: 'ATELIER', label: 'Atelier + Checklist', desc: 'Fiche suiveuse par vitrage', color: 'bg-green-700 hover:bg-green-600' },
     { id: 'POST_COUPE', label: 'Post-coupe', desc: 'Etiquette apres decoupe', color: 'bg-amber-700 hover:bg-amber-600' },
