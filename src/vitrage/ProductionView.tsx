@@ -1,6 +1,15 @@
 import { useState, useEffect, useCallback } from 'react';
+import { generateEtiquettesCE, generateEtiquettesAtelier, generateEtiquettesPostCoupe, generateEtiquettesWE } from './generateLabelsIndustrial';
+import type { Vitrage, WEGroupe } from './types';
 
 const API = import.meta.env.VITE_ISULA_API_URL as string || '';
+
+function download(blob: Blob, name: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = name; a.click();
+  URL.revokeObjectURL(url);
+}
 
 const STATUTS_VERRE = [
   { id: 'a_preparer', label: 'A preparer', color: 'text-gray-400 bg-gray-500/20' },
@@ -84,7 +93,7 @@ export function ProductionView({ onBack }: { onBack: () => void }) {
   const [lots, setLots] = useState<Lot[]>([]);
   const [selectedLot, setSelectedLot] = useState<Lot | null>(null);
   const [stats, setStats] = useState<Stats | null>(null);
-  const [tab, setTab] = useState<'verre' | 'we' | 'optim_verre' | 'optim_we' | 'preparation' | 'lots' | 'stats'>('verre');
+  const [tab, setTab] = useState<'verre' | 'we' | 'optim_verre' | 'optim_we' | 'preparation' | 'lots' | 'etiquettes' | 'stats'>('verre');
   const [filtreMachine, setFiltreMachine] = useState<string>('');
   const [filtreStatut, setFiltreStatut] = useState<string>('');
   const [filtreCommande, setFiltreCommande] = useState<string>('');
@@ -234,6 +243,7 @@ export function ProductionView({ onBack }: { onBack: () => void }) {
               ['optim_we', 'Optim WE'],
               ['preparation', 'Preparation'],
               ['lots', 'Lots matieres'],
+              ['etiquettes', 'Etiquettes'],
               ['stats', 'Productivite'],
             ] as const).map(([t, label]) => (
               <button key={t} onClick={() => setTab(t as typeof tab)}
@@ -373,6 +383,10 @@ export function ProductionView({ onBack }: { onBack: () => void }) {
           {tab === 'preparation' && selectedLot && (
             <PreparationTab lotId={selectedLot.id} pieces={pieces}
               savedPrep={selectedLot.preparation || {}} onReload={() => loadLotDetail(selectedLot)} />
+          )}
+
+          {tab === 'etiquettes' && selectedLot && (
+            <EtiquettesTab pieces={pieces} wePieces={wePieces} lotRef={selectedLot.reference} weOptim={selectedLot.we_optim} />
           )}
 
           {tab === 'stats' && stats && (
@@ -555,7 +569,7 @@ function AtelierView({ lots, semaine, poste, onSelectPoste, onBack, loadLotDetai
         <div className="flex items-center gap-4 p-3 bg-[#14161d] border-b border-[#2a2d35]">
           <button onClick={() => setSelectedLot(null)} className="text-gray-400 hover:text-white text-lg px-3 py-2">← Lots</button>
           <span className="text-xl font-bold text-white flex-1">{selectedLot.reference}</span>
-          <span className="text-base text-amber-400 font-bold">COUPE INTERCALAIRE — {barreNos.length} barres</span>
+          <span className="text-base text-amber-400 font-bold">COUPE INTERCALAIRE — {wePieces.length} coupes</span>
         </div>
 
         <div className="flex-1 overflow-auto p-4">
@@ -1324,6 +1338,86 @@ function PreparationTab({ lotId, pieces, savedPrep, onReload }: {
       <button onClick={save} className="px-4 py-2 bg-green-600 hover:bg-green-500 text-white text-sm rounded-lg transition-colors">
         Sauvegarder preparation
       </button>
+    </div>
+  );
+}
+
+
+// ── Etiquettes Tab ──────────────────────────────────────────────────
+
+function EtiquettesTab({ pieces, wePieces, lotRef, weOptim }: {
+  pieces: Piece[]; wePieces: WEPiece[]; lotRef: string; weOptim?: unknown[];
+}) {
+  const [generating, setGenerating] = useState(false);
+
+  const vitragesFromPieces = (): Vitrage[] => {
+    const grouped = new Map<string, Piece[]>();
+    for (const p of pieces) {
+      const key = p.vitrage_id || p.id;
+      const arr = grouped.get(key) || [];
+      arr.push(p);
+      grouped.set(key, arr);
+    }
+    return [...grouped.values()].map(pcs => {
+      const ext = pcs.find(p => p.face === 'EXT');
+      const int = pcs.find(p => p.face === 'INT');
+      const p = ext || int || pcs[0];
+      return {
+        id: p.vitrage_id || p.id,
+        reference: p.vitrage_ref,
+        variante: 'V1' as const,
+        largeur: p.largeur,
+        hauteur: p.hauteur,
+        composition: p.composition || `${ext?.material || ''} / ${int?.material || ''}`,
+        intercalaireEpaisseur: 10,
+        intercalaireCouleur: '012 Noir',
+        outerGlass: ext?.material || '',
+        innerGlass: int?.material || '',
+        ug: '', gazType: 'Argon',
+      };
+    });
+  };
+
+  const cmdInfo = { reference: lotRef, client: '', date_creation: new Date().toISOString().slice(0, 10) };
+
+  const gen = async (type: string) => {
+    setGenerating(true);
+    try {
+      const vitrages = vitragesFromPieces();
+      const label = lotRef.replace(/[^a-zA-Z0-9_-]/g, '_');
+      switch (type) {
+        case 'CE': download(await generateEtiquettesCE(vitrages, cmdInfo), `${label}_CE.pdf`); break;
+        case 'ATELIER': download(await generateEtiquettesAtelier(vitrages, cmdInfo), `${label}_atelier.pdf`); break;
+        case 'POST_COUPE': download(await generateEtiquettesPostCoupe(vitrages, [], lotRef), `${label}_post_coupe.pdf`); break;
+        case 'WE': download(await generateEtiquettesWE(weOptim as WEGroupe[] || [], lotRef), `${label}_WE.pdf`); break;
+      }
+    } catch (err) { alert(`Erreur: ${err}`); }
+    setGenerating(false);
+  };
+
+  const buttons = [
+    { id: 'CE', label: 'CE / CEKAL', desc: 'Conformite + tracabilite', color: 'bg-blue-700 hover:bg-blue-600' },
+    { id: 'ATELIER', label: 'Atelier + Checklist', desc: 'Fiche suiveuse par vitrage', color: 'bg-green-700 hover:bg-green-600' },
+    { id: 'POST_COUPE', label: 'Post-coupe', desc: 'Etiquette apres decoupe', color: 'bg-amber-700 hover:bg-amber-600' },
+    { id: 'WE', label: 'Warm Edge', desc: 'Etiquettes intercalaires', color: 'bg-purple-700 hover:bg-purple-600' },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <h4 className="text-sm font-semibold text-gray-300">Etiquettes du lot {lotRef}</h4>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {buttons.map(b => (
+          <button key={b.id} onClick={() => gen(b.id)} disabled={generating}
+            className={`${b.color} text-white p-4 rounded-lg text-left transition-colors disabled:opacity-50 active:scale-95`}>
+            <div className="text-sm font-bold">{b.label}</div>
+            <div className="text-xs text-white/70 mt-1">{b.desc}</div>
+            <div className="text-xs text-white/50 mt-1">
+              {b.id === 'WE' ? `${wePieces.length} coupes` : `${pieces.length / 2} vitrages`}
+            </div>
+          </button>
+        ))}
+      </div>
+      {generating && <p className="text-amber-400 text-sm">Generation en cours...</p>}
     </div>
   );
 }
