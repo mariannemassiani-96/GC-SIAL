@@ -141,55 +141,53 @@ export function PosteCoupe({ onBack, startAtelier }: Props) {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = '.xml,.pdf';
+    input.multiple = true;
     input.onchange = async () => {
-      const file = input.files?.[0];
-      if (!file) return;
+      const files = input.files;
+      if (!files || files.length === 0) return;
       const commande = commandes.find(c => c.id === commandeId);
       if (!commande) return;
 
       try {
-        const ext = file.name.split('.').pop()?.toLowerCase();
+        const existing = commande.machines[machine] || {} as MachineData;
+        let job: FstJob | undefined = existing.fstlineJob;
+        let pdfB64: string | undefined = existing.pdfBase64;
+        let xmlName = '';
+        let pdfName = '';
 
-        if (ext === 'xml') {
-          const job = await parseFstlineFile(file);
-          const md: MachineData = {
-            fstlineJob: job, fileName: file.name,
-            importDate: new Date().toISOString(), statut: 'imported',
-            barresTotal: job.totalBars, barresFaites: 0,
-          };
-          const updated: Commande = {
-            ...commande,
-            chantier: commande.chantier || job.chantier || '',
-            ref: commande.ref || job.orderCode || '',
-            machines: { ...commande.machines, [machine]: md },
-          };
-          upsert(updated);
-          setSelectedId(updated.id);
-          if (updated.ref) {
-            upsertCommandeGlobale(updated.ref.trim(), { client: '', chantier: updated.chantier || '' }).catch(() => {});
-            syncCoupeToGlobal(updated);
+        for (const file of Array.from(files)) {
+          const ext = file.name.split('.').pop()?.toLowerCase();
+          if (ext === 'xml') {
+            job = await parseFstlineFile(file);
+            xmlName = file.name;
+          } else if (ext === 'pdf') {
+            const buffer = await file.arrayBuffer();
+            const bytes = new Uint8Array(buffer);
+            let binary = '';
+            for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+            pdfB64 = btoa(binary);
+            pdfName = file.name;
           }
-        } else {
-          const buffer = await file.arrayBuffer();
-          const bytes = new Uint8Array(buffer);
-          let binary = '';
-          for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-          const base64 = btoa(binary);
+        }
 
-          const md: MachineData = {
-            pdfBase64: base64, fileName: file.name,
-            importDate: new Date().toISOString(), statut: 'imported',
-            barresTotal: 0, barresFaites: 0,
-          };
-          const updated: Commande = {
-            ...commande,
-            machines: { ...commande.machines, [machine]: md },
-          };
-          upsert(updated);
-          setSelectedId(updated.id);
-          if (updated.ref) {
-            syncCoupeToGlobal(updated);
-          }
+        const names = [xmlName, pdfName].filter(Boolean).join(' + ');
+        const md: MachineData = {
+          fstlineJob: job, pdfBase64: pdfB64,
+          fileName: names || existing.fileName || '',
+          importDate: new Date().toISOString(), statut: 'imported',
+          barresTotal: job?.totalBars ?? 0, barresFaites: 0,
+        };
+        const updated: Commande = {
+          ...commande,
+          chantier: commande.chantier || job?.chantier || '',
+          ref: commande.ref || job?.orderCode || '',
+          machines: { ...commande.machines, [machine]: md },
+        };
+        upsert(updated);
+        setSelectedId(updated.id);
+        if (updated.ref) {
+          upsertCommandeGlobale(updated.ref.trim(), { client: '', chantier: updated.chantier || '' }).catch(() => {});
+          syncCoupeToGlobal(updated);
         }
       } catch (e) {
         alert('Erreur import : ' + (e instanceof Error ? e.message : String(e)));
@@ -353,10 +351,20 @@ export function PosteCoupe({ onBack, startAtelier }: Props) {
                       <span className="text-[10px] text-gray-500">{md.fileName} — {new Date(md.importDate).toLocaleDateString('fr-FR')}</span>
                     )}
                   </div>
-                  <button onClick={() => handleImportMachine(selected.id, machine)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-[#252830] hover:bg-[#353840] text-gray-300 text-xs rounded-lg border border-[#353840]">
-                    <Upload size={12} /> {md ? 'Re-importer' : 'Importer XML'}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {md?.pdfBase64 && (
+                      <button onClick={() => {
+                        const w = window.open();
+                        if (w) w.document.write(`<iframe src="data:application/pdf;base64,${md.pdfBase64}" width="100%" height="100%" style="border:none;position:absolute;inset:0"></iframe>`);
+                      }} className="flex items-center gap-1 px-3 py-1.5 bg-blue-800 hover:bg-blue-700 text-blue-200 text-xs rounded-lg">
+                        PDF
+                      </button>
+                    )}
+                    <button onClick={() => handleImportMachine(selected.id, machine)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-[#252830] hover:bg-[#353840] text-gray-300 text-xs rounded-lg border border-[#353840]">
+                      <Upload size={12} /> {md ? 'Re-importer' : 'Importer XML + PDF'}
+                    </button>
+                  </div>
                 </div>
 
                 {stats ? (
