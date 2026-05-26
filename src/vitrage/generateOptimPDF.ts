@@ -6,7 +6,6 @@ const A4_W = 210 * MM;
 const A4_H = 297 * MM;
 const MARGIN = 12 * MM;
 
-const BLUE = rgb(0, 0, 0.8);
 const YELLOW = rgb(1, 0.85, 0);
 const BLACK = rgb(0, 0, 0);
 const WHITE = rgb(1, 1, 1);
