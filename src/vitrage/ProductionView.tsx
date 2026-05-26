@@ -395,12 +395,13 @@ function OptimVerreTab({ glassOptim, pieces, lotId, onReload }: {
   const allPlates: { plate: OptimPlate; material: string }[] = [];
   for (const r of glassOptim) {
     for (const p of (r.plates || [])) {
+      const raw = p as unknown as Record<string, unknown>;
       const plate: OptimPlate = {
-        numero: p.numero ?? (p as Record<string, unknown>).numero as number,
+        numero: p.numero ?? raw.numero as number,
         material: p.material ?? (r.material || ''),
-        plateWidth: p.plateWidth ?? (p as Record<string, unknown>).plate_width as number ?? 3210,
-        plateHeight: p.plateHeight ?? (p as Record<string, unknown>).plate_height as number ?? 2550,
-        pieces: ((p.pieces || []) as Record<string, unknown>[]).map(pc => ({
+        plateWidth: p.plateWidth ?? raw.plate_width as number ?? 3210,
+        plateHeight: p.plateHeight ?? raw.plate_height as number ?? 2550,
+        pieces: ((p.pieces || []) as unknown as Record<string, unknown>[]).map(pc => ({
           vitrageRef: (pc.vitrageRef ?? pc.vitrage_ref ?? '') as string,
           width: (pc.width ?? 0) as number,
           height: (pc.height ?? 0) as number,
@@ -410,7 +411,7 @@ function OptimVerreTab({ glassOptim, pieces, lotId, onReload }: {
           face: (pc.face ?? '') as string,
           material: (pc.material ?? '') as string,
         })),
-        utilisation: p.utilisation ?? (p as Record<string, unknown>).utilisation as number ?? 0,
+        utilisation: p.utilisation ?? raw.utilisation as number ?? 0,
       };
       allPlates.push({ plate, material: plate.material });
     }
@@ -424,7 +425,6 @@ function OptimVerreTab({ glassOptim, pieces, lotId, onReload }: {
   const lotVerre = pieces.find(p => p.plaque_no === plaqueNo)?.lot_verre || '';
 
   const [lotInput, setLotInput] = useState('');
-  const [done, setDone] = useState(false);
 
   const piecesOnPlate = pieces.filter(p => p.plaque_no === plaqueNo);
   const allCut = piecesOnPlate.length > 0 && piecesOnPlate.every(p => p.statut === 'coupe' || p.statut === 'assemble');
@@ -583,11 +583,10 @@ function PreparationTab({ lotId, pieces, savedPrep, onReload }: {
     }
   }
 
-  const materials = [...plateCounts.entries()].map(([mat, plaques]) => ({
-    material: mat,
-    needed: plaques.size,
-    ...(savedPrep[mat] || { ready: false, nc_qty: 0, nc_notes: '' }),
-  }));
+  const materials = [...plateCounts.entries()].map(([mat, plaques]) => {
+    const saved = savedPrep[mat];
+    return { material: mat, needed: plaques.size, ready: saved?.ready ?? false, nc_qty: saved?.nc_qty ?? 0, nc_notes: saved?.nc_notes ?? '' };
+  });
 
   const [prep, setPrep] = useState<Record<string, PrepItem>>(() => {
     const init: Record<string, PrepItem> = {};
