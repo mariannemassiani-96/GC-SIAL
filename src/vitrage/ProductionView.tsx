@@ -414,6 +414,7 @@ function AtelierView({ lots, semaine, poste, onSelectPoste, onBack, loadLotDetai
 }) {
   const [plateIdx, setPlateIdx] = useState(0);
   const [selectedMaterial, setSelectedMaterial] = useState<string | null>(null);
+  const [editCompo, setEditCompo] = useState<{ pieceId: string; original: string; current: string } | null>(null);
 
   if (!poste) {
     return (
@@ -655,12 +656,15 @@ function AtelierView({ lots, semaine, poste, onSelectPoste, onBack, loadLotDetai
                       <td className="py-1 px-1">
                         {dbPiece && !isNC && (
                           <div className="flex gap-1">
+                            <button onClick={() => setEditCompo({ pieceId: dbPiece.id, original: dbPiece.material, current: dbPiece.material })}
+                              className="px-2 py-1 bg-purple-700 hover:bg-purple-600 text-white text-xs rounded active:scale-95">Compo</button>
                             <button onClick={() => { patchJSON(`/api/production/pieces/${dbPiece.id}`, { statut: 'nc', operateur: '' }); onReload(); }}
                               className="px-2 py-1 bg-red-700 hover:bg-red-600 text-white text-xs rounded active:scale-95">NC</button>
                             <button onClick={() => { patchJSON(`/api/production/pieces/${dbPiece.id}`, { statut: 'casse', operateur: '' }); onReload(); }}
                               className="px-2 py-1 bg-orange-700 hover:bg-orange-600 text-white text-xs rounded active:scale-95">Cassé</button>
                           </div>
                         )}
+                        {dbPiece && dbPiece.notes && <div className="text-purple-400 text-[10px]">↳ {dbPiece.notes}</div>}
                         {isNC && <span className="text-red-400 font-bold text-sm">⚠ A REFAIRE</span>}
                       </td>
                     </tr>
@@ -692,6 +696,41 @@ function AtelierView({ lots, semaine, poste, onSelectPoste, onBack, loadLotDetai
           </button>
         )}
       </div>
+
+      {/* Modale changement composition */}
+      {editCompo && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[60]" onClick={() => setEditCompo(null)}>
+          <div className="bg-[#181a20] rounded-2xl p-6 w-full max-w-md mx-4 border border-[#2a2d35]" onClick={e => e.stopPropagation()}>
+            <h3 className="text-xl font-bold text-white mb-4">Changer la composition</h3>
+            <div className="mb-4">
+              <div className="text-sm text-gray-400 mb-1">Materiau original</div>
+              <div className="text-lg text-gray-500 line-through">{editCompo.original}</div>
+            </div>
+            <div className="mb-4">
+              <label className="text-sm text-gray-400 block mb-1">Nouveau materiau</label>
+              <input value={editCompo.current} onChange={e => setEditCompo({ ...editCompo, current: e.target.value })}
+                className="w-full bg-[#14161d] border border-[#2a2d35] rounded-xl px-4 py-3 text-lg text-white focus:border-purple-500 outline-none"
+                placeholder="Ex: 6 FE 1.1" />
+            </div>
+            <div className="flex gap-3">
+              <button onClick={async () => {
+                const note = `Compo changee: ${editCompo.original} → ${editCompo.current}`;
+                await patchJSON(`/api/production/pieces/${editCompo.pieceId}`, {
+                  material: editCompo.current, composition: editCompo.current, notes: note,
+                });
+                setEditCompo(null);
+                onReload();
+              }} className="flex-1 py-4 bg-purple-600 hover:bg-purple-500 text-white text-lg font-bold rounded-xl active:scale-95">
+                Valider
+              </button>
+              <button onClick={() => setEditCompo(null)}
+                className="px-6 py-4 bg-gray-700 hover:bg-gray-600 text-white text-lg rounded-xl active:scale-95">
+                Annuler
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
