@@ -50,8 +50,8 @@ function HubFabrication({ onSelect }: { onSelect: (mode: AppMode) => void }) {
     },
     {
       id: 'poste_coupe' as AppMode,
-      label: 'Poste de Coupe',
-      description: 'Optimisation barres, preparation stock, validation coupes piece par piece, visualisation chutes.',
+      label: 'Preparation & Coupe Profiles',
+      description: 'Import FSTLINE, preparation barres, coupe LMT65/DT/Renfort, suivi piece par piece.',
       icon: (
         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-red-400">
           <path d="M6 9l6 6M14 9l-6 6" /><circle cx="10" cy="12" r="9" />
@@ -325,7 +325,7 @@ function AppContent() {
             )}
             {autoApps.includes('poste_coupe') && (
               <button onClick={() => setMode('poste_coupe')} className="p-6 bg-green-700 hover:bg-green-600 text-white text-2xl font-bold rounded-2xl active:scale-95">
-                COUPE PROFILES
+                PREPARATION & COUPE PROFILES
               </button>
             )}
             <button onClick={() => { apiLogout(); window.location.reload(); }}
