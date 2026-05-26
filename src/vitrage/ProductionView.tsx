@@ -77,6 +77,8 @@ async function patchJSON(path: string, body: unknown) {
 // ── Main Production View ─────────────────────────────────────────────
 
 export function ProductionView({ onBack }: { onBack: () => void }) {
+  const [modeAtelier, setModeAtelier] = useState(false);
+  const [poste, setPoste] = useState<'' | 'lisec' | 'bottero' | 'assemblage'>('');
   const [semaine, setSemaine] = useState(getISOWeek(new Date()));
   const [lots, setLots] = useState<Lot[]>([]);
   const [selectedLot, setSelectedLot] = useState<Lot | null>(null);
@@ -131,12 +133,33 @@ export function ProductionView({ onBack }: { onBack: () => void }) {
 
   const allCommandes = [...new Set(pieces.map(p => p.commande_ref))];
 
+  // ── Mode Atelier (tablette/opérateur) ──
+  if (modeAtelier) {
+    return (
+      <AtelierView
+        lots={lots} semaine={semaine} poste={poste}
+        onSelectPoste={setPoste}
+        onBack={() => setModeAtelier(false)}
+        onSemaineChange={setSemaine}
+        loadLotDetail={loadLotDetail}
+        selectedLot={selectedLot}
+        setSelectedLot={setSelectedLot}
+        updatePieceStatut={updatePieceStatut}
+        onReload={() => { if (selectedLot) loadLotDetail(selectedLot); }}
+      />
+    );
+  }
+
   return (
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center gap-4 flex-wrap">
         <button onClick={onBack} className="text-gray-500 hover:text-white text-sm">&larr; Retour</button>
         <h2 className="text-xl font-bold text-amber-400">Production</h2>
+        <button onClick={() => setModeAtelier(true)}
+          className="px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white text-sm rounded-lg font-bold transition-colors">
+          MODE ATELIER
+        </button>
         <div className="flex items-center gap-2">
           <button onClick={() => {
             const d = new Date(); d.setDate(d.getDate() - 7);
@@ -380,6 +403,228 @@ export function ProductionView({ onBack }: { onBack: () => void }) {
     </div>
   );
 }
+
+// ── Mode Atelier (plein écran tactile) ───────────────────────────────
+
+function AtelierView({ lots, semaine, poste, onSelectPoste, onBack, onSemaineChange, loadLotDetail, selectedLot, setSelectedLot, updatePieceStatut, onReload }: {
+  lots: Lot[]; semaine: string; poste: '' | 'lisec' | 'bottero' | 'assemblage';
+  onSelectPoste: (p: '' | 'lisec' | 'bottero' | 'assemblage') => void;
+  onBack: () => void; onSemaineChange: (s: string) => void;
+  loadLotDetail: (lot: Lot) => void; selectedLot: Lot | null;
+  setSelectedLot: (l: Lot | null) => void;
+  updatePieceStatut: (id: string, statut: string) => void; onReload: () => void;
+}) {
+  const [plateIdx, setPlateIdx] = useState(0);
+
+  if (!poste) {
+    return (
+      <div className="fixed inset-0 bg-[#0a0c10] flex flex-col items-center justify-center gap-8 z-50">
+        <button onClick={onBack} className="absolute top-4 left-4 text-gray-500 hover:text-white text-lg px-4 py-2">← Bureau</button>
+        <h1 className="text-4xl font-black text-white">ISULA VITRAGE</h1>
+        <p className="text-xl text-gray-400">{semaine}</p>
+        <div className="grid grid-cols-1 gap-6 w-full max-w-md px-8">
+          {([['lisec', 'COUPE LISEC', 'bg-blue-700 hover:bg-blue-600'],
+             ['bottero', 'COUPE BOTTERO', 'bg-green-700 hover:bg-green-600'],
+             ['assemblage', 'ASSEMBLAGE', 'bg-purple-700 hover:bg-purple-600']] as const).map(([id, label, cls]) => (
+            <button key={id} onClick={() => onSelectPoste(id)}
+              className={`${cls} text-white text-2xl font-bold py-8 rounded-2xl transition-colors shadow-lg active:scale-95`}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  const pieces = selectedLot?.pieces ?? [];
+  const machinePieces = poste === 'assemblage'
+    ? pieces.filter(p => p.statut === 'coupe' || p.statut === 'a_assembler')
+    : pieces.filter(p => p.machine === poste);
+
+  if (!selectedLot) {
+    return (
+      <div className="fixed inset-0 bg-[#0a0c10] flex flex-col z-50">
+        <div className="flex items-center gap-4 p-4 bg-[#14161d] border-b border-[#2a2d35]">
+          <button onClick={() => onSelectPoste('')} className="text-gray-400 hover:text-white text-lg px-3 py-2">← Postes</button>
+          <h1 className="text-2xl font-black text-white flex-1">{poste.toUpperCase()}</h1>
+          <span className="text-lg text-amber-400 font-mono">{semaine}</span>
+        </div>
+        <div className="flex-1 overflow-auto p-6">
+          {lots.length === 0 ? (
+            <p className="text-gray-500 text-2xl text-center py-20">Aucun lot cette semaine</p>
+          ) : (
+            <div className="space-y-4 max-w-2xl mx-auto">
+              {lots.map(lot => (
+                <button key={lot.id} onClick={() => loadLotDetail(lot)}
+                  className="w-full p-6 bg-[#181a20] rounded-2xl border border-[#2a2d35] hover:border-amber-500 transition-colors text-left active:scale-[0.98]">
+                  <div className="text-xl font-bold text-white">{lot.reference}</div>
+                  <div className="text-base text-gray-400 mt-1">{lot.total_pieces} pcs verre — {lot.total_we} WE</div>
+                  <div className="flex gap-2 mt-2 flex-wrap">
+                    {(lot.commande_refs || []).map((ref, i) => (
+                      <span key={i} className="text-sm px-2 py-1 rounded bg-[#14161d] text-gray-300">{ref}</span>
+                    ))}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ── Vue plaque par plaque Atelier ──
+  const glassOptim = selectedLot.glass_optim || [];
+  const allPlates: OptimPlate[] = [];
+  for (const r of glassOptim) {
+    for (const p of (r.plates || [])) {
+      const raw = p as unknown as Record<string, unknown>;
+      allPlates.push({
+        numero: p.numero ?? raw.numero as number,
+        material: p.material ?? r.material,
+        plateWidth: p.plateWidth ?? raw.plate_width as number ?? 3210,
+        plateHeight: p.plateHeight ?? raw.plate_height as number ?? 2550,
+        pieces: ((p.pieces || []) as unknown as Record<string, unknown>[]).map(pc => ({
+          vitrageRef: (pc.vitrageRef ?? pc.vitrage_ref ?? '') as string,
+          width: (pc.width ?? 0) as number, height: (pc.height ?? 0) as number,
+          x: (pc.x ?? 0) as number, y: (pc.y ?? 0) as number,
+          rotated: (pc.rotated ?? false) as boolean,
+          face: (pc.face ?? '') as string, material: (pc.material ?? '') as string,
+        })),
+        utilisation: p.utilisation ?? raw.utilisation as number ?? 0,
+      });
+    }
+  }
+
+  const idx = Math.min(plateIdx, Math.max(0, allPlates.length - 1));
+  const plate = allPlates[idx];
+  const plaqueNo = plate?.numero || 0;
+  const piecesOnPlate = pieces.filter(p => p.plaque_no === plaqueNo);
+  const allCut = piecesOnPlate.length > 0 && piecesOnPlate.every(p => p.statut === 'coupe' || p.statut === 'assemble');
+  const lotVerre = piecesOnPlate.find(p => p.lot_verre)?.lot_verre || '';
+
+  const markPlateAsCut = async () => {
+    for (const p of piecesOnPlate) {
+      if (p.statut !== 'coupe' && p.statut !== 'assemble') {
+        await patchJSON(`/api/production/pieces/${p.id}`, { statut: 'coupe', operateur: '' });
+      }
+    }
+    onReload();
+  };
+
+  if (!plate) {
+    return (
+      <div className="fixed inset-0 bg-[#0a0c10] flex flex-col items-center justify-center z-50">
+        <p className="text-gray-500 text-xl">Pas de donnees d'optimisation pour ce lot</p>
+        <button onClick={() => setSelectedLot(null)} className="mt-8 px-8 py-4 bg-gray-700 text-white text-lg rounded-xl">← Retour aux lots</button>
+      </div>
+    );
+  }
+
+  const pad = 20;
+  const scale = 400 / Math.max(plate.plateWidth, plate.plateHeight);
+  const w = plate.plateWidth * scale;
+  const h = plate.plateHeight * scale;
+
+  return (
+    <div className="fixed inset-0 bg-[#0a0c10] flex flex-col z-50">
+      {/* Header atelier */}
+      <div className="flex items-center gap-4 p-3 bg-[#14161d] border-b border-[#2a2d35]">
+        <button onClick={() => setSelectedLot(null)} className="text-gray-400 hover:text-white text-base px-3 py-2">← Lots</button>
+        <span className="text-lg font-bold text-white flex-1">{selectedLot.reference}</span>
+        <span className="text-base text-amber-400 font-mono">{poste.toUpperCase()}</span>
+      </div>
+
+      {/* Navigation + plaque */}
+      <div className="flex-1 flex items-center gap-2 px-2 overflow-hidden">
+        {/* Flèche gauche */}
+        <button onClick={() => setPlateIdx(Math.max(0, idx - 1))} disabled={idx === 0}
+          className="text-6xl text-white hover:text-amber-400 disabled:text-gray-800 transition-colors px-2 select-none active:scale-90 shrink-0">
+          ◀
+        </button>
+
+        {/* Plaque centrale */}
+        <div className="flex-1 flex flex-col items-center gap-3 min-w-0">
+          <div className="text-center">
+            <div className="text-3xl font-black text-white">Plaque {plaqueNo}</div>
+            <div className="text-lg text-amber-400">{plate.material} — {plate.utilisation.toFixed(0)}% — {plate.pieces.length} pcs</div>
+            <div className="text-base text-gray-500">{idx + 1} / {allPlates.length}</div>
+          </div>
+
+          {/* SVG plaque */}
+          <div className="bg-white rounded-xl p-3 w-full max-w-xl">
+            <svg viewBox={`0 0 ${w + pad * 2} ${h + pad * 2}`} className="w-full" style={{ maxHeight: '35vh' }}>
+              <rect x={pad} y={pad} width={w} height={h} fill="#FFD700" stroke="#000" strokeWidth={1.5} />
+              {plate.pieces.map((p, i) => {
+                const pw = (p.rotated ? p.height : p.width) * scale;
+                const ph = (p.rotated ? p.width : p.height) * scale;
+                const rx = pad + p.x * scale;
+                const ry = pad + p.y * scale;
+                const fills = ['#0000CC', '#2244AA', '#0033BB', '#1155CC', '#003399', '#2266BB'];
+                const fs = Math.min(12, pw / 8, ph / 3);
+                return (
+                  <g key={i}>
+                    <rect x={rx} y={ry} width={pw} height={ph} fill={fills[i % fills.length]} stroke="#FFD700" strokeWidth={2} />
+                    <text x={rx + pw / 2} y={ry + ph / 2} textAnchor="middle" dominantBaseline="middle"
+                      fill="#FFD700" fontSize={Math.max(fs, 6)} fontWeight="bold">{i + 1}</text>
+                  </g>
+                );
+              })}
+              <text x={pad + w / 2} y={h + pad + 14} textAnchor="middle" fill="#000" fontSize={12} fontWeight="bold">{plate.plateWidth}</text>
+              <text x={6} y={pad + h / 2} textAnchor="middle" fill="#000" fontSize={12} fontWeight="bold"
+                transform={`rotate(-90,6,${pad + h / 2})`}>{plate.plateHeight}</text>
+            </svg>
+          </div>
+
+          {/* Lot verre */}
+          {lotVerre && <div className="text-lg text-green-400 font-mono">Lot verre : {lotVerre}</div>}
+
+          {/* Liste pièces compacte */}
+          <div className="w-full max-w-xl overflow-auto max-h-[15vh]">
+            <table className="w-full text-sm">
+              <tbody>
+                {plate.pieces.map((p, i) => {
+                  const effW = p.rotated ? p.height : p.width;
+                  const effH = p.rotated ? p.width : p.height;
+                  return (
+                    <tr key={i} className="border-b border-gray-800">
+                      <td className="py-1 px-2 text-amber-400 font-bold text-base">{i + 1}</td>
+                      <td className="py-1 px-2 text-white text-base">{p.vitrageRef}</td>
+                      <td className={`py-1 px-2 text-base ${p.face === 'EXT' ? 'text-red-400' : 'text-blue-400'}`}>{p.face}</td>
+                      <td className="py-1 px-2 text-gray-300 text-base">{effW} x {effH}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Flèche droite */}
+        <button onClick={() => setPlateIdx(Math.min(allPlates.length - 1, idx + 1))} disabled={idx >= allPlates.length - 1}
+          className="text-6xl text-white hover:text-amber-400 disabled:text-gray-800 transition-colors px-2 select-none active:scale-90 shrink-0">
+          ▶
+        </button>
+      </div>
+
+      {/* Barre d'action bas */}
+      <div className="p-4 bg-[#14161d] border-t border-[#2a2d35] flex items-center justify-center gap-6">
+        <button onClick={markPlateAsCut} disabled={allCut}
+          className={`px-12 py-5 rounded-2xl text-xl font-black transition-colors active:scale-95 ${
+            allCut ? 'bg-green-800 text-green-300' : 'bg-green-600 hover:bg-green-500 text-white shadow-lg'}`}>
+          {allCut ? '✓ PLAQUE COUPEE' : 'MARQUER COUPEE'}
+        </button>
+        {idx < allPlates.length - 1 && allCut && (
+          <button onClick={() => setPlateIdx(idx + 1)}
+            className="px-12 py-5 rounded-2xl text-xl font-black bg-amber-600 hover:bg-amber-500 text-white shadow-lg active:scale-95">
+            SUIVANTE ▶
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 
 // ── Optim Verre Tab (plaque par plaque) ──────────────────────────────
 
