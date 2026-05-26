@@ -539,20 +539,15 @@ function AtelierView({ lots, semaine, poste, onSelectPoste, onBack, loadLotDetai
     }
 
     const barreLength = 6000;
-    const barres = new Map<number, WEPiece[]>();
-    for (const wp of wePieces) {
-      const arr = barres.get(wp.barre_no) || [];
-      arr.push(wp);
-      barres.set(wp.barre_no, arr);
-    }
-    const barreNos = [...barres.keys()].sort((a, b) => a - b);
 
-    const epGroups = new Map<string, number[]>();
-    for (const [no, pcs] of barres) {
-      const key = `${pcs[0]?.epaisseur}mm — ${pcs[0]?.couleur}`;
-      const arr = epGroups.get(key) || [];
-      arr.push(no);
-      epGroups.set(key, arr);
+    const epGroups = new Map<string, Map<number, WEPiece[]>>();
+    for (const wp of wePieces) {
+      const groupKey = `${wp.epaisseur}mm — ${wp.couleur}`;
+      if (!epGroups.has(groupKey)) epGroups.set(groupKey, new Map());
+      const barresMap = epGroups.get(groupKey)!;
+      const arr = barresMap.get(wp.barre_no) || [];
+      arr.push(wp);
+      barresMap.set(wp.barre_no, arr);
     }
 
     return (
@@ -564,15 +559,17 @@ function AtelierView({ lots, semaine, poste, onSelectPoste, onBack, loadLotDetai
         </div>
 
         <div className="flex-1 overflow-auto p-4">
-          {[...epGroups.entries()].map(([groupLabel, nos]) => (
+          {[...epGroups.entries()].map(([groupLabel, barresMap]) => {
+            const barreNos = [...barresMap.keys()].sort((a, b) => a - b);
+            return (
             <div key={groupLabel} className="mb-8">
               <div className="flex items-center gap-4 mb-3 border-b-2 border-gray-300 pb-2">
                 <div className="text-lg font-black text-gray-800">{groupLabel}</div>
-                <div className="text-base text-gray-500">Qte {nos.length} barres</div>
+                <div className="text-base text-gray-500">Qte {barreNos.length} barres</div>
               </div>
 
-              {nos.map(no => {
-                const pcs = barres.get(no) || [];
+              {barreNos.map(no => {
+                const pcs = barresMap.get(no) || [];
                 const used = pcs.reduce((s, p) => s + p.longueur, 0);
                 const chute = barreLength - used;
                 const allDone = pcs.every(p => p.statut === 'coupe');
@@ -623,7 +620,8 @@ function AtelierView({ lots, semaine, poste, onSelectPoste, onBack, loadLotDetai
                 );
               })}
             </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     );
