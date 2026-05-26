@@ -69,6 +69,24 @@ db.exec(`
 try { db.exec('ALTER TABLE users ADD COLUMN pin TEXT DEFAULT NULL'); } catch {}
 try { db.exec('ALTER TABLE users ADD COLUMN pin_enabled INTEGER DEFAULT 0'); } catch {}
 
+// Production events (time tracking)
+db.exec(`
+  CREATE TABLE IF NOT EXISTS production_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    commande_ref TEXT NOT NULL,
+    poste TEXT NOT NULL,
+    user_id INTEGER,
+    user_nom TEXT DEFAULT '',
+    action TEXT NOT NULL,
+    piece_ref TEXT DEFAULT '',
+    detail TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_events_commande ON production_events(commande_ref);
+  CREATE INDEX IF NOT EXISTS idx_events_poste ON production_events(commande_ref, poste);
+  CREATE INDEX IF NOT EXISTS idx_events_user ON production_events(user_id);
+`);
+
 // Profile images cache
 db.exec(`
   CREATE TABLE IF NOT EXISTS profile_images (
