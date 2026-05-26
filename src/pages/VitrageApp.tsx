@@ -9,7 +9,8 @@ import {
 import { parseVitrageSpec } from '../vitrage/parseVitrageSpec';
 import { parseExcelFile, parseCSVText, type ParseResult } from '../vitrage/parseExcel';
 import { optimizeWE } from '../vitrage/optimizeWE';
-import { optimizeGlass } from '../vitrage/optimize2D';
+import { optimizeGlass, extractGlassPieces } from '../vitrage/optimize2D';
+import { hasBackend, apiOptimize, apiExportDXF, apiExportOPT, apiLabelsZPL } from '../vitrage/api';
 import { generateLabelsA, generateLabelsB, generateLabelsC } from '../vitrage/generateLabels';
 import { generateFicheWE } from '../vitrage/generateFicheWE';
 import { generateEtiquettesCE, generateEtiquettesAtelier, generateEtiquettesPostCoupe, generateEtiquettesWE } from '../vitrage/generateLabelsIndustrial';
@@ -165,6 +166,61 @@ function Dashboard({ commandes, onSelect, onNew, onDelete, onBatch }: {
   );
 }
 
+// ── Backend-aware optimization hook ──────────────────────────────────
+
+function useOptimization(vitrages: Vitrage[], glass: GlassSettings) {
+  const [glassResult, setGlassResult] = useState<GlassOptimResult[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [backend, setBackend] = useState(false);
+
+  useEffect(() => {
+    if (vitrages.length === 0) { setGlassResult([]); return; }
+    let cancelled = false;
+
+    async function run() {
+      setLoading(true);
+      if (hasBackend) {
+        try {
+          const pieces = extractGlassPieces(vitrages).map(p => ({
+            id: p.vitrageId,
+            vitrage_ref: p.vitrageRef,
+            width: p.width,
+            height: p.height,
+            material: p.material,
+            face: p.face,
+            no_rotation: p.noRotation,
+          }));
+          const resp = await apiOptimize({
+            pieces,
+            plate_width: glass.plateWidth,
+            plate_height: glass.plateHeight,
+            edge_margin: glass.edgeTrimMargin ?? 15,
+            cutting_gap: glass.cuttingGap,
+          });
+          if (!cancelled) {
+            setGlassResult(resp.results as GlassOptimResult[]);
+            setBackend(true);
+          }
+          setLoading(false);
+          return;
+        } catch (err) {
+          console.warn('Backend optimizer failed, using local:', err);
+        }
+      }
+      if (!cancelled) {
+        setGlassResult(optimizeGlass(vitrages, glass));
+        setBackend(false);
+      }
+      setLoading(false);
+    }
+
+    run();
+    return () => { cancelled = true; };
+  }, [vitrages, glass]);
+
+  return { glassResult, loading, backend };
+}
+
 // ── Order Detail ─────────────────────────────────────────────────────
 
 const TABS = ['Import', 'Vitrages', 'Optim Verre', 'Warm Edge', 'Etiquettes', 'Lots & Tracabilite', 'Parametres'] as const;
@@ -180,7 +236,7 @@ function OrderDetail({ commande, onUpdate, onBack, avery, we, glass, onAvery, on
   const c = commande;
 
   const weResult = useMemo(() => c.vitrages.length > 0 ? optimizeWE(c.vitrages, we) : [], [c.vitrages, we]);
-  const glassResult = useMemo(() => c.vitrages.length > 0 ? optimizeGlass(c.vitrages, glass) : [], [c.vitrages, glass]);
+  const { glassResult, loading: optimLoading, backend: usingBackend } = useOptimization(c.vitrages, glass);
   const allPlates = useMemo(() => glassResult.flatMap(g => g.plates), [glassResult]);
 
   return (
@@ -223,7 +279,7 @@ function OrderDetail({ commande, onUpdate, onBack, avery, we, glass, onAvery, on
 
       {tab === 0 && <TabImport vitrages={c.vitrages} onUpdate={v => onUpdate({ vitrages: v })} onSetRef={ref => onUpdate({ reference: ref })} />}
       {tab === 1 && <TabVitrages vitrages={c.vitrages} onUpdate={v => onUpdate({ vitrages: v })} />}
-      {tab === 2 && <TabGlass results={glassResult} />}
+      {tab === 2 && <TabGlass results={glassResult} loading={optimLoading} backend={usingBackend} />}
       {tab === 3 && <TabWE results={weResult} />}
       {tab === 4 && <TabExport vitrages={c.vitrages} allPlates={allPlates} weResult={weResult}
         commandeLabel={`${c.reference} — ${c.client}`} commande={c} avery={avery} we={we} />}
@@ -373,7 +429,8 @@ function TabVitrages({ vitrages, onUpdate }: { vitrages: Vitrage[]; onUpdate: (v
 
 // ── Tab: Glass Optimization ──────────────────────────────────────────
 
-function TabGlass({ results }: { results: GlassOptimResult[] }) {
+function TabGlass({ results, loading, backend }: { results: GlassOptimResult[]; loading?: boolean; backend?: boolean }) {
+  if (loading) return <p className="text-blue-400 text-sm">Optimisation en cours (rectpack)...</p>;
   if (results.length === 0) return <p className="text-gray-500 text-sm">Importez des vitrages pour voir l'optimisation.</p>;
 
   const totalInterdit = results.reduce((s, r) => s + r.plates.filter(p => p.hasInterdit).length, 0);
@@ -385,6 +442,8 @@ function TabGlass({ results }: { results: GlassOptimResult[] }) {
         <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-amber-500/30 border border-amber-500/50" /> Surveiller (250-300)</span>
         <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-red-500/30 border border-red-500/50" /> Interdit (50-250)</span>
         {totalInterdit > 0 && <span className="text-red-400 font-semibold ml-4">{totalInterdit} plaque(s) avec chutes interdites</span>}
+        {backend && <span className="text-green-400 ml-auto text-[10px] px-2 py-0.5 rounded bg-green-500/10 border border-green-500/20">rectpack (serveur)</span>}
+        {!backend && <span className="text-gray-500 ml-auto text-[10px] px-2 py-0.5 rounded bg-gray-500/10 border border-gray-500/20">JS local</span>}
       </div>
       {results.map((r, i) => (
         <div key={i} className="bg-[#181a20] rounded-lg p-4 border border-[#2a2d35]">
@@ -521,6 +580,26 @@ function TabExport({ vitrages, allPlates, weResult, commandeLabel, commande, ave
         case 'ATELIER': download(await generateEtiquettesAtelier(vitrages, cmd), `${label}_atelier.pdf`); break;
         case 'POST_COUPE': download(await generateEtiquettesPostCoupe(vitrages, allPlates, commandeLabel), `${label}_post_coupe.pdf`); break;
         case 'WE_ETQ': download(await generateEtiquettesWE(weResult, commandeLabel), `${label}_WE_etiquettes.pdf`); break;
+        case 'DXF': download(await apiExportDXF(allPlates, 'bottero'), `${label}_bottero.dxf`); break;
+        case 'OPT': download(await apiExportOPT(allPlates), `${label}_bottero.opt`); break;
+        case 'ZPL_CE': {
+          const zplLabels = vitrages.map(v => ({
+            vitrage_id: v.id, reference: v.reference, composition: v.composition,
+            width: v.largeur, height: v.hauteur, ug: v.ug || '', gaz: v.gazType || 'Argon',
+            commande_ref: cmd.reference, client: cmd.client,
+          }));
+          download(await apiLabelsZPL(zplLabels, 'ce'), `${label}_CE.zpl`);
+          break;
+        }
+        case 'ZPL_ATELIER': {
+          const zplLabels = vitrages.map(v => ({
+            vitrage_id: v.id, reference: v.reference, composition: v.composition,
+            width: v.largeur, height: v.hauteur, ug: v.ug || '', gaz: v.gazType || 'Argon',
+            commande_ref: cmd.reference, client: cmd.client,
+          }));
+          download(await apiLabelsZPL(zplLabels, 'atelier'), `${label}_atelier.zpl`);
+          break;
+        }
       }
     } catch (err) { alert(`Erreur : ${err}`); }
     setGenerating('');
@@ -563,6 +642,26 @@ function TabExport({ vitrages, allPlates, weResult, commandeLabel, commande, ave
         </button>
       ))}
     </div>
+    {hasBackend && (
+      <>
+        <h4 className="text-sm font-semibold text-gray-300">Export machine & ZPL Zebra</h4>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+          {[
+            { id: 'DXF', title: 'DXF Bottero', desc: 'Plan de coupe DXF', color: 'blue', ok: has && allPlates.length > 0 },
+            { id: 'OPT', title: 'OPT Bottero', desc: 'Format texte OPT', color: 'green', ok: has && allPlates.length > 0 },
+            { id: 'ZPL_CE', title: 'ZPL CE/CEKAL', desc: `${vitrages.length} etiquettes Zebra`, color: 'purple', ok: has },
+            { id: 'ZPL_ATELIER', title: 'ZPL Atelier', desc: 'Fiches atelier Zebra', color: 'amber', ok: has },
+          ].map(d => (
+            <button key={d.id} onClick={() => gen(d.id)} disabled={!d.ok || !!generating}
+              className={`text-left p-5 rounded-xl border-2 bg-[#181a20] transition-all ${
+                d.ok ? `border-${d.color}-500/30 hover:border-${d.color}-500/60 cursor-pointer` : 'border-[#2a2d35] opacity-40 cursor-not-allowed'}`}>
+              <div className={`text-sm font-semibold text-${d.color}-400`}>{d.title}</div>
+              <div className="text-xs text-gray-500 mt-1">{generating === d.id ? 'Generation...' : d.desc}</div>
+            </button>
+          ))}
+        </div>
+      </>
+    )}
     </div>
   );
 }
@@ -671,7 +770,7 @@ function BatchView({ commandes, onBack, avery, we, glass }: {
   const allVitrages = useMemo(() => commandes.flatMap(c => c.vitrages), [commandes]);
   const batchLabel = commandes.map(c => c.reference).join(' + ');
   const weResult = useMemo(() => allVitrages.length > 0 ? optimizeWE(allVitrages, we) : [], [allVitrages, we]);
-  const glassResult = useMemo(() => allVitrages.length > 0 ? optimizeGlass(allVitrages, glass) : [], [allVitrages, glass]);
+  const { glassResult, loading: optimLoading, backend: usingBackend } = useOptimization(allVitrages, glass);
   const allPlates = useMemo(() => glassResult.flatMap(g => g.plates), [glassResult]);
 
   return (
@@ -729,7 +828,7 @@ function BatchView({ commandes, onBack, avery, we, glass }: {
           </table>
         </div>
       )}
-      {tab === 1 && <TabGlass results={glassResult} />}
+      {tab === 1 && <TabGlass results={glassResult} loading={optimLoading} backend={usingBackend} />}
       {tab === 2 && <TabWE results={weResult} />}
       {tab === 3 && <TabExport vitrages={allVitrages} allPlates={allPlates} weResult={weResult}
         commandeLabel={batchLabel} avery={avery} we={we} />}
