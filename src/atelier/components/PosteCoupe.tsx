@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import { ArrowLeft, Upload, FileText, Trash2, X, Search, ChevronRight, Scissors, Plus, Eye, RefreshCw } from 'lucide-react';
 import { v4 as uid } from 'uuid';
 import { useApiState } from '../../useApiState';
+import { useAuth } from '../../AuthContext';
 
 interface Props { onBack: () => void; }
 
@@ -100,6 +101,8 @@ function pickPdf(): Promise<{ file: File; dataUrl: string } | null> {
 // ── Composant principal ──────────────────────────────────────────────
 
 export function PosteCoupe({ onBack }: Props) {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
   const [commandes, setCommandes] = useApiState<Commande[]>('coupe', 'commandes', STORAGE_KEY, DEMO);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
@@ -113,9 +116,10 @@ export function PosteCoupe({ onBack }: Props) {
   }, [commandes, setCommandes]);
 
   const removeCommande = useCallback((id: string) => {
+    if (!isAdmin) return;
     setCommandes(commandes.filter(c => c.id !== id));
     setSelectedId(null);
-  }, [commandes, setCommandes]);
+  }, [commandes, setCommandes, isAdmin]);
 
   const setOptim = useCallback((id: string, machine: Machine, optim: OptimisationMachine | null) => {
     setCommandes(commandes.map(c => {
@@ -293,10 +297,12 @@ export function PosteCoupe({ onBack }: Props) {
               </div>
             </div>
           </div>
-          <button onClick={() => { if (confirm(`Supprimer la commande ${selected.nom} ?`)) removeCommande(selected.id); }}
-            className="text-red-400 hover:text-red-300 text-xs px-2 py-1 rounded border border-red-500/20 hover:border-red-500/40 shrink-0">
-            <Trash2 size={12} className="inline mr-1" /> Supprimer
-          </button>
+          {isAdmin && (
+            <button onClick={() => { if (confirm(`Supprimer la commande ${selected.nom} ?`)) removeCommande(selected.id); }}
+              className="text-red-400 hover:text-red-300 text-xs px-2 py-1 rounded border border-red-500/20 hover:border-red-500/40 shrink-0">
+              <Trash2 size={12} className="inline mr-1" /> Supprimer
+            </button>
+          )}
         </div>
       </header>
 
