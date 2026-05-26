@@ -68,13 +68,10 @@ def _fill_strip_greedy(
     gap: float,
     can_rotate: bool,
 ) -> tuple[list[tuple[GlassPiece, bool, float]], float] | None:
-    """Fill one strip by greedily maximizing width usage.
+    """Fill one strip, picking the height that maximizes density (area / strip_area).
 
-    For each slot, pick the piece that best fills the remaining width.
+    This prevents tall strips that waste vertical space when pieces are short.
     """
-    best_result = None
-    best_area = 0.0
-
     candidates = []
     for p in pieces:
         if p.width <= strip_w and p.height <= max_h:
@@ -90,13 +87,22 @@ def _fill_strip_greedy(
     for _, _, _, ch in candidates:
         seen_heights.add(ch)
 
-    for strip_h in sorted(seen_heights, reverse=True):
+    best_result = None
+    best_score = 0.0
+
+    for strip_h in sorted(seen_heights):
         result = _try_fill_at_height(pieces, strip_w, strip_h, gap, can_rotate)
-        if result:
-            area = sum(w * h for _, _, _, w, h in result)
-            if area > best_area:
-                best_area = area
-                best_result = ([(pc, rot, x) for pc, rot, x, _, _ in result], strip_h)
+        if not result:
+            continue
+        n_pieces = len(result)
+        piece_area = sum(w * h for _, _, _, w, h in result)
+        strip_area = strip_w * strip_h
+        density = piece_area / strip_area if strip_area > 0 else 0
+        score = n_pieces * 1000 + density * 100
+
+        if score > best_score:
+            best_score = score
+            best_result = ([(pc, rot, x) for pc, rot, x, _, _ in result], strip_h)
 
     return best_result
 
