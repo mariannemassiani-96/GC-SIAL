@@ -117,12 +117,55 @@ export async function listUsers(): Promise<UserFull[]> {
   return request<UserFull[]>('GET', '/api/users');
 }
 
-export async function createUser(data: { email: string; password: string; nom: string; role: string; apps_autorisees: string[] }): Promise<{ id: number }> {
+export async function createUser(data: { email?: string; password?: string; nom: string; role: string; apps_autorisees: string[]; pin?: string; pin_enabled?: boolean }): Promise<{ id: number }> {
   return request('POST', '/api/users', data);
 }
 
 export async function updateUser(id: number, data: Partial<{ nom: string; role: string; apps_autorisees: string[]; actif: boolean; password: string; pin: string; pin_enabled: boolean }>): Promise<void> {
   await request('PUT', `/api/users/${id}`, data);
+}
+
+// ── Commandes Globales ──────────────────────────────────────────────
+
+export interface ModuleStatus {
+  total?: number;
+  fait?: number;
+  nc?: number;
+  bloque?: number;
+  statut?: 'attente' | 'en_cours' | 'termine' | 'bloque';
+  [key: string]: unknown;
+}
+
+export interface CommandeGlobale {
+  ref: string;
+  client: string;
+  chantier: string;
+  date_creation: string;
+  semaine_fab: string;
+  semaine_liv: string;
+  reception: ModuleStatus;
+  coupe_profiles: ModuleStatus;
+  vitrage: ModuleStatus;
+  assemblage: ModuleStatus;
+  livraison: ModuleStatus;
+  notes: string;
+  updated_at: string;
+}
+
+export async function listCommandesGlobales(): Promise<CommandeGlobale[]> {
+  return request<CommandeGlobale[]>('GET', '/api/commandes-globales');
+}
+
+export async function getCommandeGlobale(ref: string): Promise<CommandeGlobale> {
+  return request<CommandeGlobale>('GET', `/api/commandes-globales/${encodeURIComponent(ref)}`);
+}
+
+export async function upsertCommandeGlobale(ref: string, data: Partial<CommandeGlobale>): Promise<void> {
+  await request('PUT', `/api/commandes-globales/${encodeURIComponent(ref)}`, data);
+}
+
+export async function patchCommandeModule(ref: string, module: string, data: ModuleStatus): Promise<void> {
+  await request('PATCH', `/api/commandes-globales/${encodeURIComponent(ref)}/${module}`, data);
 }
 
 // ── Health ───────────────────────────────────────────────────────────

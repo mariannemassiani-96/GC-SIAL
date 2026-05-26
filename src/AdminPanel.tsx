@@ -90,11 +90,12 @@ export function AdminPanel({ onBack }: Props) {
   const clearAllApps = () => setFormApps([]);
 
   const handleSaveNew = async () => {
-    if (!formEmail || !formPassword || !formNom) { setError('Email, mot de passe et nom requis'); return; }
+    if (!formNom) { setError('Nom requis'); return; }
+    if (!formPinEnabled && (!formEmail || !formPassword)) { setError('Email + mot de passe requis (ou activer PIN)'); return; }
     setSaving(true);
     setError(null);
     try {
-      await createUser({ email: formEmail, password: formPassword, nom: formNom, role: formRole, apps_autorisees: formApps });
+      await createUser({ email: formEmail, password: formPassword, nom: formNom, role: formRole, apps_autorisees: formApps, pin: formPin, pin_enabled: formPinEnabled });
       setShowNew(false);
       await load();
     } catch (e: unknown) {

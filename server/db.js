@@ -45,6 +45,26 @@ db.exec(`
   );
 `);
 
+// ── Commandes Globales ───────────────────────────────────────────────
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS commandes_globales (
+    ref TEXT PRIMARY KEY,
+    client TEXT DEFAULT '',
+    chantier TEXT DEFAULT '',
+    date_creation TEXT DEFAULT (datetime('now')),
+    semaine_fab TEXT DEFAULT '',
+    semaine_liv TEXT DEFAULT '',
+    reception TEXT DEFAULT '{}',
+    coupe_profiles TEXT DEFAULT '{}',
+    vitrage TEXT DEFAULT '{}',
+    assemblage TEXT DEFAULT '{}',
+    livraison TEXT DEFAULT '{}',
+    notes TEXT DEFAULT '',
+    updated_at TEXT DEFAULT (datetime('now'))
+  );
+`);
+
 // Migrations
 try { db.exec('ALTER TABLE users ADD COLUMN pin TEXT DEFAULT NULL'); } catch {}
 try { db.exec('ALTER TABLE users ADD COLUMN pin_enabled INTEGER DEFAULT 0'); } catch {}
