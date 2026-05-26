@@ -443,7 +443,7 @@ export function PosteCoupe({ onBack, startAtelier }: Props) {
           <div className="flex items-center gap-3">
             <button onClick={onBack} className="text-gray-400 hover:text-white"><ArrowLeft size={18} /></button>
             <div>
-              <h1 className="text-sm font-bold text-white">Poste de Coupe — Alu/PVC</h1>
+              <h1 className="text-sm font-bold text-white">Preparation & Coupe Profiles</h1>
               <p className="text-[10px] text-gray-500">Import FSTLINE XML — Gestion coupes profils</p>
             </div>
           </div>
@@ -572,7 +572,7 @@ function AtelierView({
         <button onClick={onBack} className="absolute top-4 left-4 text-gray-500 hover:text-white text-lg px-4 py-2">
           <ArrowLeft size={24} className="inline mr-2" />Bureau
         </button>
-        <h1 className="text-4xl font-black text-white">POSTE DE COUPE</h1>
+        <h1 className="text-4xl font-black text-white">PREPARATION & COUPE PROFILES</h1>
         <p className="text-xl text-gray-400">Choisir la machine</p>
         <div className="grid grid-cols-1 gap-6 w-full max-w-md px-8">
           {(['lmt65', 'dt', 'renfort'] as MachineName[]).map(m => {

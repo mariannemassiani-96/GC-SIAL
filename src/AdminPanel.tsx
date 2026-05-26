@@ -15,7 +15,7 @@ const ROLES = [
 const ALL_APPS = [
   { id: 'vitrage', label: 'ISULA VITRAGE' },
   { id: 'reception_matiere', label: 'Reception Matiere' },
-  { id: 'poste_coupe', label: 'Poste de Coupe' },
+  { id: 'poste_coupe', label: 'Preparation & Coupe Profiles' },
   { id: 'gc', label: 'Configurateur GC' },
   { id: 'smart_assembly', label: 'Smart Assembly' },
   { id: 'stock_accessoires', label: 'Stock & Accessoires' },
