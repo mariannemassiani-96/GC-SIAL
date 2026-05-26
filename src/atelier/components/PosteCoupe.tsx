@@ -4,7 +4,7 @@ import { v4 as uid } from 'uuid';
 import { useApiCollection } from '../../useApiCollection';
 import { useAuth } from '../../AuthContext';
 import { parseFstlineFile, type FstJob, type FstBar, type FstCut } from '../fstlineParser';
-import { patchCommandeModule, upsertCommandeGlobale } from '../../api';
+import { patchCommandeModule, upsertCommandeGlobale, extractAndCacheProfileImages, getProfileImages } from '../../api';
 
 interface Props { onBack: () => void; startAtelier?: boolean; }
 
@@ -168,6 +168,13 @@ export function PosteCoupe({ onBack, startAtelier }: Props) {
             pdfB64 = btoa(binary);
             pdfName = file.name;
           }
+        }
+
+        // Extract profile images from PDF + cache them
+        const pdfFile = Array.from(files).find(f => f.name.toLowerCase().endsWith('.pdf'));
+        if (pdfFile && job) {
+          const profileCodes = job.profiles.map(p => p.code);
+          extractAndCacheProfileImages(pdfFile, profileCodes).catch(() => {});
         }
 
         const names = [xmlName, pdfName].filter(Boolean).join(' + ');
@@ -533,9 +540,22 @@ function AtelierView({
   const [profileCode, setProfileCode] = useState<string | null>(null);
   const [barIdx, setBarIdx] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [profileImgs, setProfileImgs] = useState<Record<string, string>>({});
 
   const commande = commandes.find(c => c.id === commandeId) ?? null;
   const md = commande && machine ? commande.machines[machine] : undefined;
+
+  // Load profile images when we have a job
+  useEffect(() => {
+    if (!md?.fstlineJob) return;
+    const codes = md.fstlineJob.profiles.map(p => p.code);
+    const missing = codes.filter(c => !profileImgs[c]);
+    if (missing.length > 0) {
+      getProfileImages(missing).then(imgs => {
+        setProfileImgs(prev => ({ ...prev, ...imgs }));
+      }).catch(() => {});
+    }
+  }, [md?.fstlineJob]);
   const job = md?.fstlineJob ?? null;
 
   // Bars for selected profile
@@ -677,7 +697,11 @@ function AtelierView({
                   className="w-full p-5 bg-[#181a20] rounded-2xl border border-[#2a2d35] hover:border-blue-500 transition-colors text-left active:scale-[0.98]"
                   style={{ minHeight: 70 }}>
                   <div className="flex items-center justify-between">
-                    <div>
+                    {profileImgs[code] && (
+                      <img src={`data:image/png;base64,${profileImgs[code]}`} alt={code}
+                        className="w-16 h-16 object-contain bg-white rounded-lg border border-gray-600 mr-4 shrink-0" />
+                    )}
+                    <div className="flex-1">
                       <div className="text-lg font-bold text-white">{code}</div>
                       <div className="text-base text-gray-400">{desc}</div>
                       <div className="text-sm text-gray-500 mt-1">
@@ -718,9 +742,13 @@ function AtelierView({
           <button onClick={goBack} className="text-gray-400 hover:text-white text-lg px-3 py-2">
             <ArrowLeft size={24} className="inline mr-2" />Profils
           </button>
+          {profileImgs[currentBar.code] && (
+            <img src={`data:image/png;base64,${profileImgs[currentBar.code]}`} alt={currentBar.code}
+              className="w-12 h-12 object-contain bg-white rounded border border-gray-600" />
+          )}
           <div className="flex-1">
             <span className="text-lg font-bold text-white">{commande?.ref}</span>
-            <span className="text-base text-gray-500 ml-3">{currentBar.code}</span>
+            <span className="text-base text-gray-500 ml-3">{currentBar.code} — {currentBar.description}</span>
           </div>
           <span className="text-base text-amber-400 font-mono">{MACHINE_LABELS[machine]}</span>
         </div>
