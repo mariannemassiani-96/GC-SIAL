@@ -324,7 +324,7 @@ function OrderDetail({ commande, onUpdate, onBack, avery, we, glass, onAvery, on
         ))}
       </div>
 
-      {tab === 0 && <TabImport vitrages={c.vitrages} onUpdate={v => onUpdate({ vitrages: v })} onSetRef={ref => onUpdate({ reference: ref })} />}
+      {tab === 0 && <TabImport vitrages={c.vitrages} onUpdate={v => onUpdate({ vitrages: v })} onSetRef={ref => onUpdate({ reference: ref })} chantier={c.client} />}
       {tab === 1 && <TabVitrages vitrages={c.vitrages} onUpdate={v => onUpdate({ vitrages: v })} />}
       {tab === 2 && <TabGlass results={glassResult} loading={optimLoading} backend={usingBackend} commandeLabel={`${c.reference} — ${c.client}`} />}
       {tab === 3 && <TabWE results={weResult} commandeLabel={`${c.reference} — ${c.client}`} we={we} />}
@@ -338,7 +338,7 @@ function OrderDetail({ commande, onUpdate, onBack, avery, we, glass, onAvery, on
 
 // ── Tab: Import ──────────────────────────────────────────────────────
 
-function TabImport({ vitrages, onUpdate, onSetRef }: { vitrages: Vitrage[]; onUpdate: (v: Vitrage[]) => void; onSetRef?: (ref: string) => void }) {
+function TabImport({ vitrages, onUpdate, onSetRef, chantier }: { vitrages: Vitrage[]; onUpdate: (v: Vitrage[]) => void; onSetRef?: (ref: string) => void; chantier?: string }) {
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
   const [loading, setLoading] = useState(false);
@@ -375,7 +375,7 @@ function TabImport({ vitrages, onUpdate, onSetRef }: { vitrages: Vitrage[]; onUp
         const text = await file.text();
         result = parseCSVText(text);
       } else {
-        result = await parseExcelFile(file);
+        result = await parseExcelFile(file, chantier);
       }
       handleResult(result, file.name);
     } catch (err) {
