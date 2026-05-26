@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { generateEtiquettesCE, generateEtiquettesAtelier, generateEtiquettesPostCoupe, generateEtiquettesWE } from './generateLabelsIndustrial';
 import { generateLabelsA, generateLabelsB, generateLabelsC } from './generateLabels';
-import type { Vitrage, WEGroupe, AverySettings } from './types';
+import type { Vitrage, WEGroupe } from './types';
 import { DEFAULT_AVERY } from './types';
 
 const API = import.meta.env.VITE_ISULA_API_URL as string || '';
