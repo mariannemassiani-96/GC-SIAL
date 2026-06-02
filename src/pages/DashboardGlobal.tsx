@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { ArrowLeft, Search, X, AlertTriangle, ChevronDown, ChevronUp, Plus, Save, Upload, CheckCircle, Send, FileText } from 'lucide-react';
-import { listCommandesGlobales, upsertCommandeGlobale, getProductionStatsByCommande, type CommandeGlobale, type ModuleStatus } from '../api';
+import { ArrowLeft, Search, X, AlertTriangle, ChevronDown, ChevronUp, Plus, Save, Upload, CheckCircle, Send, FileText, Lock, Unlock, Clock, Circle, Zap, Bell, Info, Check } from 'lucide-react';
+import { listCommandesGlobales, upsertCommandeGlobale, patchCommandeModule, getProductionStatsByCommande, type CommandeGlobale, type ModuleStatus } from '../api';
 import { parseExcelFile, parseCSVText } from '../vitrage/parseExcel';
 import { parseFstlineFile, type FstJob } from '../atelier/fstlineParser';
 import type { Vitrage } from '../vitrage/types';
@@ -49,7 +49,89 @@ const MODULES: ModuleDef[] = [
   { key: 'livraison', label: 'Livraison', color: 'text-emerald-400', bgColor: 'bg-emerald-600/20', borderColor: 'border-emerald-500/30' },
 ];
 
+// ── Workflow Status Types ────────────────────────────────────────────
+
+type WorkflowStatus = 'pas_commence' | 'attente' | 'en_cours' | 'bloque' | 'termine';
+
+interface WorkflowStatusInfo {
+  status: WorkflowStatus;
+  label: string;
+  colorClass: string;
+  bgClass: string;
+  borderClass: string;
+  dotClass: string;
+  icon: typeof CheckCircle;
+  animate: boolean;
+}
+
+const WORKFLOW_STATUS_MAP: Record<WorkflowStatus, WorkflowStatusInfo> = {
+  pas_commence: {
+    status: 'pas_commence',
+    label: 'Pas commence',
+    colorClass: 'text-gray-500',
+    bgClass: 'bg-gray-600/20',
+    borderClass: 'border-gray-500/30',
+    dotClass: 'bg-gray-600',
+    icon: Circle,
+    animate: false,
+  },
+  attente: {
+    status: 'attente',
+    label: 'En attente',
+    colorClass: 'text-gray-400',
+    bgClass: 'bg-gray-600/20',
+    borderClass: 'border-gray-400/40',
+    dotClass: 'bg-gray-400',
+    icon: Clock,
+    animate: false,
+  },
+  en_cours: {
+    status: 'en_cours',
+    label: 'En cours',
+    colorClass: 'text-amber-400',
+    bgClass: 'bg-amber-600/20',
+    borderClass: 'border-amber-500/30',
+    dotClass: 'bg-amber-500',
+    icon: Zap,
+    animate: true,
+  },
+  bloque: {
+    status: 'bloque',
+    label: 'Bloque',
+    colorClass: 'text-red-400',
+    bgClass: 'bg-red-600/20',
+    borderClass: 'border-red-500/30',
+    dotClass: 'bg-red-500',
+    icon: Lock,
+    animate: true,
+  },
+  termine: {
+    status: 'termine',
+    label: 'Termine',
+    colorClass: 'text-green-400',
+    bgClass: 'bg-green-600/20',
+    borderClass: 'border-green-500/30',
+    dotClass: 'bg-green-500',
+    icon: CheckCircle,
+    animate: false,
+  },
+};
+
 // ── Helpers ──────────────────────────────────────────────────────────
+
+function getModuleWorkflowStatus(mod: ModuleStatus): WorkflowStatus {
+  if (!mod || typeof mod !== 'object') return 'pas_commence';
+  if (mod.statut === 'termine') return 'termine';
+  if (mod.statut === 'bloque' || (mod.nc !== undefined && mod.nc > 0)) return 'bloque';
+  if (mod.statut === 'en_cours') return 'en_cours';
+  if (mod.statut === 'attente') return 'attente';
+  // Has data but no explicit status
+  if (mod.total && mod.total > 0) {
+    if (mod.fait && mod.fait > 0) return 'en_cours';
+    return 'attente';
+  }
+  return 'pas_commence';
+}
 
 function getModuleProgress(mod: ModuleStatus): number {
   if (!mod || typeof mod !== 'object') return 0;
@@ -67,6 +149,27 @@ function getModuleStatutLabel(mod: ModuleStatus): string {
   if (mod.statut === 'bloque') return 'Bloque';
   if (mod.total && mod.fait && mod.fait > 0) return 'En cours';
   return 'Attente';
+}
+
+/** Count commands that need supervisor attention (blocked or NC > 0) */
+function countAttentionNeeded(commandes: CommandeGlobale[]): number {
+  return commandes.filter(c =>
+    MODULES.some(m => {
+      const mod = c[m.key] as ModuleStatus;
+      if (!mod || typeof mod !== 'object') return false;
+      return mod.statut === 'bloque' || (mod.nc !== undefined && mod.nc > 0);
+    })
+  ).length;
+}
+
+/** Check if module progress is complete (fait >= total) */
+function isModuleComplete(mod: ModuleStatus): boolean {
+  if (!mod || typeof mod !== 'object') return false;
+  if (mod.statut === 'termine') return true;
+  if (mod.total && mod.total > 0 && mod.fait !== undefined) {
+    return mod.fait >= mod.total;
+  }
+  return false;
 }
 
 function getOverallProgress(cmd: CommandeGlobale): number {
@@ -88,21 +191,28 @@ function getWeekNumber(dateStr: string): string {
   return `S${Math.ceil((days + oneJan.getDay() + 1) / 7)}`;
 }
 
-// ── Module Progress Bar ─────────────────────────────────────────────
+// ── Module Progress Bar (Enhanced with 5-state) ─────────────────────
 
 function ModuleProgressBar({ mod, def }: { mod: ModuleStatus; def: ModuleDef }) {
   const progress = getModuleProgress(mod);
   const alert = hasAlerts(mod);
+  const wfStatus = getModuleWorkflowStatus(mod);
+  const statusInfo = WORKFLOW_STATUS_MAP[wfStatus];
+
+  const barColorClass = wfStatus === 'termine' ? 'bg-green-500'
+    : wfStatus === 'bloque' ? 'bg-red-500'
+    : wfStatus === 'en_cours' ? 'bg-amber-500'
+    : wfStatus === 'attente' ? 'bg-gray-400'
+    : 'bg-gray-700';
 
   return (
     <div className="flex items-center gap-2">
       <span className={`text-[10px] w-24 truncate ${def.color}`}>{def.label}</span>
+      <div className={`w-2 h-2 rounded-full flex-shrink-0 ${statusInfo.dotClass} ${statusInfo.animate ? 'animate-pulse' : ''}`} />
       <div className="flex-1 h-2 bg-[#1e2028] rounded-full overflow-hidden">
         <div
-          className={`h-full rounded-full transition-all duration-500 ${
-            progress === 100 ? 'bg-green-500' : progress > 0 ? 'bg-amber-500' : 'bg-gray-700'
-          }`}
-          style={{ width: `${progress}%` }}
+          className={`h-full rounded-full transition-all duration-500 ${barColorClass}`}
+          style={{ width: `${Math.max(progress, wfStatus === 'attente' ? 3 : 0)}%` }}
         />
       </div>
       <span className="text-[10px] text-gray-500 w-8 text-right">{progress}%</span>
@@ -548,6 +658,192 @@ function ProductionStatsSection({ cmdRef }: { cmdRef: string }) {
   );
 }
 
+// ── Global Workflow Pipeline Bar ────────────────────────────────────
+
+function WorkflowPipeline({ cmd, onScrollToModule }: { cmd: CommandeGlobale; onScrollToModule: (key: string) => void }) {
+  return (
+    <div className="px-5 py-4 border-b border-[#2a2d35] bg-[#0f1117]">
+      <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-3">Pipeline de production</h3>
+      <div className="flex items-center gap-1 overflow-x-auto pb-1">
+        {MODULES.map((m, idx) => {
+          const mod = cmd[m.key] as ModuleStatus;
+          const wfStatus = getModuleWorkflowStatus(mod);
+          const statusInfo = WORKFLOW_STATUS_MAP[wfStatus];
+          const progress = getModuleProgress(mod);
+          const StatusIcon = statusInfo.icon;
+
+          return (
+            <div key={m.key} className="flex items-center">
+              {idx > 0 && (
+                <div className={`w-6 h-0.5 flex-shrink-0 ${
+                  getModuleWorkflowStatus(cmd[MODULES[idx - 1].key] as ModuleStatus) === 'termine'
+                    ? 'bg-green-500/50' : 'bg-[#2a2d35]'
+                }`} />
+              )}
+              <button
+                onClick={() => onScrollToModule(m.key)}
+                className={`flex flex-col items-center gap-1.5 px-3 py-2 rounded-lg border transition-all hover:scale-105 cursor-pointer flex-shrink-0 ${statusInfo.bgClass} ${statusInfo.borderClass}`}
+                title={`${m.label} — ${statusInfo.label}`}
+              >
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${statusInfo.bgClass} ${statusInfo.animate ? 'animate-pulse' : ''}`}>
+                  <StatusIcon size={16} className={statusInfo.colorClass} />
+                </div>
+                <span className="text-[10px] font-medium text-gray-300 whitespace-nowrap">{m.label}</span>
+                <span className={`text-[9px] font-semibold ${statusInfo.colorClass}`}>
+                  {wfStatus === 'en_cours' ? `${progress}%` : statusInfo.label}
+                </span>
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── Module Workflow Actions ─────────────────────────────────────────
+
+function ModuleWorkflowActions({
+  mod,
+  moduleDef,
+  cmdRef,
+  onRefresh,
+}: {
+  mod: ModuleStatus;
+  moduleDef: ModuleDef;
+  cmdRef: string;
+  onRefresh: () => void;
+}) {
+  const [acting, setActing] = useState(false);
+  const wfStatus = getModuleWorkflowStatus(mod);
+  const statusInfo = WORKFLOW_STATUS_MAP[wfStatus];
+  const progress = getModuleProgress(mod);
+  const complete = isModuleComplete(mod);
+
+  const handleAction = async (newStatut: 'en_cours' | 'termine' | 'attente') => {
+    setActing(true);
+    try {
+      const patch: ModuleStatus = { ...mod, statut: newStatut };
+      if (newStatut === 'termine') {
+        patch.fait = patch.total || 0;
+        patch.nc = 0;
+        patch.bloque = 0;
+      }
+      if (newStatut === 'en_cours' || newStatut === 'attente') {
+        // Debloquer: clear nc and bloque flags
+        patch.nc = 0;
+        patch.bloque = 0;
+      }
+      await patchCommandeModule(cmdRef, moduleDef.key, patch);
+      onRefresh();
+    } catch {
+      // silent
+    } finally {
+      setActing(false);
+    }
+  };
+
+  return (
+    <div className="mt-3 space-y-2">
+      {/* Big status badge */}
+      <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-bold ${statusInfo.bgClass} ${statusInfo.borderClass} border ${statusInfo.colorClass} ${statusInfo.animate ? 'animate-pulse' : ''}`}>
+        <statusInfo.icon size={16} />
+        {statusInfo.label}
+      </div>
+
+      {/* Progress bar with X/Y count */}
+      {mod && mod.total !== undefined && mod.total > 0 && (
+        <div className="space-y-1">
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-gray-400">{mod.fait || 0} / {mod.total}</span>
+            <span className={`font-bold ${progress === 100 ? 'text-green-400' : 'text-white'}`}>{progress}%</span>
+          </div>
+          <div className="h-3 bg-[#1e2028] rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all duration-700 ${
+                wfStatus === 'termine' ? 'bg-green-500'
+                : wfStatus === 'bloque' ? 'bg-red-500'
+                : progress > 0 ? 'bg-amber-500' : 'bg-gray-700'
+              }`}
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Contextual actions */}
+      <div className="flex flex-wrap items-center gap-2 pt-1">
+        {/* Blocked: show reason + DEBLOQUER button */}
+        {wfStatus === 'bloque' && (
+          <>
+            <div className="flex items-center gap-1.5 text-xs text-red-400 bg-red-600/10 border border-red-500/20 rounded-lg px-2.5 py-1.5">
+              <AlertTriangle size={12} />
+              <span>
+                {mod?.nc && mod.nc > 0 ? `${mod.nc} NC` : ''}
+                {mod?.nc && mod.nc > 0 && mod?.bloque && mod.bloque > 0 ? ' + ' : ''}
+                {mod?.bloque && mod.bloque > 0 ? `${mod.bloque} bloque(s)` : ''}
+                {(!mod?.nc || mod.nc === 0) && (!mod?.bloque || mod.bloque === 0) ? 'Validation requise' : ''}
+              </span>
+            </div>
+            <button
+              onClick={() => handleAction('en_cours')}
+              disabled={acting}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white rounded-lg transition-colors"
+            >
+              <Unlock size={12} />
+              {acting ? '...' : 'DEBLOQUER'}
+            </button>
+            <button
+              onClick={() => handleAction('attente')}
+              disabled={acting}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-gray-600 hover:bg-gray-500 disabled:opacity-50 text-white rounded-lg transition-colors"
+            >
+              <Clock size={12} />
+              {acting ? '...' : 'VALIDER'}
+            </button>
+          </>
+        )}
+
+        {/* En cours + complete: MARQUER TERMINE button */}
+        {wfStatus === 'en_cours' && complete && (
+          <button
+            onClick={() => handleAction('termine')}
+            disabled={acting}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white rounded-lg transition-colors"
+          >
+            <Check size={12} />
+            {acting ? '...' : 'MARQUER TERMINE'}
+          </button>
+        )}
+
+        {/* Pas commence: info message */}
+        {wfStatus === 'pas_commence' && (
+          <div className="flex items-center gap-1.5 text-xs text-gray-500 bg-gray-600/10 border border-gray-500/20 rounded-lg px-2.5 py-1.5">
+            <Info size={12} />
+            <span>Importer les donnees et envoyer aux postes pour demarrer</span>
+          </div>
+        )}
+
+        {/* Attente: info about waiting */}
+        {wfStatus === 'attente' && (
+          <div className="flex items-center gap-1.5 text-xs text-gray-400 bg-gray-600/10 border border-gray-400/20 rounded-lg px-2.5 py-1.5">
+            <Clock size={12} />
+            <span>Donnees importees — en attente d'envoi aux postes</span>
+          </div>
+        )}
+
+        {/* Termine: completed badge */}
+        {wfStatus === 'termine' && (
+          <div className="flex items-center gap-1.5 text-xs text-green-400 bg-green-600/10 border border-green-500/20 rounded-lg px-2.5 py-1.5">
+            <CheckCircle size={12} />
+            <span>Module termine</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Detail View ─────────────────────────────────────────────────────
 
 function DetailView({ cmd, onClose, onRefresh }: { cmd: CommandeGlobale; onClose: () => void; onRefresh: () => void }) {
@@ -569,6 +865,13 @@ function DetailView({ cmd, onClose, onRefresh }: { cmd: CommandeGlobale; onClose
     (cmd.coupe_profiles as CoupeModuleData) || {}
   );
   const [importDirty, setImportDirty] = useState(false);
+
+  // Module section refs for scroll-to from pipeline
+  const moduleRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const scrollToModule = useCallback((key: string) => {
+    const el = moduleRefs.current[key];
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, []);
 
   const handleSave = async () => {
     setSaving(true);
@@ -762,6 +1065,9 @@ function DetailView({ cmd, onClose, onRefresh }: { cmd: CommandeGlobale; onClose
         </div>
       )}
 
+      {/* ── Global Workflow Pipeline ──────────────────────────────── */}
+      <WorkflowPipeline cmd={cmd} onScrollToModule={scrollToModule} />
+
       {/* ── File Import Section ─────────────────────────────────── */}
       <div className="px-5 py-4 border-b border-[#2a2d35]">
         <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">
@@ -871,57 +1177,46 @@ function DetailView({ cmd, onClose, onRefresh }: { cmd: CommandeGlobale; onClose
       {/* Temps & Productivite */}
       <ProductionStatsSection cmdRef={cmd.ref} />
 
-      {/* Modules detail */}
+      {/* Modules detail with workflow actions */}
       <div className="divide-y divide-[#2a2d35]">
         {MODULES.map(m => {
           const mod = cmd[m.key] as ModuleStatus;
-          const progress = getModuleProgress(mod);
-          const statut = getModuleStatutLabel(mod);
+          const wfStatus = getModuleWorkflowStatus(mod);
+          const statusInfo = WORKFLOW_STATUS_MAP[wfStatus];
           const alert = hasAlerts(mod);
 
           return (
-            <div key={m.key} className="px-5 py-4">
+            <div
+              key={m.key}
+              ref={el => { moduleRefs.current[m.key] = el; }}
+              className="px-5 py-4"
+            >
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
-                  <span className={`w-2 h-2 rounded-full ${
-                    progress === 100 ? 'bg-green-500' : progress > 0 ? 'bg-amber-500' : 'bg-gray-600'
-                  }`} />
+                  <span className={`w-2.5 h-2.5 rounded-full ${statusInfo.dotClass} ${statusInfo.animate ? 'animate-pulse' : ''}`} />
                   <span className={`text-sm font-semibold ${m.color}`}>{m.label}</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className={`text-xs px-2 py-0.5 rounded border ${
-                    statut === 'Termine' ? 'bg-green-600/20 text-green-400 border-green-500/30' :
-                    statut === 'En cours' ? 'bg-amber-600/20 text-amber-400 border-amber-500/30' :
-                    statut === 'Bloque' ? 'bg-red-600/20 text-red-400 border-red-500/30' :
-                    'bg-gray-600/20 text-gray-400 border-gray-500/30'
-                  }`}>
-                    {statut}
-                  </span>
-                  <span className="text-sm font-bold text-white">{progress}%</span>
+                  {alert && mod?.nc !== undefined && mod.nc > 0 && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-600/20 text-red-400 border border-red-500/30">
+                      {mod.nc} NC
+                    </span>
+                  )}
+                  {alert && mod?.bloque !== undefined && mod.bloque > 0 && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-600/20 text-orange-400 border border-orange-500/30">
+                      {mod.bloque} Bloque
+                    </span>
+                  )}
                 </div>
               </div>
 
-              {/* Progress bar */}
-              <div className="h-2.5 bg-[#0f1117] rounded-full overflow-hidden mb-2">
-                <div
-                  className={`h-full rounded-full transition-all duration-700 ${
-                    progress === 100 ? 'bg-green-500' : progress > 0 ? 'bg-amber-500' : 'bg-gray-700'
-                  }`}
-                  style={{ width: `${progress}%` }}
-                />
-              </div>
-
-              {/* Details row */}
-              <div className="flex gap-4 text-[10px] text-gray-500">
-                {mod?.total !== undefined && <span>Total: {mod.total}</span>}
-                {mod?.fait !== undefined && <span>Fait: {mod.fait}</span>}
-                {alert && mod?.nc !== undefined && mod.nc > 0 && (
-                  <span className="text-red-400">NC: {mod.nc}</span>
-                )}
-                {alert && mod?.bloque !== undefined && mod.bloque > 0 && (
-                  <span className="text-orange-400">Bloque: {mod.bloque}</span>
-                )}
-              </div>
+              {/* Workflow actions (status badge, progress bar, action buttons) */}
+              <ModuleWorkflowActions
+                mod={mod}
+                moduleDef={m}
+                cmdRef={cmd.ref}
+                onRefresh={onRefresh}
+              />
             </div>
           );
         })}
@@ -1143,6 +1438,9 @@ export function DashboardGlobal({ onBack }: Props) {
 
   const selectedCmd = selectedRef ? commandes.find(c => c.ref === selectedRef) : null;
 
+  // Count commands needing attention (blocked or NC > 0)
+  const attentionCount = useMemo(() => countAttentionNeeded(commandes), [commandes]);
+
   const handleCommandCreated = (ref: string) => {
     setShowNew(false);
     load().then(() => {
@@ -1169,6 +1467,15 @@ export function DashboardGlobal({ onBack }: Props) {
             <p className="text-[10px] text-gray-500">Vue superviseur de toutes les commandes</p>
           </div>
           <div className="flex-1" />
+          {attentionCount > 0 && (
+            <div className="relative flex items-center gap-1.5 px-3 py-1.5 bg-red-600/20 border border-red-500/30 rounded-lg animate-pulse">
+              <Bell size={14} className="text-red-400" />
+              <span className="text-xs font-bold text-red-400">{attentionCount}</span>
+              <span className="text-[10px] text-red-400/80 hidden sm:inline">
+                {attentionCount === 1 ? 'commande' : 'commandes'} a traiter
+              </span>
+            </div>
+          )}
           <button
             onClick={() => { setShowNew(true); setSelectedRef(null); }}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-500 text-white text-xs font-semibold rounded-lg transition-colors"
