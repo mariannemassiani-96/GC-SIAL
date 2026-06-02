@@ -33,6 +33,7 @@ interface MachineData {
   statut: 'imported' | 'en_cours' | 'termine';
   barresTotal?: number;
   barresFaites?: number;
+  preparation?: Record<string, 'ok' | 'nc' | 'manquant'>;
 }
 
 interface Commande {
@@ -282,11 +283,25 @@ export function PosteCoupe({ onBack, startAtelier }: Props) {
     }
   }, [commandes, upsert, user]);
 
+  const updateBarPreparation = useCallback((commandeId: string, machine: MachineName, barId: string, status: 'ok' | 'nc' | 'manquant' | null) => {
+    const c = allCommandes.find(x => x.id === commandeId);
+    if (!c) return;
+    const md = c.machines[machine];
+    if (!md) return;
+    const prep = { ...(md.preparation || {}) };
+    if (status === null) delete prep[barId];
+    else prep[barId] = status;
+    const updated = { ...c, machines: { ...c.machines, [machine]: { ...md, preparation: prep } } };
+    upsert(updated);
+    if (status && c.ref) logProductionEvent({ commande_ref: c.ref, poste: 'preparation', action: status, piece_ref: barId }).catch(() => {});
+  }, [allCommandes, upsert]);
+
   // ── Mode Atelier ──
   if (modeAtelier) {
     return (
       <AtelierView
         commandes={allCommandes}
+        updateBarPreparation={updateBarPreparation}
         onBack={() => setModeAtelier(false)}
         updateCutStatut={updateCutStatut}
         markBarAllCut={markBarAllCut}
@@ -488,12 +503,13 @@ export function PosteCoupe({ onBack, startAtelier }: Props) {
 type AtelierStep = 'machine' | 'commande' | 'profile' | 'bar';
 
 function AtelierView({
-  commandes, onBack, updateCutStatut, markBarAllCut,
+  commandes, onBack, updateCutStatut, markBarAllCut, updateBarPreparation,
 }: {
   commandes: Commande[];
   onBack: () => void;
   updateCutStatut: (commandeId: string, machine: MachineName, barId: string, cutIdx: number, statut: FstCut['statut']) => void;
   markBarAllCut: (commandeId: string, machine: MachineName, barId: string) => void;
+  updateBarPreparation: (commandeId: string, machine: MachineName, barId: string, status: 'ok' | 'nc' | 'manquant' | null) => void;
 }) {
   const [step, setStep] = useState<AtelierStep | 'preparation'>('machine');
   const [machine, setMachine] = useState<MachineName | null>(null);
@@ -597,8 +613,22 @@ function AtelierView({
                       {colorCode && <div className="text-xs text-amber-400 mt-0.5">Coloris: {colorCode}</div>}
                     </div>
                     <div className="text-right">
-                      <div className="text-2xl font-black text-cyan-400">{total}</div>
-                      <div className="text-xs text-gray-500">barres</div>
+                      {(() => {
+                        const okCount = items.filter(it => it.commande.machines[it.machine]?.preparation?.[it.bar.id] === 'ok').length;
+                        const ncCount = items.filter(it => {
+                          const s = it.commande.machines[it.machine]?.preparation?.[it.bar.id];
+                          return s === 'nc' || s === 'manquant';
+                        }).length;
+                        return (
+                          <>
+                            <div className={`text-2xl font-black ${okCount === total ? 'text-green-400' : okCount > 0 ? 'text-amber-400' : 'text-cyan-400'}`}>
+                              {okCount}/{total}
+                            </div>
+                            <div className="text-xs text-gray-500">preparees</div>
+                            {ncCount > 0 && <div className="text-xs text-red-400 font-bold">{ncCount} NC</div>}
+                          </>
+                        );
+                      })()}
                     </div>
                   </div>
                   <div className="space-y-1">
@@ -607,14 +637,37 @@ function AtelierView({
                       const barLen = it.bar.length;
                       const chantier = it.commande.chantier || it.commande.ref;
                       const barColor = it.bar.innerColor || it.bar.outerColor || '';
+                      const prepStatus = it.commande.machines[it.machine]?.preparation?.[it.bar.id];
                       return (
                         <div key={`${it.commande.id}_${it.bar.id}_${idx}`}
-                          className="flex items-center gap-3 p-2 rounded-lg bg-[#14161d] border border-[#1e2028]">
+                          className={`flex items-center gap-3 p-2 rounded-lg border ${
+                            prepStatus === 'ok' ? 'bg-green-900/20 border-green-500/30' :
+                            prepStatus === 'nc' ? 'bg-red-900/20 border-red-500/30' :
+                            prepStatus === 'manquant' ? 'bg-orange-900/20 border-orange-500/30' :
+                            'bg-[#14161d] border-[#1e2028]'}`}>
                           <span className="text-xs text-gray-500 w-16 shrink-0">{MACHINE_LABELS[it.machine]}</span>
                           <span className="text-sm text-white font-mono">{barLen}mm</span>
                           {barColor && <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-600/20 text-amber-400 border border-amber-500/30">{barColor}</span>}
                           <span className="text-xs text-gray-400 flex-1">{chantier} — {totalCuts} pcs</span>
-                          <span className="text-xs text-green-400 font-bold">OK</span>
+                          {prepStatus === 'ok' ? (
+                            <button onClick={() => updateBarPreparation(it.commande.id, it.machine, it.bar.id, null)}
+                              className="text-green-400 font-bold text-sm px-3 py-1 active:scale-90">✓ OK</button>
+                          ) : prepStatus === 'nc' || prepStatus === 'manquant' ? (
+                            <div className="flex gap-1">
+                              <span className="text-red-400 font-bold text-xs">{prepStatus === 'nc' ? 'NC' : 'MANQ.'}</span>
+                              <button onClick={() => updateBarPreparation(it.commande.id, it.machine, it.bar.id, null)}
+                                className="text-gray-500 text-xs px-1 active:scale-90">↩</button>
+                            </div>
+                          ) : (
+                            <div className="flex gap-1">
+                              <button onClick={() => updateBarPreparation(it.commande.id, it.machine, it.bar.id, 'ok')}
+                                className="px-3 py-1.5 bg-green-700 hover:bg-green-600 text-white text-xs font-bold rounded active:scale-90">OK</button>
+                              <button onClick={() => updateBarPreparation(it.commande.id, it.machine, it.bar.id, 'nc')}
+                                className="px-2 py-1.5 bg-red-700 hover:bg-red-600 text-white text-xs rounded active:scale-90">NC</button>
+                              <button onClick={() => updateBarPreparation(it.commande.id, it.machine, it.bar.id, 'manquant')}
+                                className="px-2 py-1.5 bg-orange-700 hover:bg-orange-600 text-white text-xs rounded active:scale-90">Manq.</button>
+                            </div>
+                          )}
                         </div>
                       );
                     })}
