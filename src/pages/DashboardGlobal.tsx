@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { ArrowLeft, Search, X, AlertTriangle, ChevronDown, ChevronUp, Plus, Save, Upload, CheckCircle, Send, FileText, Lock, Unlock, Clock, Circle, Zap, Bell, Info, Check } from 'lucide-react';
 import { listCommandesGlobales, upsertCommandeGlobale, patchCommandeModule, getProductionStatsByCommande, type CommandeGlobale, type ModuleStatus } from '../api';
-import { parseExcelFile, parseCSVText } from '../vitrage/parseExcel';
+import { parseExcelFile, parseCSVText, parseDocxFile } from '../vitrage/parseExcel';
 import { parseFstlineFile, type FstJob } from '../atelier/fstlineParser';
 import type { Vitrage } from '../vitrage/types';
 
@@ -330,6 +330,9 @@ function ImportSlotVitrage({
         const text = await file.text();
         const result = parseCSVText(text);
         vitrages = result.vitrages;
+      } else if (ext === 'docx') {
+        const result = await parseDocxFile(file, chantier);
+        vitrages = result.vitrages;
       } else {
         const result = await parseExcelFile(file, chantier);
         vitrages = result.vitrages;
@@ -378,7 +381,7 @@ function ImportSlotVitrage({
         <input
           ref={inputRef}
           type="file"
-          accept=".xlsx,.xls,.csv"
+          accept=".xlsx,.xls,.csv,.docx"
           onChange={handleFile}
           className="hidden"
         />

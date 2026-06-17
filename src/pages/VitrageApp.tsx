@@ -7,7 +7,7 @@ import {
   EMPTY_LOT, DEFAULT_AVERY, DEFAULT_WE, DEFAULT_GLASS, STATUT_LABELS, STATUT_COLORS,
 } from '../vitrage/types';
 import { parseVitrageSpec } from '../vitrage/parseVitrageSpec';
-import { parseExcelFile, parseCSVText, type ParseResult } from '../vitrage/parseExcel';
+import { parseExcelFile, parseCSVText, parseDocxFile, type ParseResult } from '../vitrage/parseExcel';
 import { optimizeWE } from '../vitrage/optimizeWE';
 import { optimizeGlass, extractGlassPieces } from '../vitrage/optimize2D';
 import { hasBackend, apiOptimize, apiExportDXF, apiExportOPT, apiLabelsZPL } from '../vitrage/api';
@@ -457,6 +457,8 @@ function TabImport({ vitrages, onUpdate, onSetRef, chantier }: { vitrages: Vitra
       if (ext === 'csv' || ext === 'tsv' || ext === 'txt') {
         const text = await file.text();
         result = parseCSVText(text);
+      } else if (ext === 'docx') {
+        result = await parseDocxFile(file, chantier);
       } else {
         result = await parseExcelFile(file, chantier);
       }
@@ -480,9 +482,9 @@ function TabImport({ vitrages, onUpdate, onSetRef, chantier }: { vitrages: Vitra
     <div className="space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <label className="border-2 border-dashed border-[#2a2d35] rounded-lg p-6 text-center cursor-pointer hover:border-blue-500/50 transition-colors">
-          <input type="file" accept=".xlsx,.xls,.csv,.tsv,.txt" onChange={handleFile} className="hidden" />
-          <div className="text-blue-400 text-sm font-semibold">Import Excel / CSV</div>
-          <div className="text-xs text-gray-500 mt-1">.xlsx, .xls, .csv, .tsv</div>
+          <input type="file" accept=".xlsx,.xls,.csv,.tsv,.txt,.docx" onChange={handleFile} className="hidden" />
+<div className="text-blue-400 text-sm font-semibold">Import Excel / CSV</div>
+          <div className="text-xs text-gray-500 mt-1">.xlsx, .xls, .csv, .tsv, .docx</div>
         </label>
         <button onClick={addEmpty}
           className="border-2 border-dashed border-[#2a2d35] rounded-lg p-6 text-center cursor-pointer hover:border-amber-500/50 transition-colors">

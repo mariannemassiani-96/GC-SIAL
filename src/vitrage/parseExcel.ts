@@ -1,4 +1,5 @@
 import * as XLSX from 'xlsx';
+import mammoth from 'mammoth';
 import { v4 as uuid } from 'uuid';
 import type { Vitrage } from './types';
 import { parseVitrageSpec } from './parseVitrageSpec';
@@ -223,4 +224,118 @@ export function parseCSVText(text: string): ParseResult {
   }
 
   return { vitrages, columnsDetected, allHeaders: headerCells, lotInfo: '', totalRows: lines.length - 1, skippedRows: skipped };
+}
+
+// ── DOCX Parser (Pro2D optimization export) ─────────────────────────
+
+function parseHtmlTables(html: string): string[][][] {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, 'text/html');
+  const tables: string[][][] = [];
+  for (const table of doc.querySelectorAll('table')) {
+    const rows: string[][] = [];
+    for (const tr of table.querySelectorAll('tr')) {
+      const cells: string[] = [];
+      for (const td of tr.querySelectorAll('td, th')) {
+        cells.push((td as HTMLElement).textContent?.trim() ?? '');
+      }
+      rows.push(cells);
+    }
+    tables.push(rows);
+  }
+  return tables;
+}
+
+export async function parseDocxFile(file: File, chantier?: string): Promise<ParseResult> {
+  const buffer = await file.arrayBuffer();
+  const result = await mammoth.convertToHtml({ arrayBuffer: buffer });
+  const tables = parseHtmlTables(result.value);
+
+  let lotInfo = '';
+  const vitrages: Vitrage[] = [];
+  let totalRows = 0;
+  let skipped = 0;
+
+  // Find "Récapitulatif des panneaux" table (Référence | Matériel | Dimensions | Qt.)
+  let panneauxTable: string[][] | null = null;
+  for (const table of tables) {
+    const firstRow = table[0]?.join(' ').toLowerCase() ?? '';
+    if (firstRow.includes('capitulatif') && firstRow.includes('panneau')) {
+      panneauxTable = table;
+    }
+    if (table.some(r => r[0]?.startsWith('S') && /\d{4}/.test(r[0]))) {
+      lotInfo = table.find(r => r[0]?.startsWith('S'))?.[0] ?? '';
+    }
+  }
+
+  if (!panneauxTable) {
+    for (const table of tables) {
+      if (table.length > 2 && table[1]?.[0]?.toLowerCase().includes('rence')) {
+        panneauxTable = table;
+        break;
+      }
+    }
+  }
+
+  if (!panneauxTable) {
+    return { ...emptyResult(), allHeaders: ['Aucune table de panneaux trouvee dans le DOCX'], totalRows: 0 };
+  }
+
+  let refIdx = -1, matIdx = -1, dimIdx = -1, qtyIdx = -1;
+  const header = panneauxTable[1] || panneauxTable[0];
+  for (let c = 0; c < header.length; c++) {
+    const h = header[c].toLowerCase();
+    if (h.includes('rence') || h.includes('ref')) refIdx = c;
+    else if (h.includes('mat') || h.includes('riel')) matIdx = c;
+    else if (h.includes('dim')) dimIdx = c;
+    else if (h.includes('qt')) qtyIdx = c;
+  }
+
+  const startRow = refIdx >= 0 ? 2 : 1;
+
+  for (let r = startRow; r < panneauxTable.length; r++) {
+    const row = panneauxTable[r];
+    if (!row || row.every(c => !c)) continue;
+    totalRows++;
+
+    const reference = refIdx >= 0 ? row[refIdx]?.trim() : '';
+    const composition = matIdx >= 0 ? row[matIdx]?.trim() : '';
+    const dimStr = dimIdx >= 0 ? row[dimIdx]?.trim() : '';
+    const qte = qtyIdx >= 0 ? parseInt(row[qtyIdx]) || 1 : 1;
+
+    if (!dimStr || !composition) { skipped++; continue; }
+
+    const parsed = parseDimStr(dimStr);
+    if (!parsed) { skipped++; continue; }
+
+    const { outer, inner, epaisseur } = parseVitrageSpec(composition);
+    const chantierLabel = chantier ? chantier.replace(/\s+/g, '_') : '';
+    const vitRef = chantierLabel ? `${reference}_${chantierLabel}` : reference || composition;
+
+    for (let i = 0; i < qte; i++) {
+      vitrages.push({
+        id: uuid(),
+        reference: vitRef,
+        variante: 'V1',
+        largeur: parsed.largeur,
+        hauteur: parsed.hauteur,
+        composition,
+        intercalaireEpaisseur: epaisseur,
+        intercalaireCouleur: '012 (Noir)',
+        outerGlass: outer,
+        innerGlass: inner,
+        ug: '',
+        gazType: 'Argon',
+      });
+    }
+  }
+
+  return {
+    vitrages,
+    columnsDetected: { reference: 'Reference', composition: 'Materiel', dimensions: 'Dimensions', qte: 'Qt.' },
+    allHeaders: header,
+    lotInfo,
+    totalRows,
+    skippedRows: skipped,
+  };
 }
