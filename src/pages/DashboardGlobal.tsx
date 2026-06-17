@@ -142,14 +142,6 @@ function getModuleProgress(mod: ModuleStatus): number {
   return 0;
 }
 
-function getModuleStatutLabel(mod: ModuleStatus): string {
-  if (!mod || typeof mod !== 'object') return 'Attente';
-  if (mod.statut === 'termine') return 'Termine';
-  if (mod.statut === 'en_cours') return 'En cours';
-  if (mod.statut === 'bloque') return 'Bloque';
-  if (mod.total && mod.fait && mod.fait > 0) return 'En cours';
-  return 'Attente';
-}
 
 /** Count commands that need supervisor attention (blocked or NC > 0) */
 function countAttentionNeeded(commandes: CommandeGlobale[]): number {
@@ -325,8 +317,9 @@ function ImportSlotVitrage({
     setImporting(true);
     setImportError('');
     try {
+      const ext = file.name.split('.').pop()?.toLowerCase();
       let vitrages: Vitrage[];
-      if (file.name.endsWith('.csv')) {
+      if (ext === 'csv') {
         const text = await file.text();
         const result = parseCSVText(text);
         vitrages = result.vitrages;
