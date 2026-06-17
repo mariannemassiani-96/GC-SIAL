@@ -364,7 +364,7 @@ function useOptimization(vitrages: Vitrage[], glass: GlassSettings) {
 
 // ── Order Detail ─────────────────────────────────────────────────────
 
-const TABS = ['Import', 'Vitrages', 'Tracabilite'] as const;
+const TABS = ['Import', 'Vitrages', 'Etiquettes', 'Tracabilite'] as const;
 
 function OrderDetail({ commande, onUpdate, onBack }: {
   commande: Commande;
@@ -414,7 +414,8 @@ function OrderDetail({ commande, onUpdate, onBack }: {
 
       {tab === 0 && <TabImport vitrages={c.vitrages} onUpdate={v => onUpdate({ vitrages: v })} onSetRef={ref => onUpdate({ reference: ref })} chantier={c.client} />}
       {tab === 1 && <TabVitrages vitrages={c.vitrages} onUpdate={v => onUpdate({ vitrages: v })} />}
-      {tab === 2 && <TabTracabilite commandeRef={c.reference} />}
+      {tab === 2 && <TabEtiquettesCommande vitrages={c.vitrages} commandeLabel={`${c.reference} — ${c.client}`} />}
+      {tab === 3 && <TabTracabilite commandeRef={c.reference} />}
     </div>
   );
 }
@@ -575,6 +576,52 @@ interface TracaPiece {
   date_assemblage: string | null;
   lot_reference: string;
   lot_matieres: Record<string, string> | null;
+}
+
+function TabEtiquettesCommande({ vitrages, commandeLabel }: { vitrages: Vitrage[]; commandeLabel: string }) {
+  const [generating, setGenerating] = useState(false);
+
+  const gen = async (type: string) => {
+    if (vitrages.length === 0) { alert('Aucun vitrage a imprimer'); return; }
+    setGenerating(true);
+    try {
+      const label = commandeLabel.replace(/[^a-zA-Z0-9_-]/g, '_');
+      const cmd = {
+        id: '', reference: commandeLabel, client: '', dateCreation: '', semaineFabrication: '', semaineLivraison: '',
+        statut: 'en_cours' as const, vitrages, lotFabrication: EMPTY_LOT, notes: '',
+      };
+      switch (type) {
+        case 'A': download(await generateLabelsA(vitrages, commandeLabel, DEFAULT_AVERY), `${label}_A.pdf`); break;
+        case 'B': download(await generateLabelsB(vitrages, commandeLabel, DEFAULT_AVERY), `${label}_B.pdf`); break;
+        case 'C': download(await generateLabelsC(vitrages, [], commandeLabel, DEFAULT_AVERY), `${label}_C.pdf`); break;
+        case 'CE': download(await generateEtiquettesCE(vitrages, cmd), `${label}_CE.pdf`); break;
+        case 'ATELIER': download(await generateEtiquettesAtelier(vitrages, cmd), `${label}_atelier.pdf`); break;
+      }
+    } catch (err) { alert(`Erreur: ${err}`); }
+    setGenerating(false);
+  };
+
+  return (
+    <div className="space-y-4">
+      <h4 className="text-sm font-semibold text-gray-300">Etiquettes — {vitrages.length} vitrages</h4>
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {[
+          { id: 'A', label: 'Avery A', desc: 'Ref + compo + dimensions', color: 'bg-gray-700 hover:bg-gray-600' },
+          { id: 'B', label: 'Avery B', desc: 'Ref + QR code', color: 'bg-gray-700 hover:bg-gray-600' },
+          { id: 'C', label: 'Avery C', desc: 'Ref + plaque + face', color: 'bg-gray-700 hover:bg-gray-600' },
+          { id: 'CE', label: 'CE / CEKAL', desc: 'Conformite + tracabilite', color: 'bg-blue-700 hover:bg-blue-600' },
+          { id: 'ATELIER', label: 'Atelier + Checklist', desc: 'Fiche suiveuse', color: 'bg-green-700 hover:bg-green-600' },
+        ].map(b => (
+          <button key={b.id} onClick={() => gen(b.id)} disabled={generating}
+            className={`${b.color} text-white p-4 rounded-lg text-left transition-colors disabled:opacity-50 active:scale-95`}>
+            <div className="text-sm font-bold">{b.label}</div>
+            <div className="text-xs text-white/70 mt-1">{b.desc}</div>
+          </button>
+        ))}
+      </div>
+      {generating && <p className="text-amber-400 text-sm">Generation en cours...</p>}
+    </div>
+  );
 }
 
 function TabTracabilite({ commandeRef }: { commandeRef: string }) {
