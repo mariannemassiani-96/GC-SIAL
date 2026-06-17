@@ -13,6 +13,7 @@ export function parseVitrageSpec(spec: string): {
 } {
   const s = spec.trim();
 
+  // Format: "SP10 10 ARG WE 44.2 FE 1.1" or "44.2 /10 ARG WE /44.2 FE 1.0"
   const m = s.match(
     /^(.+?)\s*[/]?\s*(\d+)\s+(?:ARG\s+WE|WE\s+ARG)\s*[/]?\s*(.+)$/i,
   );
@@ -24,6 +25,7 @@ export function parseVitrageSpec(spec: string): {
     };
   }
 
+  // Format: "44,6/10 WE ARG/44,2 FE1,1"
   const m2 = s.match(
     /^(.+?)\s*\/\s*(\d+)\s+(?:WE\s+ARG|ARG\s+WE)\s*\/\s*(.+)$/i,
   );
@@ -32,6 +34,16 @@ export function parseVitrageSpec(spec: string): {
       outer: m2[1].trim(),
       inner: m2[3].trim(),
       epaisseur: parseInt(m2[2]),
+    };
+  }
+
+  // Format DOCX Pro2D: "44.2 S/16/4 Fe 1.1" or "6/18/4 CS70" or "4/20/4 Fe 1.1"
+  const m3 = s.match(/^(.+?)\/(\d+)\/(.+)$/);
+  if (m3) {
+    return {
+      outer: m3[1].trim(),
+      inner: m3[3].trim(),
+      epaisseur: parseInt(m3[2]),
     };
   }
 
