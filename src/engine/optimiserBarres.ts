@@ -27,14 +27,14 @@ export function optimiserBarres(pieces: PieceAOptimiser[]): OptimResultat[] {
     for (const p of piecesRef) {
       for (let i = 0; i < p.qte; i++) {
         if (p.longueur > LG_COUPE_MAX_MM) {
-          // Découper en segments de max LG_COUPE_MAX_MM
+          // Répartir uniformément pour éviter un segment trop court
+          const nbSegments = Math.ceil(p.longueur / LG_COUPE_MAX_MM);
+          const longueurSegment = Math.ceil(p.longueur / nbSegments);
           let restant = p.longueur;
-          let segment = 1;
-          while (restant > 0) {
-            const coupe = Math.min(restant, LG_COUPE_MAX_MM);
-            flat.push({ longueur: coupe, label: `${p.label} (seg.${segment})`, traveeRef: p.traveeRef });
+          for (let seg = 1; seg <= nbSegments; seg++) {
+            const coupe = Math.min(restant, longueurSegment);
+            flat.push({ longueur: coupe, label: `${p.label} (seg.${seg}/${nbSegments})`, traveeRef: p.traveeRef });
             restant -= coupe;
-            segment++;
           }
         } else {
           flat.push({ longueur: p.longueur, label: p.label, traveeRef: p.traveeRef });
