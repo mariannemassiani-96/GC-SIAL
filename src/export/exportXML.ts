@@ -71,7 +71,22 @@ function splitAtRaidisseurs(
   if (piece.longueur <= MAX_PIECE_MM) return [piece];
 
   const sorted = [...raidPositions].filter(p => p > 1 && p < fullLength - 1).sort((a, b) => a - b);
-  if (sorted.length === 0) return [piece];
+  if (sorted.length === 0) {
+    // Pas de raidisseurs: découpe uniforme avec décalage MC
+    const isMainCourante = piece.posType === 'mc';
+    const nbSeg = Math.ceil(piece.longueur / MAX_PIECE_MM);
+    const baseLen = Math.ceil(piece.longueur / nbSeg);
+    const result: CutInfo[] = [];
+    let restant = piece.longueur;
+    for (let s = 1; s <= nbSeg; s++) {
+      let coupe = Math.min(restant, baseLen);
+      if (isMainCourante && nbSeg > 1 && s === 1) coupe = Math.min(restant, baseLen + 200);
+      if (coupe > MAX_PIECE_MM) coupe = MAX_PIECE_MM;
+      result.push({ ...piece, longueur: coupe, segmentLabel: `seg.${s}/${nbSeg}` });
+      restant -= coupe;
+    }
+    return result;
+  }
 
   const splitPoints: number[] = [0];
   let lastSplit = 0;
@@ -274,6 +289,9 @@ function buildXMLString(affaire: Affaire, resultat: ResultatAffaire): string {
     refCuts.sort((a, b) => b.longueur - a.longueur);
     const bars: { cuts: CutInfo[]; used: number }[] = [];
     for (const cut of refCuts) {
+      if (cut.longueur > LG_BARRE_MM) {
+        console.warn(`[exportXML] Piece ${cut.ref} trop longue: ${cut.longueur}mm > ${LG_BARRE_MM}mm barre`);
+      }
       let placed = false;
       for (const bar of bars) {
         if (LG_BARRE_MM - bar.used >= cut.longueur) {
