@@ -1,6 +1,9 @@
 import { LG_BARRE_MM, LG_COUPE_MAX_MM, PROFILS } from '../constants/profils';
 import type { OptimResultat, BarreOptim } from '../types';
 
+const DECALAGE_MC = 200;
+const REFS_MAIN_COURANTE = new Set(['180030', '180032', '180033']);
+
 interface PieceAOptimiser {
   longueur: number;
   qte: number;
@@ -10,7 +13,6 @@ interface PieceAOptimiser {
 }
 
 export function optimiserBarres(pieces: PieceAOptimiser[]): OptimResultat[] {
-  // Regrouper par référence profilé
   const parRef = new Map<string, PieceAOptimiser[]>();
   for (const p of pieces) {
     if (p.longueur <= 0) continue;
@@ -22,17 +24,26 @@ export function optimiserBarres(pieces: PieceAOptimiser[]): OptimResultat[] {
   const resultats: OptimResultat[] = [];
 
   for (const [ref, piecesRef] of parRef.entries()) {
-    // Aplatir + découper les pièces trop longues
+    const isMainCourante = REFS_MAIN_COURANTE.has(ref);
     const flat: { longueur: number; label: string; traveeRef: string }[] = [];
     for (const p of piecesRef) {
       for (let i = 0; i < p.qte; i++) {
         if (p.longueur > LG_COUPE_MAX_MM) {
-          // Répartir uniformément pour éviter un segment trop court
           const nbSegments = Math.ceil(p.longueur / LG_COUPE_MAX_MM);
-          const longueurSegment = Math.ceil(p.longueur / nbSegments);
+          const longueurBase = Math.ceil(p.longueur / nbSegments);
           let restant = p.longueur;
           for (let seg = 1; seg <= nbSegments; seg++) {
-            const coupe = Math.min(restant, longueurSegment);
+            let coupe: number;
+            if (isMainCourante && nbSegments > 1) {
+              if (seg === 1) {
+                coupe = Math.min(restant, longueurBase + DECALAGE_MC);
+              } else {
+                coupe = Math.min(restant, longueurBase);
+              }
+            } else {
+              coupe = Math.min(restant, longueurBase);
+            }
+            if (coupe > LG_COUPE_MAX_MM) coupe = LG_COUPE_MAX_MM;
             flat.push({ longueur: coupe, label: `${p.label} (seg.${seg}/${nbSegments})`, traveeRef: p.traveeRef });
             restant -= coupe;
           }
@@ -42,10 +53,8 @@ export function optimiserBarres(pieces: PieceAOptimiser[]): OptimResultat[] {
       }
     }
 
-    // Trier par longueur décroissante (FFD)
     flat.sort((a, b) => b.longueur - a.longueur);
 
-    // Bin packing FFD
     const barres: BarreOptim[] = [];
     for (const piece of flat) {
       let placed = false;
