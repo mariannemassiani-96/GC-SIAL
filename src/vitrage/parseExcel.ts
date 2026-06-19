@@ -339,3 +339,8 @@ export async function parseDocxFile(file: File, chantier?: string): Promise<Pars
     skippedRows: skipped,
   };
 }
+
+// ── ODT Parser (re-export) ──────────────────────────────────────────
+
+export { parseODTFile } from './parseODT';
+export type { ODTParseResult } from './parseODT';
