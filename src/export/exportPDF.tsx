@@ -276,12 +276,37 @@ function FicheFabricationPage({ affaire, rt, parentTravee }: { affaire: Affaire;
             <Text style={s.cellMd}>L (mm)</Text>
             <Text style={s.cellSm}>Qté</Text>
           </View>
-          {rt.nomenclature.filter((n) => n.type === 'profil').map((n, i) => (
-            <View key={i} style={s.tableRow}>
-              <Text style={s.cellMd}>{n.ref}</Text>
-              <Text style={s.cellXl}>{n.label}</Text>
-              <Text style={s.cellMd}>{n.longueur.toFixed(1)}</Text>
-              <Text style={s.cellSm}>{n.qte}</Text>
+          {rt.nomenclature.filter((n) => n.type === 'profil').map((n, i) => {
+            const needsSegments = n.longueur > 6300;
+            const isMainCourante = ['180030', '180032', '180033'].includes(n.ref);
+            const nbSeg = needsSegments ? Math.ceil(n.longueur / 6300) : 0;
+            const baseLen = needsSegments ? Math.ceil(n.longueur / nbSeg) : 0;
+            return (
+              <View key={i}>
+                <View style={s.tableRow}>
+                  <Text style={s.cellMd}>{n.ref}</Text>
+                  <Text style={s.cellXl}>{n.label}{needsSegments ? ` → ${nbSeg} segments` : ''}</Text>
+                  <Text style={s.cellMd}>{n.longueur.toFixed(1)}</Text>
+                  <Text style={s.cellSm}>{n.qte}</Text>
+                </View>
+                {needsSegments && (
+                  <View style={{ paddingLeft: 15, paddingBottom: 2 }}>
+                    {Array.from({ length: nbSeg }, (_, s) => {
+                      let coupe = baseLen;
+                      if (isMainCourante && s === 0) coupe = Math.min(baseLen + 200, 6300);
+                      if (s === nbSeg - 1) coupe = n.longueur - (isMainCourante ? (Math.min(baseLen + 200, 6300) + baseLen * (nbSeg - 2)) : baseLen * (nbSeg - 1));
+                      if (coupe < 0) coupe = n.longueur / nbSeg;
+                      return (
+                        <Text key={s} style={{ fontSize: 6, color: '#666' }}>
+                          seg.{s + 1}/{nbSeg} : {Math.round(coupe)} mm{isMainCourante && s === 0 ? ' (+200mm décalage MC)' : ''}
+                        </Text>
+                      );
+                    })}
+                  </View>
+                )}
+              </View>
+            );
+          })}
             </View>
           ))}
         </View>
