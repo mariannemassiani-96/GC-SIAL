@@ -291,17 +291,35 @@ function FicheFabricationPage({ affaire, rt, parentTravee }: { affaire: Affaire;
                 </View>
                 {needsSegments && (
                   <View style={{ paddingLeft: 15, paddingBottom: 2 }}>
-                    {Array.from({ length: nbSeg }, (_, s) => {
-                      let coupe = baseLen;
-                      if (isMainCourante && s === 0) coupe = Math.min(baseLen + 200, 6300);
-                      if (s === nbSeg - 1) coupe = n.longueur - (isMainCourante ? (Math.min(baseLen + 200, 6300) + baseLen * (nbSeg - 2)) : baseLen * (nbSeg - 1));
-                      if (coupe < 0) coupe = n.longueur / nbSeg;
-                      return (
-                        <Text key={s} style={{ fontSize: 6, color: '#666' }}>
-                          seg.{s + 1}/{nbSeg} : {Math.round(coupe)} mm{isMainCourante && s === 0 ? ' (+200mm décalage MC)' : ''}
-                        </Text>
-                      );
-                    })}
+                    {(() => {
+                      const isLisse = n.ref === '180010';
+                      const allHoles = isLisse && rt.usinages.length > 0 ? rt.usinages[0].percageLisse : [];
+                      const cutPositions = [0];
+                      let rest = n.longueur;
+                      for (let si = 0; si < nbSeg; si++) {
+                        let coupe = baseLen;
+                        if (isMainCourante && si === 0) coupe = Math.min(baseLen + 200, 6300);
+                        if (si === nbSeg - 1) coupe = rest;
+                        if (coupe > 6300) coupe = 6300;
+                        cutPositions.push(cutPositions[cutPositions.length - 1] + coupe);
+                        rest -= coupe;
+                      }
+                      return Array.from({ length: nbSeg }, (_, si) => {
+                        const segStart = cutPositions[si];
+                        const segEnd = cutPositions[si + 1];
+                        const segLen = segEnd - segStart;
+                        const segHoles = allHoles.filter((h: number) => h >= segStart && h < segEnd);
+                        const firstHole = segHoles.length > 0 ? segHoles[0] - segStart : -1;
+                        const lastHole = segHoles.length > 0 ? segEnd - segHoles[segHoles.length - 1] : -1;
+                        return (
+                          <Text key={si} style={{ fontSize: 6, color: '#444' }}>
+                            seg.{si + 1}/{nbSeg} : {Math.round(segLen)} mm
+                            {isMainCourante && si === 0 ? ' (+200mm décalage MC)' : ''}
+                            {isLisse && firstHole >= 0 ? `  —  1er trou: ${Math.round(firstHole)}mm du bord G  |  dernier trou: ${Math.round(lastHole)}mm du bord D  (${segHoles.length} trous)` : ''}
+                          </Text>
+                        );
+                      });
+                    })()}
                   </View>
                 )}
               </View>
