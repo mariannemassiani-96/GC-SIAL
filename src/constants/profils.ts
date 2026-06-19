@@ -1,4 +1,5 @@
 export const LG_BARRE_MM = 6400;
+export const LG_COUPE_MAX_MM = 6300;
 
 export const PROFILS: Record<string, { label: string; w: number; h: number }> = {
   '180000': { label: 'Raidisseur (Montant fort) 40×20', w: 20, h: 40 },

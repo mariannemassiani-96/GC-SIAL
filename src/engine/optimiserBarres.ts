@@ -1,4 +1,4 @@
-import { LG_BARRE_MM, PROFILS } from '../constants/profils';
+import { LG_BARRE_MM, LG_COUPE_MAX_MM, PROFILS } from '../constants/profils';
 import type { OptimResultat, BarreOptim } from '../types';
 
 interface PieceAOptimiser {
@@ -22,11 +22,23 @@ export function optimiserBarres(pieces: PieceAOptimiser[]): OptimResultat[] {
   const resultats: OptimResultat[] = [];
 
   for (const [ref, piecesRef] of parRef.entries()) {
-    // Aplatir
+    // Aplatir + découper les pièces trop longues
     const flat: { longueur: number; label: string; traveeRef: string }[] = [];
     for (const p of piecesRef) {
       for (let i = 0; i < p.qte; i++) {
-        flat.push({ longueur: p.longueur, label: p.label, traveeRef: p.traveeRef });
+        if (p.longueur > LG_COUPE_MAX_MM) {
+          // Découper en segments de max LG_COUPE_MAX_MM
+          let restant = p.longueur;
+          let segment = 1;
+          while (restant > 0) {
+            const coupe = Math.min(restant, LG_COUPE_MAX_MM);
+            flat.push({ longueur: coupe, label: `${p.label} (seg.${segment})`, traveeRef: p.traveeRef });
+            restant -= coupe;
+            segment++;
+          }
+        } else {
+          flat.push({ longueur: p.longueur, label: p.label, traveeRef: p.traveeRef });
+        }
       }
     }
 
