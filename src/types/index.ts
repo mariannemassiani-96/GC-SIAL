@@ -7,7 +7,7 @@ export type TypeGCId =
   | 'bateau1'
   | 'bateau2';
 
-export type MCId = 'std' | 'design' | 'ronde';
+export type MCId = 'std' | 'mc80' | 'design' | 'ronde';
 export type PoseId = 'dalle' | 'anglaise';
 export type LieuId = 'prive' | 'public';
 export type FixationId = 'libre' | 'mur_d' | 'mur_g' | 'raccord90' | 'raccord_droit';
@@ -26,21 +26,35 @@ export interface TraveeConfig {
   hauteur: number;
 }
 
+export interface RaidBranche {
+  nb?: number;
+  positions?: number[];
+}
+
 export interface Travee extends TraveeConfig {
   id: string;
   etage: string;
   repere: string;
   largeur: number;
-  /** Largeur branche 2 (L/U). 0 = pas de branche 2. */
   largeur2: number;
-  /** Largeur branche 3 (U). 0 = pas de branche 3. */
   largeur3: number;
   qte: number;
   coupeG: '90' | '45';
   coupeD: '90' | '45';
+  fixRetourG?: 'mur' | 'libre';
+  fixRetourD?: 'mur' | 'libre';
+  rotationSchema?: number;
+  raidGauche?: RaidBranche;
+  raidCentre?: RaidBranche;
+  raidDroite?: RaidBranche;
+  debRaidForce?: number;
+  debBarreauForce?: number;
+  drawPoints?: { x: number; y: number }[];
 }
 
 /** Affaire = enveloppe projet + valeurs par défaut pour nouvelles travées */
+export type ClasseColoris = 1 | 2 | 3 | 4;
+
 export interface Affaire {
   id: string;
   ref: string;
@@ -48,10 +62,22 @@ export interface Affaire {
   chantier: string;
   date: string;
   coloris: string;
-  /** Valeurs par défaut — pré-remplissent les nouvelles travées */
+  classeColoris: ClasseColoris;
   defaults: TraveeConfig;
   travees: Travee[];
   statut: StatutAffaire;
+}
+
+export interface TarifItem {
+  classe1: number;
+  classe2: number;
+  classe3: number;
+  classe4: number;
+}
+
+export interface TarifKawneer {
+  dateMAJ: string;
+  prix: Record<string, TarifItem>;
 }
 
 export interface NomenclatureItem {

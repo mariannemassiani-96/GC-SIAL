@@ -1,6 +1,7 @@
 import type { Travee, NomenclatureItem } from '../types';
 import { PROFILS, ACCESSOIRES } from '../constants/profils';
 import { TYPES_GC, TYPES_MC, POSE_DATA } from '../constants/typesGC';
+import { MAX_PIECE_MM } from '../constants/parametres';
 
 interface CalcResult {
   nbRaid: number;
@@ -100,8 +101,40 @@ export function calcNomenclature(
   if (travee.fixG === 'mur_g') addAccess('127150', 1);
   if (travee.fixD === 'mur_d') addAccess('127149', 1);
   if (travee.fixD === 'mur_g') addAccess('127150', 1);
-  if (travee.fixG === 'raccord90' || travee.fixD === 'raccord90') addAccess('110962', 1);
+
+  // Raccords 90° — 1 par angle
+  let nbRaccord90 = 0;
+  if (travee.fixG === 'raccord90') nbRaccord90++;
+  if (travee.fixD === 'raccord90') nbRaccord90++;
+  if (nbRaccord90 > 0) addAccess('110962', nbRaccord90);
+
   if (travee.fixG === 'raccord_droit' || travee.fixD === 'raccord_droit') addAccess('110966', 1);
+
+  // Éclisses d'aboutage pour les GC longs (profilés > 6300mm)
+  if (calc.debMC > MAX_PIECE_MM) {
+    const nbSplices = Math.ceil(calc.debMC / MAX_PIECE_MM) - 1;
+    const nbLisses = (gc.hasBarreaux || gc.hasRemplissage) ? (gc.hasLisseInter ? 3 : gc.hasBarreaux ? 2 : 1) : 0;
+    const nbProfilsAboutés = 1 + nbLisses + 1; // MC + lisses + closoir
+    addAccess('110966', nbSplices * nbProfilsAboutés);
+  }
+
+  // Bouts des retours (L/U)
+  if (travee.coupeG === '45') {
+    if ((travee.fixRetourG ?? 'libre') === 'libre') {
+      addAccess(mc.bouchon, 1);
+      addAccess('127144', 1);
+    } else {
+      addAccess('127150', 1);
+    }
+  }
+  if (travee.coupeD === '45') {
+    if ((travee.fixRetourD ?? 'libre') === 'libre') {
+      addAccess(mc.bouchon, 1);
+      addAccess('127144', 1);
+    } else {
+      addAccess('127149', 1);
+    }
+  }
 
   return items;
 }

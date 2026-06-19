@@ -1,5 +1,6 @@
 import type { ResultatTravee } from '../types';
 import { TYPES_GC, TYPES_MC } from '../constants/typesGC';
+import { ESPACEMENT_BARREAU } from '../constants/parametres';
 
 interface PreviewGCProps {
   rt: ResultatTravee;
@@ -45,13 +46,8 @@ export function PreviewGC({ rt }: PreviewGCProps) {
   const sabotH = 20 * scale;
   const dalleH = 8;
 
-  // Raidisseur positions (relative to left edge of the guardrail, in mm)
-  // posRaidisseurs are relative to the lisse (with DEPASSEMENT_LISSE offset)
-  // We need positions relative to the guardrail width: raidisseur i is at i * entraxeEff
-  const raidPositions: number[] = [];
-  for (let i = 0; i < rt.nbRaid; i++) {
-    raidPositions.push(i * rt.entraxeEff);
-  }
+  // Use positions from the calculation engine (already filtered for angle junctions)
+  const raidPositions = rt.posRaidisseurs;
 
   // Barreaux positions between raidisseurs
   const barreauPositions: number[] = [];
@@ -60,7 +56,7 @@ export function PreviewGC({ rt }: PreviewGCProps) {
       const left = raidPositions[i];
       const right = raidPositions[i + 1];
       const interval = right - left;
-      const nbBar = Math.ceil(interval / 130) - 1;
+      const nbBar = Math.ceil(interval / ESPACEMENT_BARREAU) - 1;
       if (nbBar > 0) {
         const esp = interval / (nbBar + 1);
         for (let j = 1; j <= nbBar; j++) {

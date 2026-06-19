@@ -1,0 +1,178 @@
+import type { ObjetType } from './types';
+
+export interface CatalogEntry {
+  label: string;
+  pluriel: string;
+  defaultLargeur: number; // cm
+  defaultHauteur: number; // cm
+  couleur: string;
+  description: string;
+}
+
+export const CATALOG: Record<ObjetType, CatalogEntry> = {
+  machine: {
+    label: 'Machine',
+    pluriel: 'Machines',
+    defaultLargeur: 200,
+    defaultHauteur: 150,
+    couleur: '#3b82f6',
+    description: 'Équipement de production',
+  },
+  poste: {
+    label: 'Poste de travail',
+    pluriel: 'Postes',
+    defaultLargeur: 150,
+    defaultHauteur: 80,
+    couleur: '#10b981',
+    description: 'Poste opérateur, établi',
+  },
+  convoyeur: {
+    label: 'Convoyeur',
+    pluriel: 'Convoyeurs',
+    defaultLargeur: 400,
+    defaultHauteur: 60,
+    couleur: '#f59e0b',
+    description: 'Transport inter-postes',
+  },
+  stock: {
+    label: 'Stock',
+    pluriel: 'Stocks',
+    defaultLargeur: 200,
+    defaultHauteur: 100,
+    couleur: '#8b5cf6',
+    description: 'Zone de stockage, rack',
+  },
+  stock_tampon: {
+    label: 'Stock tampon',
+    pluriel: 'Stocks tampon',
+    defaultLargeur: 120,
+    defaultHauteur: 80,
+    couleur: '#ec4899',
+    description: 'En-cours entre deux postes',
+  },
+  zone: {
+    label: 'Zone',
+    pluriel: 'Zones',
+    defaultLargeur: 400,
+    defaultHauteur: 300,
+    couleur: '#64748b',
+    description: 'Zone fonctionnelle (circulation, sécurité…)',
+  },
+  mur: {
+    label: 'Mur / Cloison',
+    pluriel: 'Murs',
+    defaultLargeur: 500,
+    defaultHauteur: 20,
+    couleur: '#374151',
+    description: 'Cloison fixe',
+  },
+  porte: {
+    label: 'Porte',
+    pluriel: 'Portes',
+    defaultLargeur: 100,
+    defaultHauteur: 20,
+    couleur: '#fbbf24',
+    description: 'Porte intérieure ou extérieure',
+  },
+  fenetre: {
+    label: 'Fenêtre',
+    pluriel: 'Fenêtres',
+    defaultLargeur: 120,
+    defaultHauteur: 20,
+    couleur: '#60a5fa',
+    description: 'Fenêtre — posée sur un mur',
+  },
+  colonne: {
+    label: 'Colonne',
+    pluriel: 'Colonnes',
+    defaultLargeur: 40,
+    defaultHauteur: 40,
+    couleur: '#4b5563',
+    description: 'Poteau porteur',
+  },
+  bureau: {
+    label: 'Bureau',
+    pluriel: 'Bureaux',
+    defaultLargeur: 160,
+    defaultHauteur: 80,
+    couleur: '#0ea5e9',
+    description: 'Bureau / poste administratif',
+  },
+  armoire: {
+    label: 'Armoire',
+    pluriel: 'Armoires',
+    defaultLargeur: 100,
+    defaultHauteur: 50,
+    couleur: '#6366f1',
+    description: 'Rangement bureau',
+  },
+  salle: {
+    label: 'Salle',
+    pluriel: 'Salles',
+    defaultLargeur: 400,
+    defaultHauteur: 300,
+    couleur: '#0891b2',
+    description: 'Salle réunion, vestiaire, sanitaires…',
+  },
+  equipement: {
+    label: 'Équipement',
+    pluriel: 'Équipements',
+    defaultLargeur: 80,
+    defaultHauteur: 60,
+    couleur: '#14b8a6',
+    description: 'Imprimante, photocopieur, frigo…',
+  },
+  parking: {
+    label: 'Place de parking',
+    pluriel: 'Places parking',
+    defaultLargeur: 250,
+    defaultHauteur: 500,
+    couleur: '#64748b',
+    description: 'Place de stationnement',
+  },
+  vehicule: {
+    label: 'Véhicule',
+    pluriel: 'Véhicules',
+    defaultLargeur: 200,
+    defaultHauteur: 450,
+    couleur: '#475569',
+    description: 'Véhicule type VL / utilitaire',
+  },
+  exterieur: {
+    label: 'Zone extérieure',
+    pluriel: 'Extérieurs',
+    defaultLargeur: 600,
+    defaultHauteur: 400,
+    couleur: '#84cc16',
+    description: 'Cour, espace vert, voirie',
+  },
+  piece: {
+    label: 'Pièce',
+    pluriel: 'Pièces',
+    defaultLargeur: 400,
+    defaultHauteur: 300,
+    couleur: '#22d3ee',
+    description: 'Pièce cloisonnée — surface auto',
+  },
+};
+
+export const TYPES_ORDERED: ObjetType[] = [
+  'machine',
+  'poste',
+  'convoyeur',
+  'stock_tampon',
+  'stock',
+  'bureau',
+  'armoire',
+  'equipement',
+  'salle',
+  'zone',
+  'mur',
+  'porte',
+  'fenetre',
+  'colonne',
+  'parking',
+  'vehicule',
+  'exterieur',
+  'piece',
+];

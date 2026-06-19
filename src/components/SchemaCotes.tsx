@@ -15,7 +15,7 @@ export function SchemaCotes({ affaire }: SchemaCotesProps) {
 
   // Build plan view geometry
   const totalWidth = travees.reduce((s, t) => {
-    const w = t.largeur + (t.largeur2 > 0 ? t.largeur2 : 0);
+    const w = t.largeur + (t.largeur2 > 0 ? t.largeur2 : 0) + ((t.largeur3 ?? 0) > 0 ? t.largeur3 ?? 0 : 0);
     return s + w;
   }, 0);
 
@@ -71,9 +71,29 @@ export function SchemaCotes({ affaire }: SchemaCotesProps) {
                     {angle && t.coupeD === '45' && (
                       <line x1={x + w} y1={planY + 10} x2={x + w} y2={planY + 10 - w2} stroke="#3b82f6" strokeWidth={3} />
                     )}
-                    {angle && t.coupeG === '45' && (
+                    {angle && t.coupeG === '45' && t.coupeD !== '45' && (
                       <line x1={x} y1={planY + 10} x2={x} y2={planY + 10 - w2} stroke="#3b82f6" strokeWidth={3} />
                     )}
+                    {/* U-shape: left branch uses largeur3 */}
+                    {t.coupeG === '45' && t.coupeD === '45' && (t.largeur3 ?? 0) > 0 && (
+                      <line x1={x} y1={planY + 10} x2={x} y2={planY + 10 - (t.largeur3 ?? 0) * scale} stroke="#3b82f6" strokeWidth={3} />
+                    )}
+
+                    {/* Wall marks at end of retours */}
+                    {angle && t.coupeD === '45' && (t.fixRetourD ?? 'libre') === 'mur' && (
+                      <rect x={x + w - 2} y={planY + 10 - w2 - 2} width={4} height={4} fill="#9ca3af" rx={0.5} />
+                    )}
+                    {angle && t.coupeD === '45' && (t.fixRetourD ?? 'libre') === 'libre' && (
+                      <circle cx={x + w} cy={planY + 10 - w2} r={2.5} fill="#ef4444" />
+                    )}
+                    {t.coupeG === '45' && (() => {
+                      const branchLen = t.coupeD === '45' ? (t.largeur3 ?? 0) * scale : w2;
+                      if (branchLen <= 0) return null;
+                      const isMur = (t.fixRetourG ?? 'libre') === 'mur';
+                      return isMur
+                        ? <rect x={x - 2} y={planY + 10 - branchLen - 2} width={4} height={4} fill="#9ca3af" rx={0.5} />
+                        : <circle cx={x} cy={planY + 10 - branchLen} r={2.5} fill="#ef4444" />;
+                    })()}
 
                     {/* Dimension: width */}
                     <line x1={x} y1={planY + 30} x2={x + w} y2={planY + 30} stroke="#f59e0b" strokeWidth={0.5} />
@@ -94,11 +114,20 @@ export function SchemaCotes({ affaire }: SchemaCotesProps) {
                             </text>
                           </>
                         )}
-                        {t.coupeG === '45' && (
+                        {t.coupeG === '45' && t.coupeD !== '45' && (
                           <>
                             <line x1={x - 8} y1={planY + 10} x2={x - 8} y2={planY + 10 - w2} stroke="#f59e0b" strokeWidth={0.5} />
                             <text x={x - 14} y={planY + 10 - w2 / 2} fill="#f59e0b" fontSize={7} fontFamily="monospace" dominantBaseline="middle" textAnchor="end">
                               {t.largeur2}
+                            </text>
+                          </>
+                        )}
+                        {/* U-shape: left dimension (largeur3) */}
+                        {t.coupeG === '45' && t.coupeD === '45' && (t.largeur3 ?? 0) > 0 && (
+                          <>
+                            <line x1={x - 8} y1={planY + 10} x2={x - 8} y2={planY + 10 - (t.largeur3 ?? 0) * scale} stroke="#f59e0b" strokeWidth={0.5} />
+                            <text x={x - 14} y={planY + 10 - ((t.largeur3 ?? 0) * scale) / 2} fill="#f59e0b" fontSize={7} fontFamily="monospace" dominantBaseline="middle" textAnchor="end">
+                              {t.largeur3}
                             </text>
                           </>
                         )}

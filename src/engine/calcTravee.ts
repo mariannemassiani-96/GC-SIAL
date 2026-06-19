@@ -1,210 +1,267 @@
 import type { Affaire, Travee, ResultatTravee, UsinageLisse, Alerte } from '../types';
-import { ENTRAXE, ESPACEMENT_BARREAU, DEPASSEMENT_LISSE } from '../constants/parametres';
-import { TYPES_GC, TYPES_MC, POSE_DATA } from '../constants/typesGC';
+import { ENTRAXE, ESPACEMENT_BARREAU, MIN_BORD_BARREAU } from '../constants/parametres';
+import { TYPES_GC, TYPES_MC } from '../constants/typesGC';
 import { calcNomenclature } from './calcNomenclature';
 
 /**
- * Calcule le nombre de barreaux par intervalle pour un entraxe donné.
- * ceil garantit espacement ≤ 130mm (NF P01-012).
+ * Grille canonique : offset symétrique ∈ [MIN_BORD, ESPACEMENT] puis 130mm fixe.
+ * Le bord fait toujours ≤ 130mm — on « saute un trou » pour ça.
+ * forcedBordG/D : forcer l'offset d'un côté (alignement raccord 90°).
  */
-function calcBarParIntervalle(entraxeEff: number): number {
-  if (entraxeEff <= ESPACEMENT_BARREAU) return 0;
-  return Math.ceil(entraxeEff / ESPACEMENT_BARREAU) - 1;
-}
+function computeGridPositions(
+  longueurLisse: number,
+  forcedBordG?: number,
+  forcedBordD?: number,
+): number[] {
+  const E = ESPACEMENT_BARREAU;
 
-/**
- * Répartit nbBar barreaux symétriquement dans un intervalle [start, end].
- * L'espacement barreau-barreau = espacement barreau-raidisseur = largeur/(nbBar+1).
- */
-function barreauxDansIntervalle(start: number, end: number, nbBar: number): number[] {
-  if (nbBar <= 0) return [];
-  const largeur = end - start;
-  const esp = largeur / (nbBar + 1);
+  if (forcedBordG !== undefined) {
+    const positions: number[] = [];
+    let pos = forcedBordG;
+    while (pos <= longueurLisse - MIN_BORD_BARREAU + 0.05) {
+      positions.push(Math.round(pos * 10) / 10);
+      pos += E;
+    }
+    return positions;
+  }
+
+  if (forcedBordD !== undefined) {
+    const positions: number[] = [];
+    let pos = longueurLisse - forcedBordD;
+    while (pos >= MIN_BORD_BARREAU - 0.05) {
+      positions.unshift(Math.round(pos * 10) / 10);
+      pos -= E;
+    }
+    return positions;
+  }
+
+  const intervals = Math.floor((longueurLisse - 2 * MIN_BORD_BARREAU) / E);
+  if (intervals < 0) return [];
+  const count = intervals + 1;
+  const offset = Math.round((longueurLisse - intervals * E) / 2 * 10) / 10;
   const positions: number[] = [];
-  for (let i = 1; i <= nbBar; i++) {
-    positions.push(Math.round((start + i * esp) * 10) / 10);
+  for (let i = 0; i < count; i++) {
+    positions.push(Math.round((offset + i * E) * 10) / 10);
   }
   return positions;
 }
 
-export function calcPositionsUsinages(
-  longueurLisse: number,
-  nbRaid: number,
-  entraxeEff: number
-): UsinageLisse {
-  const depassement = DEPASSEMENT_LISSE;
+function snapToGrid(positions: number[], grid: number[]): number[] {
+  if (grid.length === 0) return [];
+  const snapped = positions.map(p => {
+    let best = grid[0];
+    for (const gp of grid) {
+      if (Math.abs(gp - p) < Math.abs(best - p)) best = gp;
+    }
+    return best;
+  });
+  return [...new Set(snapped)].sort((a, b) => a - b);
+}
 
-  // Positions des raidisseurs
-  const posRaidisseurs: number[] = [];
-  for (let i = 0; i < nbRaid; i++) {
-    posRaidisseurs.push(Math.round((depassement + i * entraxeEff) * 10) / 10);
+function calcGrille(longueurLisse: number, entraxeMax: number, forcedBordG?: number, forcedBordD?: number) {
+  const E = ESPACEMENT_BARREAU;
+  const gridPositions = computeGridPositions(longueurLisse, forcedBordG, forcedBordD);
+  const count = gridPositions.length;
+
+  if (count === 0) {
+    return { raidPositions: [], barreauPositions: [], allPositions: [], entraxeRaid: 0 };
   }
 
-  // Barreaux : même nombre dans chaque intervalle, répartis symétriquement
-  // Le nombre est calculé une seule fois sur l'entraxe pour garantir l'uniformité
-  const barParInterval = calcBarParIntervalle(entraxeEff);
-  const posBarreaux: number[] = [];
-  for (let i = 0; i < nbRaid - 1; i++) {
-    posBarreaux.push(...barreauxDansIntervalle(posRaidisseurs[i], posRaidisseurs[i + 1], barParInterval));
+  // 1 raidisseur si la lisse est courte
+  if (longueurLisse <= 2 * entraxeMax) {
+    const center = longueurLisse / 2;
+    let bestIdx = 0;
+    for (let i = 1; i < count; i++) {
+      if (Math.abs(gridPositions[i] - center) < Math.abs(gridPositions[bestIdx] - center)) bestIdx = i;
+    }
+    return {
+      raidPositions: [gridPositions[bestIdx]],
+      barreauPositions: gridPositions.filter((_, i) => i !== bestIdx),
+      allPositions: gridPositions,
+      entraxeRaid: 0,
+    };
   }
 
-  // Goupilles d'extrémité
-  const posGoupilleG = 68.3;
-  const posGoupilleD = Math.round((longueurLisse - 68.3) * 10) / 10;
+  // Plusieurs raidisseurs : chercher K (nb intervalles 130mm entre raids)
+  const K_max = Math.floor(entraxeMax / E);
+  for (let nbRaid = 2; nbRaid <= 50; nbRaid++) {
+    for (let K = K_max; K >= 1; K--) {
+      const raidSpan = (nbRaid - 1) * K;
+      if (raidSpan >= count) continue;
+      const startIdx = Math.round((count - 1 - raidSpan) / 2);
+      if (startIdx < 0) continue;
+      const endIdx = startIdx + raidSpan;
+      if (endIdx >= count) continue;
+      if (gridPositions[startIdx] > entraxeMax) continue;
+      if (longueurLisse - gridPositions[endIdx] > entraxeMax) continue;
 
-  // percageLisse = barreaux + goupilles extrémité + positions raidisseurs
-  // (les raidisseurs ont un "Perçage Lisse" goupille 110306 EN PLUS du "Perçage Lisse_Raidisseur")
-  const allPercage = [...posBarreaux, posGoupilleG, posGoupilleD, ...posRaidisseurs];
-  const uniquePercage = [...new Set(allPercage.map(v => Math.round(v * 10) / 10))].sort((a, b) => a - b);
+      const raidPositions: number[] = [];
+      for (let r = 0; r < nbRaid; r++) {
+        raidPositions.push(gridPositions[startIdx + r * K]);
+      }
+      return {
+        raidPositions,
+        barreauPositions: gridPositions.filter(p => !raidPositions.some(rp => Math.abs(rp - p) < 1)),
+        allPositions: gridPositions,
+        entraxeRaid: K * E,
+      };
+    }
+  }
 
+  const center = longueurLisse / 2;
+  let bestIdx = 0;
+  for (let i = 1; i < count; i++) {
+    if (Math.abs(gridPositions[i] - center) < Math.abs(gridPositions[bestIdx] - center)) bestIdx = i;
+  }
   return {
-    percageLisse: uniquePercage,
-    percageLisseRaidisseur: posRaidisseurs,
+    raidPositions: [gridPositions[bestIdx]],
+    barreauPositions: gridPositions.filter((_, i) => i !== bestIdx),
+    allPositions: gridPositions,
+    entraxeRaid: 0,
   };
 }
 
-export function calcTravee(travee: Travee, _affaire: Affaire): ResultatTravee {
-  // Config is now on the travee itself
+export function calcPositionsUsinages(
+  raidPositions: number[],
+  longueurLisse: number,
+  forcedBordG?: number,
+  forcedBordD?: number,
+): UsinageLisse {
+  const gridPositions = computeGridPositions(longueurLisse, forcedBordG, forcedBordD);
+  const finalRaid = raidPositions.length > 0
+    ? snapToGrid(raidPositions, gridPositions)
+    : [];
+
+  return {
+    percageLisse: gridPositions,
+    percageLisseRaidisseur: finalRaid,
+  };
+}
+
+export function calcTravee(
+  travee: Travee,
+  _affaire: Affaire,
+  gridConstraint?: { forcedBordG?: number; forcedBordD?: number },
+): ResultatTravee {
   const gc = TYPES_GC[travee.typeGC];
   const mc = TYPES_MC[travee.mc];
-  const pose = POSE_DATA[travee.pose];
   const alertes: Alerte[] = [];
 
-  // 1. Nombre de raidisseurs
+  // 1. Débits profilés filants
+  const dedG = (travee.fixG === 'raccord90' || travee.fixG === 'raccord_droit') ? 0 : 5;
+  const dedD = (travee.fixD === 'raccord90' || travee.fixD === 'raccord_droit') ? 0 : 5;
+  const debMC = travee.largeur - dedG - dedD;
+  const debLisse = travee.largeur - dedG - dedD;
+  const debClosoir = travee.largeur - dedG - dedD;
+  const longueurLisse = debLisse;
+
+  // 2. Raidisseurs — grille uniforme 130mm, raidisseur = trou spécial
   const entraxeMax = ENTRAXE[travee.lieu][travee.angle];
-  const nbRaid = Math.ceil(travee.largeur / entraxeMax) + 1;
-  const entraxeEff = travee.largeur / (nbRaid - 1);
+  const override = travee.raidCentre;
+  const hasForcePos = Array.isArray(override?.positions);
+  const hasForceNb = !hasForcePos && typeof override?.nb === 'number' && override.nb >= 1;
 
-  // 2. Débit raidisseur
-  const debRaid = travee.hauteur + pose.offsets[mc.raidKey];
+  let posRaidisseurs: number[];
 
-  // 3. h1 et débit barreau
-  const h1 = debRaid - 20 - mc.hauteur;
-  const debBarreau = gc.hasBarreaux ? Math.max(0, h1 + mc.barreauDelta) : 0;
+  const { forcedBordG, forcedBordD } = gridConstraint ?? {};
+  const canonicalGrid = computeGridPositions(longueurLisse, forcedBordG, forcedBordD);
 
-  // 4. Nombre de barreaux (même nombre par intervalle, espacement ≤ 130mm NF P01-012)
-  let nbBarreaux = 0;
-  if (gc.hasBarreaux) {
-    nbBarreaux = calcBarParIntervalle(entraxeEff) * (nbRaid - 1);
+  if (hasForcePos) {
+    const raw = override!.positions!
+      .map(p => Math.round(p * 10) / 10)
+      .filter(p => p > 1 && Math.abs(p - travee.largeur) > 1);
+    posRaidisseurs = snapToGrid(raw, canonicalGrid);
+  } else if (hasForceNb) {
+    const grille = calcGrille(longueurLisse, entraxeMax, forcedBordG, forcedBordD);
+    const desired = override!.nb!;
+    if (desired >= grille.allPositions.length) {
+      posRaidisseurs = grille.allPositions;
+    } else {
+      const step = (grille.allPositions.length - 1) / (desired - 1);
+      posRaidisseurs = [];
+      for (let i = 0; i < desired; i++) {
+        posRaidisseurs.push(grille.allPositions[Math.round(i * step)]);
+      }
+    }
+  } else {
+    const grille = calcGrille(longueurLisse, entraxeMax, forcedBordG, forcedBordD);
+    posRaidisseurs = grille.raidPositions;
   }
 
-  // 5. Débits profilés filants
-  const dedG = travee.fixG === 'libre' ? 5 : 0;
-  const dedD = travee.fixD === 'libre' ? 5 : 0;
-  const debMC = travee.largeur - dedG - dedD;
-  const debLisse = travee.largeur;
-  const debClosoir = travee.largeur;
-  const longueurLisse = travee.largeur + 2 * DEPASSEMENT_LISSE;
+  const nbRaid = posRaidisseurs.length;
+  const entraxeEff = nbRaid >= 2
+    ? (posRaidisseurs[posRaidisseurs.length - 1] - posRaidisseurs[0]) / (nbRaid - 1)
+    : travee.largeur;
+
+  // 3. Débit raidisseur
+  const debitOffsets = mc.debits[travee.pose];
+  const debRaid = travee.debRaidForce ?? (travee.hauteur + debitOffsets.raidisseur);
+
+  // 4. Débit barreau = raidisseur - 115mm (toujours)
+  const debBarreau = gc.hasBarreaux
+    ? (travee.debBarreauForce ?? Math.max(0, debRaid - 115))
+    : 0;
+
+  // 5. Nombre de barreaux — tous les trous de la grille sauf les raidisseurs
+  let nbBarreaux = 0;
+  if (gc.hasBarreaux) {
+    const usinageTest = calcPositionsUsinages(posRaidisseurs, longueurLisse, forcedBordG, forcedBordD);
+    nbBarreaux = usinageTest.percageLisse.length - usinageTest.percageLisseRaidisseur.length;
+  }
 
   // 6. Remplissage
   let hautVitre = 0;
   let largVitre = 0;
   if (gc.hasRemplissage) {
-    const deltaH = mc.raidKey === 'std' ? -112 : -80;
-    const X = 20;
-    const Y = 20;
-    hautVitre = Math.max(0, travee.hauteur + deltaH - X - Y);
+    const deltaH = mc.hauteur >= 48 ? -80 : -112;
+    hautVitre = Math.max(0, travee.hauteur + deltaH - 40);
     largVitre = Math.max(0, entraxeEff - 10);
   }
 
-  // 7. Positions raidisseurs
-  const posRaidisseurs: number[] = [];
-  for (let i = 0; i < nbRaid; i++) {
-    posRaidisseurs.push(
-      Math.round((DEPASSEMENT_LISSE + i * entraxeEff) * 10) / 10
-    );
-  }
-
-  // 8. Usinages — calculer pour chaque lisse
+  // 7. Usinages — calculer pour chaque lisse
   const nbLisses =
     gc.hasBarreaux || gc.hasRemplissage
-      ? gc.hasLisseInter
-        ? 3
-        : gc.hasBarreaux
-          ? 2
-          : 1
+      ? gc.hasLisseInter ? 3 : gc.hasBarreaux ? 2 : 1
       : 0;
   const usinages: UsinageLisse[] = [];
   for (let i = 0; i < nbLisses; i++) {
-    usinages.push(calcPositionsUsinages(longueurLisse, nbRaid, entraxeEff));
+    usinages.push(calcPositionsUsinages(posRaidisseurs, longueurLisse, forcedBordG, forcedBordD));
   }
 
-  // 9. Contrôle NF P01-012 : vérifier que tous les espacements ≤ 130mm
+  // 8. Contrôle NF P01-012 — espacement entre éléments verticaux consécutifs
   if (gc.hasBarreaux && usinages.length > 0) {
-    // Prendre toutes les positions d'éléments verticaux (raidisseurs + barreaux)
-    // = percageLisse SANS les goupilles d'extrémité (qui ne sont pas des éléments verticaux)
-    const posGoupG = 68.3;
-    const posGoupD = Math.round((longueurLisse - 68.3) * 10) / 10;
-    const posVerticaux = usinages[0].percageLisse.filter(
-      (p) => Math.abs(p - posGoupG) > 0.05 && Math.abs(p - posGoupD) > 0.05
-    );
-
-    // Vérifier bord gauche → premier élément
-    if (posVerticaux.length > 0 && posVerticaux[0] > ESPACEMENT_BARREAU + 0.5) {
-      alertes.push({
-        niveau: 'attention',
-        message: `Espace bord gauche → 1er élément = ${posVerticaux[0].toFixed(1)}mm > ${ESPACEMENT_BARREAU}mm`,
-      });
-    }
-    // Vérifier dernier élément → bord droit
-    if (posVerticaux.length > 0) {
-      const gapDroit = longueurLisse - posVerticaux[posVerticaux.length - 1];
-      if (gapDroit > ESPACEMENT_BARREAU + 0.5) {
-        alertes.push({
-          niveau: 'attention',
-          message: `Espace dernier élément → bord droit = ${gapDroit.toFixed(1)}mm > ${ESPACEMENT_BARREAU}mm`,
-        });
-      }
-    }
-    // Vérifier entre chaque paire d'éléments consécutifs
+    const posVerticaux = [...usinages[0].percageLisse].sort((a, b) => a - b);
     for (let i = 1; i < posVerticaux.length; i++) {
       const gap = posVerticaux[i] - posVerticaux[i - 1];
       if (gap > ESPACEMENT_BARREAU + 0.5) {
-        alertes.push({
-          niveau: 'bloquant',
-          message: `Espacement ${posVerticaux[i - 1].toFixed(1)}→${posVerticaux[i].toFixed(1)}mm = ${gap.toFixed(1)}mm > ${ESPACEMENT_BARREAU}mm (NF P01-012)`,
-        });
+        alertes.push({ niveau: 'bloquant', message: `Espacement ${posVerticaux[i - 1].toFixed(1)}→${posVerticaux[i].toFixed(1)}mm = ${gap.toFixed(1)}mm > ${ESPACEMENT_BARREAU}mm (NF P01-012)` });
       }
     }
   }
 
-  // 10. Alertes
+  // 9. Alertes
   if (travee.hauteur < 1000) {
     alertes.push({ niveau: 'bloquant', message: `Hauteur ${travee.hauteur}mm < 1000mm minimum` });
   }
   if (gc.hMax && travee.hauteur > gc.hMax) {
-    alertes.push({
-      niveau: 'bloquant',
-      message: `Hauteur ${travee.hauteur}mm > ${gc.hMax}mm max pour ${gc.label}`,
-    });
+    alertes.push({ niveau: 'bloquant', message: `Hauteur ${travee.hauteur}mm > ${gc.hMax}mm max pour ${gc.label}` });
   }
   if (travee.rampant) {
     alertes.push({ niveau: 'info', message: 'GC rampant — vérifier l\'angle de coupe' });
   }
 
-  // 11. Nomenclature
+  // 10. Nomenclature
   const calcResult = {
-    nbRaid,
-    entraxeEff,
-    debRaid,
-    h1,
-    debBarreau,
-    nbBarreaux,
-    debMC,
-    debLisse,
-    debClosoir,
-    longueurLisse,
-    hautVitre,
-    largVitre,
+    nbRaid, entraxeEff, debRaid,
+    h1: debRaid - 20 - mc.hauteur,
+    debBarreau, nbBarreaux,
+    debMC, debLisse, debClosoir, longueurLisse,
+    hautVitre, largVitre,
   };
   const nomenclature = calcNomenclature(travee, calcResult);
 
   return {
-    travee,
-    ...calcResult,
-    nomenclature,
-    usinages,
-    posRaidisseurs,
-    alertes,
+    travee, ...calcResult,
+    nomenclature, usinages, posRaidisseurs, alertes,
   };
 }

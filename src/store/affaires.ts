@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import type { Affaire, Travee, TraveeConfig } from '../types';
+import { useApiState } from '../useApiState';
 
 const STORAGE_KEY = 'sial-gc-affaires';
 
@@ -16,20 +17,23 @@ const DEFAULT_CONFIG: TraveeConfig = {
   hauteur: 1050,
 };
 
-function loadAffaires(): Affaire[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw) as Affaire[];
-      // Migration: old format had config on Affaire, not on Travee
-      return parsed.map(migrateAffaire);
-    }
-  } catch { /* ignore */ }
-  return [];
+function migrateTraveeRaid(t: any): any {
+  delete t.nbRaidForce;
+  delete t.posRaidForce;
+  if (!t._raidV2) {
+    delete t.raidCentre;
+    delete t.raidDroite;
+    delete t.raidGauche;
+    t._raidV2 = true;
+  }
+  return t;
 }
 
 /** Migrate old format (config on Affaire) to new format (config on Travee) */
 function migrateAffaire(a: any): Affaire {
+  if (a.travees) {
+    a.travees = a.travees.map(migrateTraveeRaid);
+  }
   // Already new format
   if (a.defaults) return a;
 
@@ -69,14 +73,11 @@ function migrateAffaire(a: any): Affaire {
     chantier: a.chantier ?? '',
     date: a.date,
     coloris: a.coloris ?? 'RAL 7016',
+    classeColoris: a.classeColoris ?? 2,
     defaults,
     travees,
     statut: a.statut ?? 'brouillon',
   };
-}
-
-function saveAffaires(affaires: Affaire[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(affaires));
 }
 
 export function createEmptyAffaire(): Affaire {
@@ -91,6 +92,7 @@ export function createEmptyAffaire(): Affaire {
     chantier: '',
     date: now.toISOString().slice(0, 10),
     coloris: 'RAL 7016',
+    classeColoris: 2,
     defaults: { ...DEFAULT_CONFIG },
     travees: [],
     statut: 'brouillon',
@@ -123,11 +125,8 @@ export function duplicateTravee(source: Travee, newIndex: number): Travee {
 }
 
 export function useAffaires() {
-  const [affaires, setAffaires] = useState<Affaire[]>(loadAffaires);
-
-  useEffect(() => {
-    saveAffaires(affaires);
-  }, [affaires]);
+  const [rawAffaires, setAffaires] = useApiState<Affaire[]>('gc', 'affaires', STORAGE_KEY, []);
+  const affaires = rawAffaires.map(migrateAffaire);
 
   const addAffaire = useCallback((affaire?: Affaire) => {
     const newAffaire = affaire ?? createEmptyAffaire();

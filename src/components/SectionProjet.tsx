@@ -1,5 +1,6 @@
-import type { Affaire, TraveeConfig } from '../types';
+import type { Affaire, TraveeConfig, ClasseColoris } from '../types';
 import { TYPES_GC, TYPES_MC, POSE_DATA } from '../constants/typesGC';
+import { CLASSES_LABELS } from '../store/tarif';
 
 interface SectionProjetProps {
   affaire: Affaire;
@@ -58,12 +59,15 @@ export function SectionProjet({ affaire, onChange }: SectionProjetProps) {
       {/* Info projet */}
       <div className="bg-[#181c25] rounded-lg border border-[#252830] p-4">
         <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Projet</h2>
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-7 gap-3">
           <Field label="Client" value={affaire.client} onChange={(v) => onChange({ client: v })} />
           <Field label="Chantier" value={affaire.chantier} onChange={(v) => onChange({ chantier: v })} />
           <Field label="Référence" value={affaire.ref} onChange={(v) => onChange({ ref: v })} />
           <Field label="Date" value={affaire.date} onChange={(v) => onChange({ date: v })} type="date" />
           <Field label="Coloris" value={affaire.coloris} onChange={(v) => onChange({ coloris: v })} />
+          <Select label="Classe coloris" value={String(affaire.classeColoris ?? 2)}
+            onChange={(v) => onChange({ classeColoris: parseInt(v) as ClasseColoris })}
+            options={([1, 2, 3, 4] as const).map(c => ({ value: String(c), label: `Cl. ${c} — ${CLASSES_LABELS[c].split('—')[1]?.trim()}` }))} />
           <Select label="Statut" value={affaire.statut} onChange={(v) => onChange({ statut: v as Affaire['statut'] })}
             options={[{ value: 'brouillon', label: 'Brouillon' }, { value: 'a_valider', label: 'À valider' }, { value: 'validee', label: 'Validée' }]} />
         </div>
