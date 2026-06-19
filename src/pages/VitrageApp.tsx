@@ -8,6 +8,7 @@ import {
 } from '../vitrage/types';
 import { parseVitrageSpec } from '../vitrage/parseVitrageSpec';
 import { parseExcelFile, parseCSVText, parseDocxFile, type ParseResult } from '../vitrage/parseExcel';
+import { parseODTFile } from '../vitrage/parseODT';
 import { optimizeWE } from '../vitrage/optimizeWE';
 import { optimizeGlass, extractGlassPieces } from '../vitrage/optimize2D';
 import { hasBackend, apiOptimize, apiExportDXF, apiExportOPT, apiLabelsZPL } from '../vitrage/api';
@@ -372,6 +373,7 @@ function OrderDetail({ commande, onUpdate, onBack }: {
   onBack: () => void;
 }) {
   const [tab, setTab] = useState(0);
+  const [importedOptim, setImportedOptim] = useState<GlassOptimResult[]>([]);
   const c = commande;
 
   return (
@@ -412,9 +414,9 @@ function OrderDetail({ commande, onUpdate, onBack }: {
         ))}
       </div>
 
-      {tab === 0 && <TabImport vitrages={c.vitrages} onUpdate={v => onUpdate({ vitrages: v })} onSetRef={ref => onUpdate({ reference: ref })} chantier={c.client} />}
+      {tab === 0 && <TabImport vitrages={c.vitrages} onUpdate={v => onUpdate({ vitrages: v })} onSetRef={ref => onUpdate({ reference: ref })} onImportOptim={setImportedOptim} chantier={c.client} />}
       {tab === 1 && <TabVitrages vitrages={c.vitrages} onUpdate={v => onUpdate({ vitrages: v })} />}
-      {tab === 2 && <TabEtiquettesCommande vitrages={c.vitrages} commandeLabel={`${c.reference} — ${c.client}`} />}
+      {tab === 2 && <TabEtiquettesCommande vitrages={c.vitrages} commandeLabel={`${c.reference} — ${c.client}`} importedPlates={importedOptim.flatMap(g => g.plates)} />}
       {tab === 3 && <TabTracabilite commandeRef={c.reference} />}
     </div>
   );
@@ -422,12 +424,18 @@ function OrderDetail({ commande, onUpdate, onBack }: {
 
 // ── Tab: Import ──────────────────────────────────────────────────────
 
-function TabImport({ vitrages, onUpdate, onSetRef, chantier }: { vitrages: Vitrage[]; onUpdate: (v: Vitrage[]) => void; onSetRef?: (ref: string) => void; chantier?: string }) {
+function TabImport({ vitrages, onUpdate, onSetRef, onImportOptim, chantier }: {
+  vitrages: Vitrage[];
+  onUpdate: (v: Vitrage[]) => void;
+  onSetRef?: (ref: string) => void;
+  onImportOptim?: (results: GlassOptimResult[]) => void;
+  chantier?: string;
+}) {
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleResult = (result: ParseResult, fileName: string) => {
+  const handleResult = (result: ParseResult, fileName: string, optimResults?: GlassOptimResult[]) => {
     const cols = Object.entries(result.columnsDetected);
     const colInfo = cols.length > 0
       ? cols.map(([f, h]) => `${f}="${h}"`).join(', ')
@@ -440,7 +448,16 @@ function TabImport({ vitrages, onUpdate, onSetRef, chantier }: { vitrages: Vitra
     if (result.vitrages.length > 0) {
       onUpdate([...vitrages, ...result.vitrages]);
       if (result.lotInfo && onSetRef) onSetRef(result.lotInfo);
-      setInfo(`${fileName} : ${result.vitrages.length} vitrages importes (${result.totalRows} lignes, ${result.skippedRows} ignorees). Colonnes : ${colInfo}${result.lotInfo ? `\nLot : ${result.lotInfo}` : ''}`);
+
+      let optimInfo = '';
+      if (optimResults && optimResults.length > 0 && onImportOptim) {
+        onImportOptim(optimResults);
+        const totalPlates = optimResults.reduce((s, r) => s + r.totalPlates, 0);
+        const totalPieces = optimResults.reduce((s, r) => s + r.totalPieces, 0);
+        optimInfo = `\nOptimisation Pro2D importee : ${totalPlates} plaques, ${totalPieces} pieces`;
+      }
+
+      setInfo(`${fileName} : ${result.vitrages.length} vitrages importes (${result.totalRows} lignes, ${result.skippedRows} ignorees). Colonnes : ${colInfo}${result.lotInfo ? `\nLot : ${result.lotInfo}` : ''}${optimInfo}`);
       setError('');
     } else {
       setError(`${fileName} : aucun vitrage detecte sur ${result.totalRows} lignes.\nColonnes reconnues : ${colInfo}${headersInfo}\n\nLe parser cherche des colonnes comme : Reference/Proto/Repere, Largeur/L, Hauteur/H, Dimensions (LxH), Composition/Vitrage, Couleur/Intercalaire, Qte`);
@@ -455,15 +472,21 @@ function TabImport({ vitrages, onUpdate, onSetRef, chantier }: { vitrages: Vitra
     try {
       const ext = file.name.split('.').pop()?.toLowerCase();
       let result: ParseResult;
+      let optimResults: GlassOptimResult[] | undefined;
+
       if (ext === 'csv' || ext === 'tsv' || ext === 'txt') {
         const text = await file.text();
         result = parseCSVText(text);
+      } else if (ext === 'odt') {
+        const odtResult = await parseODTFile(file, chantier);
+        result = odtResult;
+        optimResults = odtResult.optimResults;
       } else if (ext === 'docx') {
         result = await parseDocxFile(file, chantier);
       } else {
         result = await parseExcelFile(file, chantier);
       }
-      handleResult(result, file.name);
+      handleResult(result, file.name, optimResults);
     } catch (err) {
       setError(`Erreur lecture ${file.name} : ${err}`);
     }
@@ -483,9 +506,9 @@ function TabImport({ vitrages, onUpdate, onSetRef, chantier }: { vitrages: Vitra
     <div className="space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <label className="border-2 border-dashed border-[#2a2d35] rounded-lg p-6 text-center cursor-pointer hover:border-blue-500/50 transition-colors">
-          <input type="file" accept=".xlsx,.xls,.csv,.tsv,.txt,.docx" onChange={handleFile} className="hidden" />
-<div className="text-blue-400 text-sm font-semibold">Import Excel / CSV</div>
-          <div className="text-xs text-gray-500 mt-1">.xlsx, .xls, .csv, .tsv, .docx</div>
+          <input type="file" accept=".xlsx,.xls,.csv,.tsv,.txt,.docx,.odt" onChange={handleFile} className="hidden" />
+<div className="text-blue-400 text-sm font-semibold">Import Excel / CSV / ODT</div>
+          <div className="text-xs text-gray-500 mt-1">.xlsx, .xls, .csv, .tsv, .docx, .odt</div>
         </label>
         <button onClick={addEmpty}
           className="border-2 border-dashed border-[#2a2d35] rounded-lg p-6 text-center cursor-pointer hover:border-amber-500/50 transition-colors">
@@ -578,8 +601,9 @@ interface TracaPiece {
   lot_matieres: Record<string, string> | null;
 }
 
-function TabEtiquettesCommande({ vitrages, commandeLabel }: { vitrages: Vitrage[]; commandeLabel: string }) {
+function TabEtiquettesCommande({ vitrages, commandeLabel, importedPlates }: { vitrages: Vitrage[]; commandeLabel: string; importedPlates?: OptimizedPlate[] }) {
   const [generating, setGenerating] = useState(false);
+  const plates = importedPlates ?? [];
 
   const gen = async (type: string) => {
     if (vitrages.length === 0) { alert('Aucun vitrage a imprimer'); return; }
@@ -593,7 +617,7 @@ function TabEtiquettesCommande({ vitrages, commandeLabel }: { vitrages: Vitrage[
       switch (type) {
         case 'A': download(await generateLabelsA(vitrages, commandeLabel, DEFAULT_AVERY), `${label}_A.pdf`); break;
         case 'B': download(await generateLabelsB(vitrages, commandeLabel, DEFAULT_AVERY), `${label}_B.pdf`); break;
-        case 'C': download(await generateLabelsC(vitrages, [], commandeLabel, DEFAULT_AVERY), `${label}_C.pdf`); break;
+        case 'C': download(await generateLabelsC(vitrages, plates, commandeLabel, DEFAULT_AVERY), `${label}_C.pdf`); break;
         case 'CE': download(await generateEtiquettesCE(vitrages, cmd), `${label}_CE.pdf`); break;
         case 'ATELIER': download(await generateEtiquettesAtelier(vitrages, cmd), `${label}_atelier.pdf`); break;
       }
@@ -608,7 +632,7 @@ function TabEtiquettesCommande({ vitrages, commandeLabel }: { vitrages: Vitrage[
         {[
           { id: 'A', label: 'Avery A', desc: 'Ref + compo + dimensions', color: 'bg-gray-700 hover:bg-gray-600' },
           { id: 'B', label: 'Avery B', desc: 'Ref + QR code', color: 'bg-gray-700 hover:bg-gray-600' },
-          { id: 'C', label: 'Avery C', desc: 'Ref + plaque + face', color: 'bg-gray-700 hover:bg-gray-600' },
+          { id: 'C', label: 'Avery C', desc: plates.length > 0 ? `Ref + plaque + face (${plates.length} plaques Pro2D)` : 'Ref + plaque + face', color: plates.length > 0 ? 'bg-purple-700 hover:bg-purple-600' : 'bg-gray-700 hover:bg-gray-600' },
           { id: 'CE', label: 'CE / CEKAL', desc: 'Conformite + tracabilite', color: 'bg-blue-700 hover:bg-blue-600' },
           { id: 'ATELIER', label: 'Atelier + Checklist', desc: 'Fiche suiveuse', color: 'bg-green-700 hover:bg-green-600' },
         ].map(b => (
