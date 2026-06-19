@@ -307,8 +307,6 @@ function FicheFabricationPage({ affaire, rt, parentTravee }: { affaire: Affaire;
               </View>
             );
           })}
-            </View>
-          ))}
         </View>
       </View>
 
