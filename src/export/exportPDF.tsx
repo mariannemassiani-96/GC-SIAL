@@ -429,6 +429,40 @@ function BonCommandePage({ affaire, resultat }: { affaire: Affaire; resultat: Re
         </View>
       </View>
 
+      {/* Detail aboutages */}
+      {resultat.optimBarres.filter(opt => opt.barres.some(b => b.pieces.some(p => p.label.includes('seg.')))).map((opt, oi) => (
+        <View key={`about_${oi}`} style={s.section}>
+          <Text style={{ fontSize: 9, fontWeight: 'bold', marginBottom: 4 }}>Détail aboutage — {opt.ref} ({opt.label})</Text>
+          {opt.barres.map((barre, bi) => {
+            const hasSegments = barre.pieces.some(p => p.label.includes('seg.'));
+            if (!hasSegments) return null;
+            return (
+              <View key={bi} style={{ marginBottom: 4 }}>
+                <Text style={{ fontSize: 7, fontWeight: 'bold', marginBottom: 1 }}>
+                  Barre {bi + 1} — 6400mm — Chute: {barre.chute.toFixed(0)}mm
+                </Text>
+                <View style={s.table}>
+                  <View style={{ ...s.tableHeader, backgroundColor: '#f5f5f5' }}>
+                    <Text style={{ width: '8%', paddingHorizontal: 2, fontSize: 6 }}>N°</Text>
+                    <Text style={{ width: '42%', paddingHorizontal: 2, fontSize: 6 }}>Pièce</Text>
+                    <Text style={{ width: '20%', paddingHorizontal: 2, fontSize: 6, textAlign: 'right' }}>Longueur</Text>
+                    <Text style={{ width: '30%', paddingHorizontal: 2, fontSize: 6 }}>Travée</Text>
+                  </View>
+                  {barre.pieces.map((p, pi) => (
+                    <View key={pi} style={s.tableRow}>
+                      <Text style={{ width: '8%', paddingHorizontal: 2, fontSize: 6 }}>{pi + 1}</Text>
+                      <Text style={{ width: '42%', paddingHorizontal: 2, fontSize: 6, fontWeight: 'bold' }}>{p.label}</Text>
+                      <Text style={{ width: '20%', paddingHorizontal: 2, fontSize: 6, textAlign: 'right' }}>{p.longueur.toFixed(1)} mm</Text>
+                      <Text style={{ width: '30%', paddingHorizontal: 2, fontSize: 6 }}>{p.traveeRef}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            );
+          })}
+        </View>
+      ))}
+
       {/* Accessoires */}
       <View style={s.section}>
         <Text style={s.sectionTitle}>Accessoires</Text>
