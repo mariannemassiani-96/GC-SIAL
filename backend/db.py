@@ -34,16 +34,23 @@ def insert_commande(data: dict):
         conn.commit()
 
 
+COMMANDE_COLUMNS = {'reference', 'client', 'date_creation', 'semaine_fabrication', 'semaine_livraison', 'statut', 'vitrages', 'lot_fabrication', 'notes'}
+JSONB_COLUMNS = {'vitrages', 'lot_fabrication'}
+
 def update_commande(cid: str, data: dict):
     sets = []
     vals = []
     for k, v in data.items():
-        if k in ('vitrages', 'lot_fabrication'):
+        if k not in COMMANDE_COLUMNS:
+            continue
+        if k in JSONB_COLUMNS:
             sets.append(f"{k} = %s::jsonb")
             vals.append(json.dumps(v) if not isinstance(v, str) else v)
         else:
             sets.append(f"{k} = %s")
             vals.append(v)
+    if not sets:
+        return
     vals.append(cid)
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(f"UPDATE commandes SET {', '.join(sets)} WHERE id = %s", vals)
@@ -65,12 +72,18 @@ def get_settings():
         return dict(row) if row else None
 
 
+SETTINGS_COLUMNS = {'avery', 'we', 'glass'}
+
 def update_settings(data: dict):
     sets = []
     vals = []
     for k, v in data.items():
+        if k not in SETTINGS_COLUMNS:
+            continue
         sets.append(f"{k} = %s::jsonb")
         vals.append(json.dumps(v) if not isinstance(v, str) else v)
+    if not sets:
+        return
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(f"UPDATE settings SET {', '.join(sets)} WHERE id = 1", vals)
         conn.commit()
