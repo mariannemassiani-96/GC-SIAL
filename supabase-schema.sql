@@ -140,8 +140,11 @@ CREATE TABLE IF NOT EXISTS production_lots (
   commande_refs JSONB DEFAULT '[]'::jsonb,
   total_pieces INTEGER DEFAULT 0,
   total_we INTEGER DEFAULT 0,
-  statut TEXT DEFAULT 'en_preparation' CHECK (statut IN ('en_preparation','en_cours','termine')),
+  statut TEXT DEFAULT 'en_preparation' CHECK (statut IN ('en_preparation','pret_coupe','en_coupe','pret_assemblage','en_assemblage','en_cours','termine')),
   lot_matieres JSONB DEFAULT '{}'::jsonb,
+  glass_optim JSONB DEFAULT '[]'::jsonb,
+  we_optim JSONB DEFAULT '[]'::jsonb,
+  preparation JSONB DEFAULT '{}'::jsonb,
   notes TEXT DEFAULT '',
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
