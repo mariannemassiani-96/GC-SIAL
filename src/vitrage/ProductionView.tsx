@@ -430,27 +430,8 @@ export function ProductionView({ onBack, startAtelier }: { onBack: () => void; s
             <EtiquettesTab pieces={pieces} wePieces={wePieces} lotRef={selectedLot.reference} weOptim={selectedLot.we_optim} />
           )}
 
-          {tab === 'stats' && stats && (
-            <div className="space-y-4">
-              <h4 className="text-sm font-semibold text-gray-300">Coupes par jour</h4>
-              {stats.daily_cuts.length > 0 ? (
-                <div className="flex items-end gap-1 h-32">
-                  {stats.daily_cuts.map((d, i) => {
-                    const max = Math.max(...stats.daily_cuts.map(x => x.nb));
-                    const h = max > 0 ? (d.nb / max) * 100 : 0;
-                    return (
-                      <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                        <span className="text-[9px] text-white">{d.nb}</span>
-                        <div className="w-full bg-amber-500/60 rounded-t" style={{ height: `${h}%` }} />
-                        <span className="text-[8px] text-gray-500">{String(d.jour).slice(5)}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <p className="text-gray-500 text-xs">Aucune coupe enregistree.</p>
-              )}
-            </div>
+          {tab === 'stats' && selectedLot && (
+            <ProductiviteTab pieces={pieces} wePieces={wePieces} />
           )}
         </div>
       )}
@@ -1521,6 +1502,99 @@ function AssemblageView({ selectedLot, pieces, onReload, setSelectedLot }: {
 
 // ── Optim Verre Tab (plaque par plaque) ──────────────────────────────
 
+// ── Productivite Tab (per-operator stats) ────────────────────────────
+
+function ProductiviteTab({ pieces, wePieces }: { pieces: Piece[]; wePieces: WEPiece[] }) {
+  const opStats = new Map<string, { coupes: number; assemblages: number; nc: number }>();
+
+  for (const p of pieces) {
+    const op = p.operateur || 'Non attribue';
+    const s = opStats.get(op) || { coupes: 0, assemblages: 0, nc: 0 };
+    if (p.statut === 'coupe') s.coupes++;
+    else if (p.statut === 'assemble') s.assemblages++;
+    else if (p.statut === 'nc' || p.statut === 'casse') s.nc++;
+    opStats.set(op, s);
+  }
+
+  const operators = [...opStats.entries()]
+    .filter(([name]) => name !== 'Non attribue')
+    .sort((a, b) => (b[1].coupes + b[1].assemblages) - (a[1].coupes + a[1].assemblages));
+
+  const unattributed = opStats.get('Non attribue');
+
+  const totalCoupe = pieces.filter(p => p.statut === 'coupe' || p.statut === 'assemble').length;
+  const totalAssemble = pieces.filter(p => p.statut === 'assemble').length;
+  const totalNC = pieces.filter(p => p.statut === 'nc' || p.statut === 'casse').length;
+  const totalWECoupe = wePieces.filter(p => p.statut === 'coupe').length;
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="bg-[#181a20] rounded-lg p-4 border border-[#2a2d35] text-center">
+          <div className="text-2xl font-black text-cyan-400">{totalCoupe}</div>
+          <div className="text-xs text-gray-500">Verres coupes</div>
+        </div>
+        <div className="bg-[#181a20] rounded-lg p-4 border border-[#2a2d35] text-center">
+          <div className="text-2xl font-black text-green-400">{totalAssemble}</div>
+          <div className="text-xs text-gray-500">Assembles</div>
+        </div>
+        <div className="bg-[#181a20] rounded-lg p-4 border border-[#2a2d35] text-center">
+          <div className="text-2xl font-black text-amber-400">{totalWECoupe}</div>
+          <div className="text-xs text-gray-500">WE coupes</div>
+        </div>
+        <div className="bg-[#181a20] rounded-lg p-4 border border-[#2a2d35] text-center">
+          <div className="text-2xl font-black text-red-400">{totalNC}</div>
+          <div className="text-xs text-gray-500">NC / Casse</div>
+        </div>
+      </div>
+
+      {operators.length > 0 && (
+        <div className="bg-[#181a20] rounded-lg p-4 border border-[#2a2d35]">
+          <h4 className="text-sm font-bold text-amber-400 mb-3">Par operateur</h4>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead><tr className="text-gray-400 border-b border-[#2a2d35]">
+                <th className="text-left py-2 px-3">Operateur</th>
+                <th className="text-right py-2 px-3">Coupes</th>
+                <th className="text-right py-2 px-3">Assemblages</th>
+                <th className="text-right py-2 px-3">NC/Casse</th>
+                <th className="text-right py-2 px-3">Total</th>
+              </tr></thead>
+              <tbody>
+                {operators.map(([name, s]) => (
+                  <tr key={name} className="border-b border-[#1e2028]">
+                    <td className="py-2 px-3 text-white font-semibold">{name}</td>
+                    <td className="py-2 px-3 text-cyan-400 text-right font-bold">{s.coupes}</td>
+                    <td className="py-2 px-3 text-green-400 text-right font-bold">{s.assemblages}</td>
+                    <td className="py-2 px-3 text-red-400 text-right">{s.nc || '—'}</td>
+                    <td className="py-2 px-3 text-white text-right font-bold">{s.coupes + s.assemblages}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {operators.length === 0 && (
+        <div className="bg-[#181a20] rounded-lg p-6 border border-[#2a2d35] text-center">
+          <p className="text-gray-500 text-sm">Aucune action enregistree avec un operateur identifie.</p>
+          <p className="text-gray-600 text-xs mt-1">Les operateurs connectes par PIN seront automatiquement suivis.</p>
+        </div>
+      )}
+
+      {unattributed && (unattributed.coupes + unattributed.assemblages + unattributed.nc) > 0 && (
+        <div className="text-xs text-gray-500">
+          {unattributed.coupes + unattributed.assemblages + unattributed.nc} action(s) sans operateur identifie
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+// ── Optim Verre Tab (plaque par plaque) ──────────────────────────────
+
 function OptimVerreTab({ glassOptim, pieces, lotId, onReload }: {
   glassOptim?: OptimResult[]; pieces: Piece[]; lotId: string; onReload: () => void;
 }) {
@@ -1859,17 +1933,25 @@ function EtiquettesTab({ pieces, wePieces, lotRef, weOptim }: {
   return (
     <div className="space-y-4">
       <h4 className="text-sm font-semibold text-gray-300">Etiquettes du lot {lotRef}</h4>
+      {pieces.length === 0 && wePieces.length === 0 && (
+        <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 text-amber-400 text-sm">
+          Aucune piece dans ce lot. Importez des vitrages d'abord.
+        </div>
+      )}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {buttons.map(b => (
-          <button key={b.id} onClick={() => gen(b.id)} disabled={generating}
-            className={`${b.color} text-white p-4 rounded-lg text-left transition-colors disabled:opacity-50 active:scale-95`}>
-            <div className="text-sm font-bold">{b.label}</div>
-            <div className="text-xs text-white/70 mt-1">{b.desc}</div>
-            <div className="text-xs text-white/50 mt-1">
-              {b.id === 'WE' ? `${wePieces.length} coupes` : `${pieces.length / 2} vitrages`}
-            </div>
-          </button>
-        ))}
+        {buttons.map(b => {
+          const empty = b.id === 'WE' ? wePieces.length === 0 : pieces.length === 0;
+          return (
+            <button key={b.id} onClick={() => gen(b.id)} disabled={generating || empty}
+              className={`${b.color} text-white p-4 rounded-lg text-left transition-colors disabled:opacity-50 active:scale-95`}>
+              <div className="text-sm font-bold">{b.label}</div>
+              <div className="text-xs text-white/70 mt-1">{b.desc}</div>
+              <div className="text-xs text-white/50 mt-1">
+                {b.id === 'WE' ? `${wePieces.length} coupes` : `${Math.floor(pieces.length / 2)} vitrages`}
+              </div>
+            </button>
+          );
+        })}
       </div>
       {generating && <p className="text-amber-400 text-sm">Generation en cours...</p>}
     </div>
