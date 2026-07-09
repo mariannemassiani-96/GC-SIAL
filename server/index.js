@@ -406,6 +406,92 @@ app.get('/api/health', (req, res) => {
 });
 
 // ══════════════════════════════════════════════════════════════
+// ODOO 18 CONNECTOR
+// ══════════════════════════════════════════════════════════════
+
+const odoo = require('./odoo');
+
+app.get('/api/odoo/test', async (req, res) => {
+  try { res.json(await odoo.testConnection()); }
+  catch (e) { res.json({ status: 'error', error: e.message }); }
+});
+
+app.get('/api/odoo/products', async (req, res) => {
+  try {
+    const { q, limit = 100, offset = 0 } = req.query;
+    let domain = [];
+    if (q) domain = ['|', '|', ['name', 'ilike', q], ['default_code', 'ilike', q], ['barcode', 'ilike', q]];
+    res.json(await odoo.searchProducts(domain, null, +limit, +offset));
+  } catch (e) { res.status(502).json({ error: e.message }); }
+});
+
+app.get('/api/odoo/products/:id', async (req, res) => {
+  try { res.json(await odoo.getProduct(+req.params.id)); }
+  catch (e) { res.status(502).json({ error: e.message }); }
+});
+
+app.post('/api/odoo/products', async (req, res) => {
+  try { res.json({ id: await odoo.createProduct(req.body) }); }
+  catch (e) { res.status(502).json({ error: e.message }); }
+});
+
+app.get('/api/odoo/stock', async (req, res) => {
+  try {
+    const domain = [['location_id.usage', '=', 'internal']];
+    if (req.query.product_id) domain.push(['product_id', '=', +req.query.product_id]);
+    if (req.query.location_id) domain.push(['location_id', '=', +req.query.location_id]);
+    res.json(await odoo.getStockQuants(domain));
+  } catch (e) { res.status(502).json({ error: e.message }); }
+});
+
+app.get('/api/odoo/locations', async (req, res) => {
+  try { res.json(await odoo.getStockLocations()); }
+  catch (e) { res.status(502).json({ error: e.message }); }
+});
+
+app.patch('/api/odoo/stock/:productId', async (req, res) => {
+  try {
+    await odoo.adjustStock(+req.params.productId, req.body.location_id, req.body.quantity);
+    res.json({ ok: true });
+  } catch (e) { res.status(502).json({ error: e.message }); }
+});
+
+app.get('/api/odoo/suppliers', async (req, res) => {
+  try {
+    const domain = [['supplier_rank', '>', 0]];
+    if (req.query.q) domain.push(['name', 'ilike', req.query.q]);
+    res.json(await odoo.searchPartners(domain));
+  } catch (e) { res.status(502).json({ error: e.message }); }
+});
+
+app.get('/api/odoo/purchases', async (req, res) => {
+  try {
+    const domain = [];
+    if (req.query.state) domain.push(['state', '=', req.query.state]);
+    res.json(await odoo.searchPurchaseOrders(domain, +(req.query.limit || 50)));
+  } catch (e) { res.status(502).json({ error: e.message }); }
+});
+
+app.get('/api/odoo/purchases/:id', async (req, res) => {
+  try { res.json(await odoo.getPurchaseOrder(+req.params.id)); }
+  catch (e) { res.status(502).json({ error: e.message }); }
+});
+
+app.post('/api/odoo/purchases', async (req, res) => {
+  try { res.json({ id: await odoo.createPurchaseOrder(req.body.partner_id, req.body.lines) }); }
+  catch (e) { res.status(502).json({ error: e.message }); }
+});
+
+app.get('/api/odoo/invoices', async (req, res) => {
+  try {
+    const domain = [];
+    if (req.query.move_type) domain.push(['move_type', '=', req.query.move_type]);
+    else domain.push(['move_type', 'in', ['in_invoice', 'out_invoice']]);
+    res.json(await odoo.searchInvoices(domain, +(req.query.limit || 50)));
+  } catch (e) { res.status(502).json({ error: e.message }); }
+});
+
+// ══════════════════════════════════════════════════════════════
 // START
 // ══════════════════════════════════════════════════════════════
 

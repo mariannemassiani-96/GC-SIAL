@@ -1,4 +1,4 @@
-const ODOO_API = import.meta.env.VITE_ISULA_API_URL as string || '';
+const ODOO_API = import.meta.env.VITE_API_URL as string || 'https://pro.groupe-vista.fr/api-sial';
 
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(`${ODOO_API}${path}`);
