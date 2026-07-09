@@ -4,7 +4,8 @@ import { DotationPostes } from './DotationPostes';
 import { ProgressionStage } from './ProgressionStage';
 import { DEMO_VITRAGES, type VitrageFacture } from '../vitrageAnalyse';
 import { useApiState } from '../../useApiState';
-import { ArrowLeft, FileText, ClipboardList, CheckSquare, BarChart3, TrendingUp, Layers, ClipboardCheck, Briefcase, MessageCircle, Download, Plus, Search, Trash2, Sparkles, X, Send, FileUp } from 'lucide-react';
+import { ArrowLeft, FileText, ClipboardList, CheckSquare, BarChart3, TrendingUp, Layers, ClipboardCheck, Briefcase, MessageCircle, Download, Plus, Search, Trash2, Sparkles, X, Send, FileUp, Upload } from 'lucide-react';
+import { createProduct, searchProducts, type OdooProduct } from '../../odoo/api';
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -228,6 +229,39 @@ export function StageInventaire({ onBack }: Props) {
     URL.revokeObjectURL(url);
   }, [articles]);
 
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState('');
+
+  const syncToOdoo = useCallback(async () => {
+    const toSync = articles.filter(a => a.statut === 'Valide' && a.ref);
+    if (toSync.length === 0) { setSyncMsg('Aucun article valide a synchroniser.'); return; }
+    setSyncing(true);
+    setSyncMsg('');
+    let created = 0;
+    let skipped = 0;
+    let errors = 0;
+    for (const art of toSync) {
+      try {
+        const existing = await searchProducts(art.ref, 1);
+        if (existing.length > 0) { skipped++; continue; }
+        await createProduct({
+          name: art.designation,
+          default_code: art.ref,
+          type: 'product',
+          list_price: 0,
+          standard_price: 0,
+          barcode: art.ref,
+        });
+        updateArticle(art.id, { statut: 'Importe dans Odoo' });
+        created++;
+      } catch {
+        errors++;
+      }
+    }
+    setSyncMsg(`Sync: ${created} cree(s), ${skipped} deja present(s), ${errors} erreur(s)`);
+    setSyncing(false);
+  }, [articles, updateArticle]);
+
   const filteredArticles = articles.filter(a => {
     if (!searchFilter) return true;
     const q = searchFilter.toLowerCase();
@@ -280,7 +314,7 @@ export function StageInventaire({ onBack }: Props) {
       <main className="flex-1 overflow-y-auto">
         {tab === 'factures' && <TabFactures factures={factures} consolidated={consolidated} onUpdate={updateFactures} fournisseursExclus={fournisseursExclus} onExclus={setFournisseursExclus} corrections={corrections} onLearn={learnCategorie} />}
         {tab === 'recensement' && <TabRecensement articles={filteredArticles} consolidated={consolidated} search={searchFilter} onSearch={setSearchFilter} onAdd={addArticle} onUpdate={updateArticle} onDelete={deleteArticle} />}
-        {tab === 'decisions' && <TabDecisions articles={filteredArticles} search={searchFilter} onSearch={setSearchFilter} onUpdate={updateArticle} onExport={exportCSV} />}
+        {tab === 'decisions' && <TabDecisions articles={filteredArticles} search={searchFilter} onSearch={setSearchFilter} onUpdate={updateArticle} onExport={exportCSV} onSyncOdoo={syncToOdoo} syncing={syncing} syncMsg={syncMsg} />}
         {tab === 'dotations' && <DotationPostes />}
         {tab === 'vitrage' && <TabVitrage vitrages={vitrages} />}
         {tab === 'statistiques' && <TabStatistiques factures={factures} />}
@@ -645,10 +679,12 @@ function TabRecensement({ articles, consolidated, search, onSearch, onAdd, onUpd
 
 // ── Tab Decisions ────────────────────────────────────────────────────
 
-function TabDecisions({ articles, search, onSearch, onUpdate, onExport }: {
+function TabDecisions({ articles, search, onSearch, onUpdate, onExport, onSyncOdoo, syncing, syncMsg }: {
   articles: ArticleTerrain[]; search: string; onSearch: (s: string) => void;
   onUpdate: (id: string, u: Partial<ArticleTerrain>) => void; onExport: () => void;
+  onSyncOdoo: () => void; syncing: boolean; syncMsg: string;
 }) {
+  const validCount = articles.filter(a => a.statut === 'Valide').length;
   return (
     <div className="max-w-7xl mx-auto px-4 py-6 space-y-4">
       <div className="flex items-center gap-3">
@@ -657,10 +693,19 @@ function TabDecisions({ articles, search, onSearch, onUpdate, onExport }: {
           <input value={search} onChange={e => onSearch(e.target.value)} placeholder="Chercher..."
             className="w-full pl-9 pr-3 py-2 bg-[#1c1e24] border border-[#2a2d35] rounded-lg text-xs text-white placeholder-gray-600 outline-none" />
         </div>
+        <button onClick={onSyncOdoo} disabled={syncing || validCount === 0}
+          className="flex items-center gap-1.5 px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white text-xs font-semibold rounded-lg disabled:opacity-50 transition-colors">
+          <Upload size={14} /> {syncing ? 'Sync...' : `Sync Odoo (${validCount})`}
+        </button>
         <button onClick={onExport} className="flex items-center gap-1.5 px-4 py-2 bg-green-600 hover:bg-green-500 text-white text-xs font-semibold rounded-lg">
           <Download size={14} /> Exporter CSV
         </button>
       </div>
+      {syncMsg && (
+        <div className={`text-xs px-3 py-2 rounded-lg border ${syncMsg.includes('erreur') ? 'bg-red-500/10 border-red-500/30 text-red-400' : 'bg-green-500/10 border-green-500/30 text-green-400'}`}>
+          {syncMsg}
+        </div>
+      )}
 
       <div className="bg-[#181a20] border border-[#2a2d35] rounded-xl overflow-hidden">
         <div className="overflow-x-auto">

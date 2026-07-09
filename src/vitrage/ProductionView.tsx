@@ -3,7 +3,7 @@ import { generateEtiquettesCE, generateEtiquettesAtelier, generateEtiquettesPost
 import { generateLabelsA, generateLabelsB, generateLabelsC } from './generateLabels';
 import type { Vitrage, WEGroupe } from './types';
 import { DEFAULT_AVERY } from './types';
-import { logProductionEvent } from '../api';
+import { logProductionEvent, getStoredUser } from '../api';
 
 const API = import.meta.env.VITE_ISULA_API_URL as string || '';
 
@@ -135,7 +135,7 @@ export function ProductionView({ onBack, startAtelier }: { onBack: () => void; s
   };
 
   const updatePieceStatut = async (pieceId: string, statut: string) => {
-    await patchJSON(`/api/production/pieces/${pieceId}`, { statut, operateur: '' });
+    await patchJSON(`/api/production/pieces/${pieceId}`, { statut, operateur: getStoredUser()?.nom || '' });
     const piece = pieces.find(p => p.id === pieceId);
     const posteMap: Record<string, string> = { coupe: 'vitrage_coupe', assemble: 'vitrage_assemblage', nc: 'vitrage_coupe', casse: 'vitrage_coupe' };
     logProductionEvent({
@@ -149,7 +149,7 @@ export function ProductionView({ onBack, startAtelier }: { onBack: () => void; s
   };
 
   const updateWEStatut = async (pieceId: string, statut: string) => {
-    await patchJSON(`/api/production/we/${pieceId}`, { statut, operateur: '' });
+    await patchJSON(`/api/production/we/${pieceId}`, { statut, operateur: getStoredUser()?.nom || '' });
     const wePiece = (selectedLot?.we_pieces ?? []).find(p => p.id === pieceId);
     logProductionEvent({
       commande_ref: selectedLot?.reference || '',
@@ -753,7 +753,7 @@ function AtelierView({ lots, semaine, poste, onSelectPoste, onBack, loadLotDetai
                             style={{ width: `${pct}%`, minWidth: 30 }}
                             onClick={async () => {
                               if (wp.statut !== 'coupe') {
-                                await patchJSON(`/api/production/we/${wp.id}`, { statut: 'coupe', operateur: '' });
+                                await patchJSON(`/api/production/we/${wp.id}`, { statut: 'coupe', operateur: getStoredUser()?.nom || '' });
                                 logProductionEvent({ commande_ref: selectedLot?.reference || '', poste: 'vitrage_we', action: 'coupe', piece_ref: wp.vitrage_ref }).catch(() => {});
                                 onReload();
                               }
@@ -777,7 +777,7 @@ function AtelierView({ lots, semaine, poste, onSelectPoste, onBack, loadLotDetai
                       <button onClick={async () => {
                         for (const wp of pcs) {
                           if (wp.statut !== 'coupe') {
-                            await patchJSON(`/api/production/we/${wp.id}`, { statut: 'coupe', operateur: '' });
+                            await patchJSON(`/api/production/we/${wp.id}`, { statut: 'coupe', operateur: getStoredUser()?.nom || '' });
                             logProductionEvent({ commande_ref: selectedLot?.reference || '', poste: 'vitrage_we', action: 'coupe', piece_ref: wp.vitrage_ref }).catch(() => {});
                           }
                         }
@@ -981,7 +981,7 @@ function AtelierView({ lots, semaine, poste, onSelectPoste, onBack, loadLotDetai
   const markPlateAsCut = async () => {
     for (const p of piecesOnPlate) {
       if (p.statut !== 'coupe' && p.statut !== 'assemble') {
-        await patchJSON(`/api/production/pieces/${p.id}`, { statut: 'coupe', operateur: '' });
+        await patchJSON(`/api/production/pieces/${p.id}`, { statut: 'coupe', operateur: getStoredUser()?.nom || '' });
         logProductionEvent({
           commande_ref: selectedLot?.reference || '',
           poste: 'vitrage_coupe',
@@ -1089,11 +1089,11 @@ function AtelierView({ lots, semaine, poste, onSelectPoste, onBack, loadLotDetai
                   <div>
                     <div className="text-red-400 text-xl font-bold text-center py-2 mb-3">⚠ {dbPiece.statut === 'nc' ? 'NON CONFORME' : 'CASSE'} — A REFAIRE</div>
                     <div className="flex gap-3 justify-center">
-                      <button onClick={async () => { await patchJSON(`/api/production/pieces/${dbPiece.id}`, { statut: 'a_couper', operateur: '' }); setSelectedPieceIdx(null); onReload(); }}
+                      <button onClick={async () => { await patchJSON(`/api/production/pieces/${dbPiece.id}`, { statut: 'a_couper', operateur: getStoredUser()?.nom || '' }); setSelectedPieceIdx(null); onReload(); }}
                         className="px-5 py-3 bg-green-700 hover:bg-green-600 text-white text-base font-bold rounded-xl active:scale-95">
                         REMETTRE OK
                       </button>
-                      <button onClick={async () => { await patchJSON(`/api/production/pieces/${dbPiece.id}`, { statut: 'coupe', operateur: '' }); setSelectedPieceIdx(null); onReload(); }}
+                      <button onClick={async () => { await patchJSON(`/api/production/pieces/${dbPiece.id}`, { statut: 'coupe', operateur: getStoredUser()?.nom || '' }); setSelectedPieceIdx(null); onReload(); }}
                         className="px-5 py-3 bg-cyan-700 hover:bg-cyan-600 text-white text-base font-bold rounded-xl active:scale-95">
                         DEJA RECOUPE
                       </button>
@@ -1106,7 +1106,7 @@ function AtelierView({ lots, semaine, poste, onSelectPoste, onBack, loadLotDetai
                       CHANGER COMPO
                     </button>
                     <button onClick={async () => {
-                      await patchJSON(`/api/production/pieces/${dbPiece.id}`, { statut: 'nc', operateur: '' });
+                      await patchJSON(`/api/production/pieces/${dbPiece.id}`, { statut: 'nc', operateur: getStoredUser()?.nom || '' });
                       logProductionEvent({ commande_ref: selectedLot?.reference || '', poste: 'vitrage_coupe', action: 'nc', piece_ref: p.vitrageRef }).catch(() => {});
                       setSelectedPieceIdx(null); onReload();
                     }}
@@ -1114,7 +1114,7 @@ function AtelierView({ lots, semaine, poste, onSelectPoste, onBack, loadLotDetai
                       NON CONFORME
                     </button>
                     <button onClick={async () => {
-                      await patchJSON(`/api/production/pieces/${dbPiece.id}`, { statut: 'casse', operateur: '' });
+                      await patchJSON(`/api/production/pieces/${dbPiece.id}`, { statut: 'casse', operateur: getStoredUser()?.nom || '' });
                       logProductionEvent({ commande_ref: selectedLot?.reference || '', poste: 'vitrage_coupe', action: 'casse', piece_ref: p.vitrageRef }).catch(() => {});
                       setSelectedPieceIdx(null); onReload();
                     }}
@@ -1427,7 +1427,7 @@ function AssemblageView({ selectedLot, pieces, onReload, setSelectedLot }: {
     // Mark pieces as assembled
     for (const p of vitragePieces) {
       if (p.statut !== 'assemble') {
-        await patchJSON(`/api/production/pieces/${p.id}`, { statut: 'assemble', operateur: '' });
+        await patchJSON(`/api/production/pieces/${p.id}`, { statut: 'assemble', operateur: getStoredUser()?.nom || '' });
         logProductionEvent({
           commande_ref: selectedLot.reference || '',
           poste: 'vitrage_assemblage',
@@ -1577,7 +1577,7 @@ function OptimVerreTab({ glassOptim, pieces, lotId, onReload }: {
   const markPlateAsCut = async () => {
     for (const p of piecesOnPlate) {
       if (p.statut !== 'coupe' && p.statut !== 'assemble') {
-        await patchJSON(`/api/production/pieces/${p.id}`, { statut: 'coupe', operateur: '' });
+        await patchJSON(`/api/production/pieces/${p.id}`, { statut: 'coupe', operateur: getStoredUser()?.nom || '' });
         logProductionEvent({
           commande_ref: p.commande_ref || '',
           poste: 'vitrage_coupe',
