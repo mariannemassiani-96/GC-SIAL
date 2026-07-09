@@ -312,6 +312,152 @@ def api_production_stats(lot_id: str | None = None, semaine: str | None = None):
     return dbp.get_stats(lot_id, semaine)
 
 
+# ── Odoo 18 Connector ─────────────────────────────────────────────────
+
+@app.get("/api/odoo/test")
+def api_odoo_test():
+    from services.odoo_connector import test_connection, OdooError
+    try:
+        return test_connection()
+    except OdooError as e:
+        return {"status": "error", "error": str(e)}
+
+
+@app.get("/api/odoo/products")
+def api_odoo_products(q: str = "", limit: int = 100, offset: int = 0):
+    from services.odoo_connector import search_products, OdooError
+    try:
+        domain = []
+        if q:
+            domain = ["|", "|",
+                      ["name", "ilike", q],
+                      ["default_code", "ilike", q],
+                      ["barcode", "ilike", q]]
+        return search_products(domain, limit=limit, offset=offset)
+    except OdooError as e:
+        return Response(status_code=502, content=json.dumps({"error": str(e)}),
+                        media_type="application/json")
+
+
+@app.get("/api/odoo/products/{product_id}")
+def api_odoo_product(product_id: int):
+    from services.odoo_connector import get_product, OdooError
+    try:
+        return get_product(product_id)
+    except OdooError as e:
+        return Response(status_code=502, content=json.dumps({"error": str(e)}),
+                        media_type="application/json")
+
+
+@app.post("/api/odoo/products")
+def api_odoo_create_product(data: dict = Body(...)):
+    from services.odoo_connector import create_product, OdooError
+    try:
+        pid = create_product(data)
+        return {"id": pid}
+    except OdooError as e:
+        return Response(status_code=502, content=json.dumps({"error": str(e)}),
+                        media_type="application/json")
+
+
+@app.get("/api/odoo/stock")
+def api_odoo_stock(product_id: int | None = None, location_id: int | None = None):
+    from services.odoo_connector import get_stock_quants, OdooError
+    try:
+        domain = [["location_id.usage", "=", "internal"]]
+        if product_id:
+            domain.append(["product_id", "=", product_id])
+        if location_id:
+            domain.append(["location_id", "=", location_id])
+        return get_stock_quants(domain)
+    except OdooError as e:
+        return Response(status_code=502, content=json.dumps({"error": str(e)}),
+                        media_type="application/json")
+
+
+@app.get("/api/odoo/locations")
+def api_odoo_locations():
+    from services.odoo_connector import get_stock_locations, OdooError
+    try:
+        return get_stock_locations()
+    except OdooError as e:
+        return Response(status_code=502, content=json.dumps({"error": str(e)}),
+                        media_type="application/json")
+
+
+@app.patch("/api/odoo/stock/{product_id}")
+def api_odoo_adjust_stock(product_id: int, data: dict = Body(...)):
+    from services.odoo_connector import adjust_stock, OdooError
+    try:
+        result = adjust_stock(product_id, data["location_id"], data["quantity"])
+        return {"ok": True, "result": result}
+    except OdooError as e:
+        return Response(status_code=502, content=json.dumps({"error": str(e)}),
+                        media_type="application/json")
+
+
+@app.get("/api/odoo/suppliers")
+def api_odoo_suppliers(q: str = ""):
+    from services.odoo_connector import search_partners, OdooError
+    try:
+        domain = [["supplier_rank", ">", 0]]
+        if q:
+            domain.append(["name", "ilike", q])
+        return search_partners(domain)
+    except OdooError as e:
+        return Response(status_code=502, content=json.dumps({"error": str(e)}),
+                        media_type="application/json")
+
+
+@app.get("/api/odoo/purchases")
+def api_odoo_purchases(state: str = "", limit: int = 50):
+    from services.odoo_connector import search_purchase_orders, OdooError
+    try:
+        domain = []
+        if state:
+            domain.append(["state", "=", state])
+        return search_purchase_orders(domain, limit=limit)
+    except OdooError as e:
+        return Response(status_code=502, content=json.dumps({"error": str(e)}),
+                        media_type="application/json")
+
+
+@app.get("/api/odoo/purchases/{po_id}")
+def api_odoo_purchase(po_id: int):
+    from services.odoo_connector import get_purchase_order, OdooError
+    try:
+        return get_purchase_order(po_id)
+    except OdooError as e:
+        return Response(status_code=502, content=json.dumps({"error": str(e)}),
+                        media_type="application/json")
+
+
+@app.post("/api/odoo/purchases")
+def api_odoo_create_purchase(data: dict = Body(...)):
+    from services.odoo_connector import create_purchase_order, OdooError
+    try:
+        po_id = create_purchase_order(data["partner_id"], data["lines"])
+        return {"id": po_id}
+    except OdooError as e:
+        return Response(status_code=502, content=json.dumps({"error": str(e)}),
+                        media_type="application/json")
+
+
+@app.get("/api/odoo/invoices")
+def api_odoo_invoices(move_type: str = "", limit: int = 50):
+    from services.odoo_connector import search_invoices, OdooError
+    try:
+        domain = []
+        if move_type:
+            domain.append(["move_type", "=", move_type])
+        else:
+            domain.append(["move_type", "in", ["in_invoice", "out_invoice"]])
+        return search_invoices(domain, limit=limit)
+    except OdooError as e:
+        return Response(status_code=502, content=json.dumps({"error": str(e)}),
+                        media_type="application/json")
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=8100, reload=True)

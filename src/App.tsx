@@ -11,6 +11,7 @@ import { MaintenanceQualite } from './atelier/components/MaintenanceQualite';
 import { WorkshopApp } from './workshop/WorkshopApp';
 import { VitrageApp } from './pages/VitrageApp';
 import { DashboardGlobal } from './pages/DashboardGlobal';
+import { OdooConnector } from './pages/OdooConnector';
 import { AuthProvider, LoginScreen, useAuth } from './AuthContext';
 import { AdminPanel } from './AdminPanel';
 import { logout as apiLogout } from './api';
@@ -28,7 +29,8 @@ type AppMode =
   | 'poste_coupe'
   | 'maintenance_qualite'
   | 'vitrage'
-  | 'dashboard_global';
+  | 'dashboard_global'
+  | 'odoo';
 
 // ── Hub Fabrication (page d'accueil) ─────────────────────────────────
 
@@ -152,13 +154,24 @@ function HubFabrication({ onSelect }: { onSelect: (mode: AppMode) => void }) {
       ),
       color: 'indigo',
     },
+    {
+      id: 'odoo' as AppMode,
+      label: 'Odoo 18',
+      description: 'Connecteur ERP — produits, stock accessoires, fournisseurs, achats, factures.',
+      icon: (
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-orange-400">
+          <circle cx="12" cy="12" r="9" /><path d="M8 12h8M12 8v8" /><circle cx="12" cy="12" r="3" />
+        </svg>
+      ),
+      color: 'orange',
+    },
   ];
 
   const atelierApps = apps.filter(a =>
     ['reception_matiere', 'poste_coupe', 'smart_assembly', 'stock_accessoires', 'preparation_livraison', 'maintenance_qualite', 'vitrage'].includes(a.id),
   );
   const beApps = apps.filter(a => ['gc', 'workshop_layout'].includes(a.id));
-  const supervisionApps = apps.filter(a => ['dashboard_global'].includes(a.id));
+  const supervisionApps = apps.filter(a => ['dashboard_global', 'odoo'].includes(a.id));
 
   const filterApps = (list: typeof apps) =>
     list.filter(app => {
@@ -359,6 +372,7 @@ function AppContent() {
   if (mode === 'workshop_layout') return <WorkshopApp onHome={goHome} />;
   if (mode === 'vitrage') return <VitrageApp onBack={goHome} />;
   if (mode === 'dashboard_global') return <DashboardGlobal onBack={goHome} />;
+  if (mode === 'odoo') return <OdooConnector onBack={goHome} />;
 
   // ── Garde-corps ────────────────────────────────────
   if (selectedAffaire) {
