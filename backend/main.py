@@ -35,6 +35,8 @@ def api_optimize(req: OptimizeRequest):
     results = optimize(
         req.pieces, req.plate_width, req.plate_height,
         req.edge_margin, req.cutting_gap,
+        algorithm=req.algorithm,
+        machine=req.machine,
     )
     return OptimizeResponse(results=results)
 

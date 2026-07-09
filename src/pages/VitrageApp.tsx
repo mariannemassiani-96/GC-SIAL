@@ -338,6 +338,8 @@ function useOptimization(vitrages: Vitrage[], glass: GlassSettings) {
             plate_height: glass.plateHeight,
             edge_margin: glass.edgeTrimMargin ?? 15,
             cutting_gap: glass.cuttingGap,
+            algorithm: 'staged_dp',
+            machine: glass.machine || 'lisec',
           });
           if (!cancelled) {
             setGlassResult(mapBackendResults(resp.results as Record<string, unknown>[]));
