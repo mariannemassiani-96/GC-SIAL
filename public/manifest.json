@@ -1,0 +1,19 @@
+{
+  "name": "SIAL — Groupe VISTA",
+  "short_name": "SIAL",
+  "description": "Outils atelier et bureau d'etudes — ISULA VITRAGE, Poste de Coupe, Garde-Corps",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f1117",
+  "theme_color": "#0f1117",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "categories": ["business", "productivity"]
+}
