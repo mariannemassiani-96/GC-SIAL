@@ -753,7 +753,7 @@ function TabTracabilite({ commandeRef }: { commandeRef: string }) {
 // ── Tab: Glass Optimization ──────────────────────────────────────────
 
 function TabGlass({ results, loading, backend, commandeLabel }: { results: GlassOptimResult[]; loading?: boolean; backend?: boolean; commandeLabel?: string }) {
-  if (loading) return <p className="text-blue-400 text-sm">Optimisation en cours (rectpack)...</p>;
+  if (loading) return <p className="text-blue-400 text-sm">Optimisation en cours...</p>;
   if (results.length === 0) return <p className="text-gray-500 text-sm">Importez des vitrages pour voir l'optimisation.</p>;
 
   const totalInterdit = results.reduce((s, r) => s + r.plates.filter(p => p.hasInterdit).length, 0);
@@ -766,7 +766,7 @@ function TabGlass({ results, loading, backend, commandeLabel }: { results: Glass
           <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-amber-500/30 border border-amber-500/50" /> Surveiller (250-300)</span>
           <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-red-500/30 border border-red-500/50" /> Interdit (50-250)</span>
           {totalInterdit > 0 && <span className="text-red-400 font-semibold ml-4">{totalInterdit} plaque(s) avec chutes interdites</span>}
-          {backend && <span className="text-green-400 text-[10px] px-2 py-0.5 rounded bg-green-500/10 border border-green-500/20">rectpack (serveur)</span>}
+          {backend && <span className="text-green-400 text-[10px] px-2 py-0.5 rounded bg-green-500/10 border border-green-500/20">Guillotine DP (serveur)</span>}
           {!backend && <span className="text-gray-500 text-[10px] px-2 py-0.5 rounded bg-gray-500/10 border border-gray-500/20">JS local</span>}
         </div>
         <button onClick={async () => { const blob = await generateOptimVerrePDF(results, commandeLabel || ''); download(blob, 'optimisation_verre.pdf'); }}
@@ -1009,10 +1009,12 @@ function BatchView({ commandes, onBack, avery, we, glass }: {
   avery: AverySettings; we: WESettings; glass: GlassSettings;
 }) {
   const [tab, setTab] = useState(0);
+  const [machine, setMachine] = useState<'lisec' | 'bottero'>(glass.machine || 'lisec');
   const allVitrages = useMemo(() => commandes.flatMap(c => c.vitrages), [commandes]);
   const batchLabel = commandes.map(c => c.reference).join(' + ');
   const weResult = useMemo(() => allVitrages.length > 0 ? optimizeWE(allVitrages, we) : [], [allVitrages, we]);
-  const { glassResult, loading: optimLoading, backend: usingBackend } = useOptimization(allVitrages, glass);
+  const glassWithMachine = useMemo(() => ({ ...glass, machine }), [glass, machine]);
+  const { glassResult, loading: optimLoading, backend: usingBackend } = useOptimization(allVitrages, glassWithMachine);
   const allPlates = useMemo(() => glassResult.flatMap(g => g.plates), [glassResult]);
 
   const [sending, setSending] = useState(false);
@@ -1031,7 +1033,7 @@ function BatchView({ commandes, onBack, avery, we, glass }: {
           vitrage_ref: p.vitrageRef, vitrage_id: p.vitrageId,
           largeur: p.width, hauteur: p.height, composition: '',
           face: p.face, material: p.material,
-          machine: p.noRotation ? 'lisec' : 'bottero', plaque_no: plate.numero,
+          machine, plaque_no: plate.numero,
         }))
       );
 
@@ -1080,10 +1082,18 @@ function BatchView({ commandes, onBack, avery, we, glass }: {
         <h2 className="text-xl font-bold text-amber-400">Lot de coupe</h2>
         <span className="text-xs text-gray-400">{commandes.length} commandes — {allVitrages.length} vitrages</span>
         {allVitrages.length > 0 && (
-          <button onClick={envoyerEnProduction} disabled={sending}
-            className="ml-auto px-4 py-2 bg-green-600 hover:bg-green-500 text-white text-sm rounded-lg transition-colors disabled:opacity-50">
-            {sending ? 'Envoi...' : 'Envoyer en production'}
-          </button>
+          <div className="ml-auto flex items-center gap-3">
+            <label className="text-xs text-gray-400">Machine :</label>
+            <select value={machine} onChange={e => setMachine(e.target.value as 'lisec' | 'bottero')}
+              className="px-3 py-2 bg-[#181a20] border border-[#2a2d35] text-white text-sm rounded-lg">
+              <option value="lisec">LISEC (3-stages)</option>
+              <option value="bottero">Bottero (2-stages)</option>
+            </select>
+            <button onClick={envoyerEnProduction} disabled={sending}
+              className="px-4 py-2 bg-green-600 hover:bg-green-500 text-white text-sm rounded-lg transition-colors disabled:opacity-50">
+              {sending ? 'Envoi...' : 'Envoyer en production'}
+            </button>
+          </div>
         )}
       </div>
 
