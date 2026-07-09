@@ -12,6 +12,8 @@ import { WorkshopApp } from './workshop/WorkshopApp';
 import { VitrageApp } from './pages/VitrageApp';
 import { DashboardGlobal } from './pages/DashboardGlobal';
 import { OdooConnector } from './pages/OdooConnector';
+import { QualiteView } from './pages/QualiteView';
+import { BiDashboard } from './pages/BiDashboard';
 import { AuthProvider, LoginScreen, useAuth } from './AuthContext';
 import { AdminPanel } from './AdminPanel';
 import { logout as apiLogout } from './api';
@@ -30,7 +32,9 @@ type AppMode =
   | 'maintenance_qualite'
   | 'vitrage'
   | 'dashboard_global'
-  | 'odoo';
+  | 'odoo'
+  | 'qualite'
+  | 'bi_dashboard';
 
 // ── Hub Fabrication (page d'accueil) ─────────────────────────────────
 
@@ -165,13 +169,35 @@ function HubFabrication({ onSelect }: { onSelect: (mode: AppMode) => void }) {
       ),
       color: 'orange',
     },
+    {
+      id: 'qualite' as AppMode,
+      label: 'Qualite',
+      description: 'Non-conformites, causes, actions correctives, procedures qualite, statistiques.',
+      icon: (
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-red-400">
+          <path d="M12 9v4M12 17h.01" /><circle cx="12" cy="12" r="9" />
+        </svg>
+      ),
+      color: 'red',
+    },
+    {
+      id: 'bi_dashboard' as AppMode,
+      label: 'Tableau de Bord BI',
+      description: 'KPI, pipeline commandes, charge par poste, taux NC, progression globale.',
+      icon: (
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-cyan-400">
+          <rect x="3" y="12" width="4" height="9" rx="1" /><rect x="10" y="7" width="4" height="14" rx="1" /><rect x="17" y="3" width="4" height="18" rx="1" />
+        </svg>
+      ),
+      color: 'cyan',
+    },
   ];
 
   const atelierApps = apps.filter(a =>
     ['reception_matiere', 'poste_coupe', 'smart_assembly', 'stock_accessoires', 'preparation_livraison', 'maintenance_qualite', 'vitrage'].includes(a.id),
   );
   const beApps = apps.filter(a => ['gc', 'workshop_layout'].includes(a.id));
-  const supervisionApps = apps.filter(a => ['dashboard_global', 'odoo'].includes(a.id));
+  const supervisionApps = apps.filter(a => ['dashboard_global', 'odoo', 'qualite', 'bi_dashboard'].includes(a.id));
 
   const filterApps = (list: typeof apps) =>
     list.filter(app => {
@@ -373,6 +399,8 @@ function AppContent() {
   if (mode === 'vitrage') return <VitrageApp onBack={goHome} />;
   if (mode === 'dashboard_global') return <DashboardGlobal onBack={goHome} />;
   if (mode === 'odoo') return <OdooConnector onBack={goHome} />;
+  if (mode === 'qualite') return <QualiteView onBack={goHome} />;
+  if (mode === 'bi_dashboard') return <BiDashboard onBack={goHome} />;
 
   // ── Garde-corps ────────────────────────────────────
   if (selectedAffaire) {
