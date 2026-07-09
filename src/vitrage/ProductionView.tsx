@@ -418,15 +418,7 @@ export function ProductionView({ onBack, startAtelier }: { onBack: () => void; s
           )}
 
           {tab === 'optim_we' && selectedLot && (
-            <div className="text-sm">
-              {selectedLot.we_optim && (selectedLot.we_optim as unknown[]).length > 0 ? (
-                <pre className="bg-[#181a20] p-4 rounded text-xs text-gray-300 overflow-auto max-h-96">
-                  {JSON.stringify(selectedLot.we_optim, null, 2)}
-                </pre>
-              ) : (
-                <p className="text-gray-500 text-sm">Donnees WE non disponibles pour ce lot.</p>
-              )}
-            </div>
+            <OptimWETab weOptim={selectedLot.we_optim} />
           )}
 
           {tab === 'preparation' && selectedLot && (
@@ -1987,6 +1979,99 @@ function LotMatieresTab({ lotId, pieces, lotMatieres, onReload }: {
           Sauvegarder matieres
         </button>
       </div>
+    </div>
+  );
+}
+
+// ── WE Optimization Tab (linear bar visualization) ────────────────────
+
+interface WEOptimGroup {
+  epaisseur: number;
+  couleur: string;
+  barres: {
+    numero: number;
+    pieces: { longueur: number; origDim: number; cote: string; vitrageRef: string }[];
+    utilise: number;
+    chute: number;
+  }[];
+  totalPieces: number;
+  totalBarres: number;
+  tauxUtilisation: number;
+  chuteTotal: number;
+}
+
+function OptimWETab({ weOptim }: { weOptim?: unknown[] }) {
+  if (!weOptim || weOptim.length === 0) {
+    return <p className="text-gray-500 text-sm">Donnees WE non disponibles pour ce lot.</p>;
+  }
+
+  const groups = weOptim as WEOptimGroup[];
+  const barreLength = 6000;
+
+  return (
+    <div className="space-y-6">
+      {groups.map((g, gi) => (
+        <div key={gi} className="bg-[#181a20] rounded-lg p-4 border border-[#2a2d35]">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-3">
+              <span className="text-amber-400 font-bold text-sm">
+                WE {g.epaisseur}mm — {g.couleur || 'Standard'}
+              </span>
+            </div>
+            <div className="flex items-center gap-4 text-xs text-gray-400">
+              <span>{g.totalPieces} pieces</span>
+              <span>{g.totalBarres} barres</span>
+              <span className="text-green-400 font-semibold">{(g.tauxUtilisation || 0).toFixed(0)}% utilisation</span>
+              <span className="text-red-400">Chute: {(g.chuteTotal || 0).toFixed(0)}mm</span>
+            </div>
+          </div>
+          <div className="space-y-2">
+            {g.barres.map((barre, bi) => {
+              const scale = 100 / barreLength;
+              return (
+                <div key={bi} className="flex items-center gap-3">
+                  <span className="text-xs text-gray-500 w-12 text-right shrink-0">B{barre.numero}</span>
+                  <div className="flex-1 relative h-7 bg-gray-800 rounded overflow-hidden border border-[#2a2d35]">
+                    {(() => {
+                      let cursor = 0;
+                      const colors = ['bg-blue-600', 'bg-cyan-600', 'bg-teal-600', 'bg-indigo-600', 'bg-violet-600', 'bg-sky-600'];
+                      return barre.pieces.map((p, pi) => {
+                        const w = p.longueur * scale;
+                        const x = cursor * scale;
+                        cursor += p.longueur + 5;
+                        return (
+                          <div key={pi} className={`absolute top-0 h-full ${colors[pi % colors.length]} border-r border-gray-900`}
+                            style={{ left: `${x}%`, width: `${Math.max(w, 0.5)}%` }}
+                            title={`${p.vitrageRef} — ${p.longueur}mm (${p.cote === 'court' ? 'C' : 'L'})`}>
+                            {w > 5 && (
+                              <span className="text-[8px] text-white px-0.5 truncate block leading-7">
+                                {p.longueur}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      });
+                    })()}
+                    {barre.chute > 0 && (
+                      <div className="absolute top-0 right-0 h-full bg-red-900/40 border-l border-red-500/30"
+                        style={{ width: `${barre.chute * scale}%` }}>
+                        {barre.chute * scale > 4 && (
+                          <span className="text-[8px] text-red-400 px-1 leading-7 block text-right">
+                            {barre.chute}mm
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <span className="text-[10px] text-gray-500 w-14 shrink-0">
+                    {barre.pieces.length} pcs
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
