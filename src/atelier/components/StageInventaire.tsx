@@ -5,7 +5,7 @@ import { ProgressionStage } from './ProgressionStage';
 import { DEMO_VITRAGES, type VitrageFacture } from '../vitrageAnalyse';
 import { useApiState } from '../../useApiState';
 import { ArrowLeft, FileText, ClipboardList, CheckSquare, BarChart3, TrendingUp, Layers, ClipboardCheck, Briefcase, MessageCircle, Download, Plus, Search, Trash2, Sparkles, X, Send, FileUp, Upload } from 'lucide-react';
-import { createProduct, searchProducts, type OdooProduct } from '../../odoo/api';
+import { createProduct, searchProducts } from '../../odoo/api';
 
 // ── Types ────────────────────────────────────────────────────────────
 
