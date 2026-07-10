@@ -1,0 +1,1635 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Workflows VISTA — Livraison & Facturation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --maquis:#4F5E46;--maquis-d:#3B4735;--maquis-l:#69795C;
+  --copper:#C27A4A;--copper-d:#A5623A;
+  --noir:#1A1A1A;--creme:#F5F0E8;--paper:#FBFAF6;
+  --line:#E3DCCE;--line-soft:#EDE7DA;--ink:#2A2A26;--ink-soft:#6C6A61;
+  --shadow:0 1px 2px rgba(38,34,24,.05),0 8px 30px rgba(38,34,24,.06);
+  --rail-w:320px;
+  --sans:'DM Sans',system-ui,-apple-system,sans-serif;
+  --serif:'Cormorant Garamond',Georgia,serif;
+  --mono:'DM Mono',ui-monospace,Menlo,monospace;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;font-family:var(--sans);color:var(--ink);background:var(--paper);line-height:1.55;-webkit-font-smoothing:antialiased;font-size:15px}
+a{color:var(--copper-d)}
+
+.topbar{position:sticky;top:0;z-index:60;display:flex;align-items:center;gap:16px;padding:12px 22px;background:var(--maquis);color:#F3EFE6;border-bottom:1px solid rgba(0,0,0,.15)}
+.brand{display:flex;flex-direction:column;line-height:1.05;flex:0 0 auto}
+.brand .b1{font-family:var(--serif);font-size:1.42rem;font-weight:600}
+.brand .b2{font-size:.6rem;letter-spacing:.22em;text-transform:uppercase;opacity:.72;font-weight:500}
+.theme-wrap{display:flex;align-items:center;gap:8px;margin-left:6px}
+.theme-wrap label{font-size:.6rem;letter-spacing:.2em;text-transform:uppercase;opacity:.7;font-weight:600}
+.theme-select{appearance:none;font-family:var(--sans);font-size:.84rem;font-weight:600;color:#fff;
+  background:rgba(0,0,0,.22);border:1px solid rgba(255,255,255,.18);border-radius:10px;
+  padding:8px 34px 8px 14px;cursor:pointer;
+  background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23F3EFE6' d='M6 8L2 4h8z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center}
+.theme-select:focus{outline:2px solid var(--copper);outline-offset:1px}
+.theme-select option{color:#1A1A1A}
+.modes{display:flex;gap:4px;margin-left:auto;background:rgba(0,0,0,.18);padding:4px;border-radius:100px}
+.mode-btn{appearance:none;border:0;background:transparent;color:#E4DECF;font-family:var(--sans);font-size:.8rem;font-weight:600;padding:8px 15px;border-radius:100px;cursor:pointer;transition:.18s;white-space:nowrap}
+.mode-btn:hover{color:#fff}
+.mode-btn.active{background:var(--copper);color:#fff;box-shadow:0 1px 6px rgba(0,0,0,.2)}
+.burger{display:none;appearance:none;border:0;background:rgba(0,0,0,.18);color:#F3EFE6;width:40px;height:40px;border-radius:10px;cursor:pointer;font-size:1.1rem}
+
+.shell{display:flex;align-items:flex-start}
+.rail{width:var(--rail-w);flex:0 0 var(--rail-w);position:sticky;top:57px;height:calc(100vh - 57px);overflow-y:auto;padding:26px 20px 40px;background:var(--creme);border-right:1px solid var(--line)}
+.rail-h{font-size:.66rem;letter-spacing:.22em;text-transform:uppercase;color:var(--ink-soft);font-weight:600;margin:0 0 4px 6px}
+.rail-sub{font-size:.74rem;color:var(--ink-soft);margin:0 0 20px 6px;line-height:1.4}
+.spine{list-style:none;margin:0;padding:0;position:relative}
+.spine::before{content:"";position:absolute;left:19px;top:14px;bottom:22px;width:2px;background:var(--line)}
+.node{position:relative;padding:0 0 2px 0}
+.node-btn{display:flex;gap:13px;align-items:flex-start;width:100%;text-align:left;background:transparent;border:0;cursor:pointer;padding:9px 10px 9px 8px;border-radius:11px;transition:background .16s;font-family:var(--sans)}
+.node-btn:hover{background:rgba(79,94,70,.07)}
+.node.on .node-btn{background:#fff;box-shadow:var(--shadow)}
+.dot{flex:0 0 auto;width:24px;height:24px;border-radius:50%;margin-top:1px;display:grid;place-items:center;font-size:.58rem;font-weight:700;color:#fff;background:var(--role,#9a9a90);position:relative;z-index:2;box-shadow:0 0 0 4px var(--creme);transition:.2s;letter-spacing:-.02em}
+.node.on .dot{box-shadow:0 0 0 4px #fff,0 0 0 6px var(--role);transform:scale(1.06)}
+.node-txt .nl{font-size:.85rem;font-weight:600;color:var(--ink);line-height:1.25}
+.node-txt .ns{font-size:.72rem;color:var(--ink-soft);margin-top:1px}
+.node.on .node-txt .nl{color:var(--maquis-d)}
+.legend{margin-top:26px;padding-top:20px;border-top:1px solid var(--line)}
+.legend-h{font-size:.66rem;letter-spacing:.22em;text-transform:uppercase;color:var(--ink-soft);font-weight:600;margin:0 0 12px 6px}
+.leg-item{display:flex;align-items:center;gap:9px;padding:5px 6px;font-size:.78rem}
+.leg-swatch{width:11px;height:11px;border-radius:3px;flex:0 0 auto}
+.leg-item b{font-weight:600}
+.leg-item span{color:var(--ink-soft);margin-left:auto;font-family:var(--mono);font-size:.72rem}
+
+.main{flex:1 1 auto;min-width:0}
+.view{display:none}.view.active{display:block}
+.wrap{max-width:940px;margin:0 auto;padding:42px 40px 90px}
+.eyebrow{font-size:.7rem;letter-spacing:.24em;text-transform:uppercase;color:var(--copper-d);font-weight:600}
+h1.page{font-family:var(--serif);font-weight:600;font-size:2.9rem;line-height:1.05;margin:.28em 0 .1em;color:var(--maquis-d);letter-spacing:-.01em}
+.lead{font-size:1.06rem;color:var(--ink-soft);max-width:58ch;margin:0 0 8px}
+
+.flow{position:relative;margin:38px 0 10px}
+.flow-step{display:grid;grid-template-columns:56px 1fr;gap:20px;position:relative;padding-bottom:22px}
+.flow-step::before{content:"";position:absolute;left:27px;top:44px;bottom:-6px;width:2px;background:var(--line)}
+.flow-step:last-child::before{display:none}
+.flow-num{width:56px;height:56px;border-radius:16px;display:grid;place-items:center;font-family:var(--serif);font-size:1.5rem;font-weight:600;color:#fff;background:var(--role);box-shadow:var(--shadow);position:relative;z-index:2;letter-spacing:-.01em}
+.flow-card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:16px 20px;box-shadow:var(--shadow)}
+.flow-card h3{margin:0;font-size:1.06rem;font-weight:600;color:var(--maquis-d)}
+.flow-ph{font-size:.62rem;letter-spacing:.18em;text-transform:uppercase;color:var(--copper-d);font-weight:700;margin-bottom:5px}
+.flow-card p{margin:3px 0 0;color:var(--ink-soft);font-size:.9rem}
+.rbadge{display:inline-block;font-size:.66rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:3px 9px;border-radius:100px;color:#fff;background:var(--role);margin-top:9px}
+
+.block-h{font-family:var(--serif);font-size:1.8rem;color:var(--maquis-d);font-weight:600;margin:54px 0 4px}
+.block-h .e{display:block;font-family:var(--sans);font-size:.7rem;letter-spacing:.24em;text-transform:uppercase;color:var(--copper-d);font-weight:600;margin-bottom:2px}
+
+.aa{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:22px}
+.aa-col{border-radius:16px;padding:6px 4px}
+.aa-col.before{background:#F1EDE4;border:1px solid var(--line)}
+.aa-col.after{background:#EFF3EC;border:1px solid #D6E0CC}
+.aa-head{padding:14px 18px 10px;font-weight:700;font-size:.76rem;letter-spacing:.16em;text-transform:uppercase}
+.aa-col.before .aa-head{color:var(--ink-soft)}
+.aa-col.after .aa-head{color:var(--maquis)}
+.aa-row{padding:11px 18px;font-size:.87rem;border-top:1px solid rgba(0,0,0,.05)}
+.aa-col.before .aa-row{color:#6b665c}
+.aa-col.after .aa-row{color:var(--ink)}
+
+.tbl-scroll{overflow-x:auto;border:1px solid var(--line);border-radius:16px;background:#fff;margin-top:22px}
+table.gt{border-collapse:collapse;width:100%;min-width:540px;font-size:.87rem}
+table.gt th{background:var(--creme);text-align:left;font-size:.64rem;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-soft);font-weight:600;padding:12px 16px;border-bottom:1px solid var(--line);white-space:nowrap}
+table.gt td{padding:11px 16px;border-bottom:1px solid var(--line-soft);vertical-align:top}
+table.gt tr:last-child td{border-bottom:0}
+table.gt .em{color:var(--maquis-d);font-weight:600}
+table.gt code{white-space:nowrap}
+
+.rtable{margin-top:22px;border:1px solid var(--line);border-radius:16px;overflow:hidden;background:#fff}
+.rrow{display:grid;grid-template-columns:210px 96px 1fr;border-top:1px solid var(--line-soft)}
+.rrow:first-child{border-top:0}
+.rrow.head{background:var(--creme);font-size:.66rem;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-soft);font-weight:600}
+.rcell{padding:13px 16px;font-size:.88rem}
+.rcell.role b{display:inline-flex;align-items:center;gap:8px;font-weight:600}
+.rcell.role .cd{width:10px;height:10px;border-radius:3px;background:var(--role)}
+.rcell.steps{font-family:var(--mono);color:var(--maquis)}
+.rcell.act{color:var(--ink-soft)}
+
+.kp{margin-top:22px;display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.kp-item{background:#fff;border:1px solid var(--line);border-left:3px solid var(--copper);border-radius:12px;padding:13px 16px;font-size:.88rem}
+.attn{margin-top:22px;display:grid;gap:10px}
+.attn-item{display:flex;gap:11px;align-items:flex-start;background:#FBF1E8;border:1px solid #EAD3BC;border-radius:12px;padding:12px 16px;font-size:.88rem}
+.attn-item .ic{flex:0 0 auto}
+.attn-item b{color:var(--copper-d)}
+
+.deck{max-width:960px;margin:0 auto;padding:34px 32px 40px}
+.slide{background:#fff;border:1px solid var(--line);border-radius:22px;box-shadow:var(--shadow);padding:44px 50px 48px;min-height:60vh;position:relative;overflow:hidden}
+.slide::before{content:"";position:absolute;left:0;top:0;bottom:0;width:6px;background:var(--role,var(--maquis))}
+.slide-num{font-family:var(--serif);font-size:3.4rem;font-weight:600;color:var(--role,var(--maquis));line-height:.9}
+.slide-kick{font-size:.72rem;letter-spacing:.22em;text-transform:uppercase;color:var(--ink-soft);font-weight:600;margin-top:6px}
+.slide h2{font-family:var(--serif);font-size:2.3rem;font-weight:600;color:var(--maquis-d);margin:.15em 0 .5em;line-height:1.06}
+.slide .goal{font-size:1rem;color:var(--ink);background:var(--creme);border-radius:12px;padding:12px 16px;margin:0 0 20px;border:1px solid var(--line-soft)}
+.slide h4{font-size:.74rem;letter-spacing:.14em;text-transform:uppercase;color:var(--copper-d);font-weight:700;margin:22px 0 8px}
+.slide ul{margin:0 0 4px;padding-left:0;list-style:none}
+.slide ul li{position:relative;padding:4px 0 4px 22px;font-size:.94rem}
+.slide ul li::before{content:"";position:absolute;left:4px;top:12px;width:7px;height:7px;border-radius:2px;background:var(--role,var(--copper))}
+.slide ul li ul{margin:2px 0}
+.slide ul li ul li{font-size:.86rem;color:var(--ink-soft)}
+.slide ul li ul li::before{background:var(--line);width:5px;height:5px;top:11px}
+.slide .tbl-scroll{margin-top:8px}
+.res{margin-top:18px;font-size:.94rem;padding:12px 16px;border-radius:12px;background:#EFF3EC;border:1px solid #D6E0CC;color:var(--maquis-d)}
+.res b{color:var(--maquis)}
+.deck-nav{display:flex;align-items:center;gap:16px;justify-content:center;margin-top:26px}
+.nav-btn{appearance:none;border:1px solid var(--line);background:#fff;color:var(--maquis-d);width:46px;height:46px;border-radius:50%;cursor:pointer;font-size:1.2rem;box-shadow:var(--shadow);transition:.15s}
+.nav-btn:hover{border-color:var(--copper);color:var(--copper-d)}
+.nav-btn:disabled{opacity:.35;cursor:default}
+.dots{display:flex;gap:7px;flex-wrap:wrap;justify-content:center;max-width:340px}
+.pdot{width:9px;height:9px;border-radius:50%;background:var(--line);border:0;cursor:pointer;padding:0;transition:.18s}
+.pdot.on{background:var(--copper);transform:scale(1.25)}
+.counter{font-family:var(--mono);font-size:.82rem;color:var(--ink-soft);min-width:52px;text-align:center}
+
+.guide-head{border-bottom:1px solid var(--line);padding-bottom:20px;margin-bottom:6px}
+.chip{display:inline-block;font-size:.66rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:4px 11px;border-radius:100px;color:#fff;background:var(--role);margin-bottom:12px}
+.chap-num{font-family:var(--mono);color:var(--ink-soft);font-size:.82rem}
+h2.chap{font-family:var(--serif);font-weight:600;font-size:2.3rem;color:var(--maquis-d);margin:.08em 0 0;line-height:1.06}
+.callout{border-radius:13px;padding:13px 17px;margin:16px 0;font-size:.93rem;display:flex;gap:11px;align-items:flex-start}
+.callout .ic{flex:0 0 auto;font-size:1.05rem;line-height:1.4}
+.callout.obj{background:var(--creme);border:1px solid var(--line-soft)}
+.callout.prereq{background:#fff;border:1px solid var(--line)}
+.callout.prereq b,.callout.obj b{color:var(--maquis-d)}
+.callout.warn{background:#FBF1E8;border:1px solid #EAD3BC}
+.callout.warn b{color:var(--copper-d)}
+.callout.note{background:#EFF3EC;border:1px solid #D6E0CC}
+.callout.note b{color:var(--maquis)}
+.sub-h{font-size:.74rem;letter-spacing:.14em;text-transform:uppercase;color:var(--copper-d);font-weight:700;margin:26px 0 4px}
+.route{font-family:var(--serif);font-size:1.15rem;color:var(--maquis-d);font-weight:600;margin:20px 0 6px}
+ol.steps{counter-reset:s;list-style:none;margin:8px 0 4px;padding:0}
+ol.steps>li{position:relative;padding:5px 0 5px 40px;counter-increment:s;font-size:.94rem}
+ol.steps>li::before{content:counter(s);position:absolute;left:0;top:4px;width:26px;height:26px;border-radius:8px;background:var(--maquis);color:#fff;display:grid;place-items:center;font-size:.78rem;font-weight:700;font-family:var(--mono)}
+ol.steps ul{margin:5px 0;padding-left:18px}
+ol.steps ul li{position:relative;padding:2px 0 2px 16px;font-size:.88rem;color:var(--ink-soft);list-style:none}
+ol.steps ul li::before{content:"";position:absolute;left:0;top:11px;width:6px;height:6px;border-radius:2px;background:var(--line)}
+ol.steps ul li b{color:var(--ink)}
+details.faq{border:1px solid var(--line);border-radius:12px;margin:8px 0;background:#fff;overflow:hidden}
+details.faq summary{cursor:pointer;padding:12px 16px;font-weight:600;font-size:.9rem;color:var(--maquis-d);list-style:none;display:flex;gap:10px;align-items:center}
+details.faq summary::-webkit-details-marker{display:none}
+details.faq summary::before{content:"+";color:var(--copper);font-weight:700;font-size:1.1rem;width:16px;transition:.2s}
+details.faq[open] summary::before{transform:rotate(45deg)}
+details.faq .fa-body{padding:0 16px 14px 42px;font-size:.9rem;color:var(--ink-soft)}
+code{font-family:var(--mono);font-size:.86em;background:#F0EBE0;border:1px solid var(--line-soft);padding:1px 6px;border-radius:6px;color:var(--maquis-d);word-break:break-word}
+.res-final{margin:22px 0 4px;font-size:.96rem;padding:14px 18px;border-radius:13px;background:#EFF3EC;border:1px solid #D6E0CC}
+.res-final b{color:var(--maquis)}
+.chap-foot{display:flex;justify-content:space-between;gap:12px;margin-top:40px;padding-top:24px;border-top:1px solid var(--line)}
+.foot-btn{flex:1;text-align:left;background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px 18px;cursor:pointer;transition:.15s;font-family:var(--sans);box-shadow:var(--shadow)}
+.foot-btn:hover{border-color:var(--copper)}
+.foot-btn:disabled{opacity:.3;cursor:default}
+.foot-btn .fl{font-size:.66rem;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-soft);font-weight:600}
+.foot-btn .ft{font-weight:600;color:var(--maquis-d);margin-top:2px;font-size:.92rem}
+.foot-btn.next{text-align:right}
+.print-btn{position:fixed;right:22px;bottom:22px;z-index:40;appearance:none;border:0;cursor:pointer;background:var(--maquis);color:#F3EFE6;border-radius:100px;padding:12px 20px;font-family:var(--sans);font-weight:600;font-size:.84rem;box-shadow:0 8px 26px rgba(38,34,24,.25);display:flex;gap:8px;align-items:center}
+.print-btn:hover{background:var(--maquis-d)}
+.scrim{display:none;position:fixed;inset:0;background:rgba(26,26,26,.4);z-index:55}
+
+.attrib{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin-top:10px;font-size:.78rem}
+.attrib .who{display:inline-flex;align-items:center;gap:6px;font-weight:600;color:var(--ink);background:var(--creme);border:1px solid var(--line-soft);border-radius:100px;padding:2px 10px}
+.attrib .wd{width:8px;height:8px;border-radius:50%;flex:0 0 auto}
+.attrib .arrow{color:var(--ink-soft);font-weight:700}
+.attrib .delai{display:inline-flex;align-items:center;gap:4px;color:var(--copper-d);font-weight:600;font-family:var(--mono);font-size:.74rem}
+.slide-attrib{margin:2px 0 14px}
+
+@media (max-width:1080px){.kp,.aa{grid-template-columns:1fr}h1.page{font-size:2.3rem}}
+@media (max-width:900px){
+  .burger{display:grid;place-items:center}
+  .modes{margin-left:0;order:4;width:100%;justify-content:center}
+  .theme-wrap{order:3;margin-left:auto}
+  .topbar{flex-wrap:wrap;gap:10px 12px}
+  .rail{position:fixed;top:0;left:0;height:100vh;z-index:56;transform:translateX(-104%);transition:transform .28s cubic-bezier(.4,0,.2,1);width:min(340px,86vw);flex-basis:auto;box-shadow:6px 0 30px rgba(0,0,0,.2)}
+  .rail.open{transform:none}
+  .scrim.show{display:block}
+  .wrap{padding:30px 22px 80px}
+  .deck{padding:24px 16px 34px}
+  .slide{padding:32px 26px 36px;min-height:auto}
+  .slide h2{font-size:1.8rem}
+  .rrow{grid-template-columns:1fr}
+  .rrow.head{display:none}
+  .rcell{padding:8px 16px}
+  .rcell.role{padding-top:14px}
+  .rcell.steps::before{content:attr(data-label)" : "}
+}
+@media (max-width:560px){
+  h1.page{font-size:1.9rem}
+  .flow-step{grid-template-columns:46px 1fr;gap:14px}
+  .flow-num{width:46px;height:46px;font-size:1.3rem;border-radius:13px}
+  .flow-step::before{left:22px;top:38px}
+}
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
+@media print{
+  .topbar,.rail,.deck-nav,.chap-foot,.print-btn,.scrim,.burger{display:none!important}
+  .shell{display:block}.view{display:block!important}
+  .slide{break-inside:avoid;page-break-inside:avoid;box-shadow:none;margin-bottom:24px}
+  body{background:#fff}
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <button class="burger" id="burger" aria-label="Ouvrir l'index des étapes">☰</button>
+  <div class="brand"><span class="b1">Workflows VISTA</span><span class="b2" id="brand-sub">—</span></div>
+  <div class="theme-wrap"><label for="theme">Thème</label>
+    <select class="theme-select" id="theme"></select></div>
+  <div class="modes" role="tablist">
+    <button class="mode-btn active" data-mode="carte" role="tab">Carte du workflow</button>
+    <button class="mode-btn" data-mode="deck" role="tab">Présentation</button>
+    <button class="mode-btn" data-mode="guide" role="tab">Guide détaillé</button>
+  </div>
+</div>
+
+<div class="scrim" id="scrim"></div>
+
+<div class="shell">
+  <aside class="rail" id="rail">
+    <p class="rail-h" id="rail-h">Les étapes</p>
+    <p class="rail-sub">Cliquez une étape pour la retrouver dans le mode actif.</p>
+    <ul class="spine" id="spine"></ul>
+    <div class="legend"><p class="legend-h">Rôles</p><div id="legend"></div></div>
+  </aside>
+
+  <main class="main">
+    <section class="view active" id="view-carte"><div class="wrap" id="carte-wrap"></div></section>
+    <section class="view" id="view-deck">
+      <div class="deck">
+        <div class="slide" id="slide"></div>
+        <div class="deck-nav">
+          <button class="nav-btn" id="prevSlide" aria-label="Slide précédente">‹</button>
+          <div class="dots" id="dots"></div>
+          <span class="counter" id="counter"></span>
+          <button class="nav-btn" id="nextSlide" aria-label="Slide suivante">›</button>
+        </div>
+      </div>
+    </section>
+    <section class="view" id="view-guide"><div class="wrap" id="guide-wrap"></div></section>
+  </main>
+</div>
+
+<button class="print-btn" id="printBtn" title="Imprimer / exporter en PDF">⎙ Imprimer / PDF</button>
+
+<script>
+/* =================== WORKFLOW 1 · LIVRAISON =================== */
+const WF_LIVRAISON={
+ id:"livraison", name:"Livraison & installation", sub:"Du devis à la livraison signée",
+ railH:"Les 11 étapes",
+ eyebrow:"Vue d'ensemble", pageTitle:"La chaîne, du devis à la facture",
+ lead:"Une commande traverse onze étapes et cinq rôles. Chaque étape produit une trace dans Odoo : <code>SO → BP → BC → Batch → Facture</code>, avec preuve papier attachée.",
+ roles:{
+  commercial:{short:"Commercial",scope:"Étapes 1–4",color:"#C27A4A"},
+  logistique:{short:"Logistique",scope:"Étapes 5–10",color:"#BC942B"},
+  atelier:{short:"Atelier",scope:"Étapes 8–9",color:"#3E6B8B"},
+  chauffeur:{short:"Chauffeur",scope:"Étapes 10–11",color:"#5B8A72"},
+  comptable:{short:"Comptable",scope:"Étape 11",color:"#7A5C8E"}
+ },
+ steps:[
+  {n:1,label:"Demande & CRM Lead",sub:"réception → opportunité",role:"commercial",deck:2,chap:0,who:"annalaura"},
+  {n:2,label:"Qualification & devis",sub:"transfo PRO F2 → Odoo",role:"commercial",deck:2,chap:1,who:"marianne",delai:"chiffrage Marianne (primary) / Michaël"},
+  {n:3,label:"Signature commande",sub:"envoi devis via Zeendoc",role:"commercial",deck:3,chap:2,who:"marianne",to:"annalaura",delai:"confirmation devis→cmd par Anna-Laura"},
+  {n:4,label:"Acompte",sub:"demande puis facture",role:"commercial",deck:3,chap:3,who:"annalaura",to:"emilie",delai:"suivi Émilie · facture 48h"},
+  {n:5,label:"Validation Appro/Fab",sub:"besoins matière",role:"logistique",deck:4,chap:4,who:"marianne",to:"emilie"},
+  {n:6,label:"Approvisionnement",sub:"stock / cmd fournisseur",role:"logistique",deck:4,chap:5,who:"marianne",to:"angejoseph"},
+  {n:7,label:"Planification",sub:"OF + livraisons + tournées",role:"logistique",deck:5,chap:6,who:"angejoseph",to:"annalaura",delai:"confirmation délai 24h"},
+  {n:8,label:"Bon de Préparation",sub:"dossier fab technique",role:"atelier",deck:6,chap:7,who:"marianne"},
+  {n:9,label:"Bon de Chargement",sub:"atelier + chauffeur",role:"atelier",deck:7,chap:8,who:"annalaura",to:"angejoseph",delai:"rappel J-7"},
+  {n:10,label:"Batch livraison (BL)",sub:"chauffeur → client",role:"chauffeur",deck:8,chap:9,who:"annalaura",to:"chauffeur"},
+  {n:11,label:"Facture + BL signé",sub:"comptable",role:"comptable",deck:9,chap:10,who:"annalaura",to:"emilie",delai:"BL 24h · facture 48h"}
+ ],
+ flow:[
+  {n:1,role:"commercial",t:"Demande & CRM Lead",d:"Réception (tél, email, RDV) → création d'un lead CRM, puis « Nouveau devis ». Import PROF2 et portail hors périmètre de formation actuel."},
+  {n:2,role:"commercial",t:"Qualification & devis",d:"Devis complété dans Ventes : lignes, produits, zone, chantier ; puis envoi au client."},
+  {n:3,role:"commercial",t:"Signature commande",d:"Confirmation → wizard signature → PDF envoyé à Zeendoc."},
+  {n:4,role:"commercial",t:"Acompte (si requis)",d:"Deux temps : demande envoyée au client, puis facture d'acompte une fois l'encaissement constaté."},
+  {n:5,role:"logistique",t:"Validation Appro/Fab",d:"Parcours A : la signature suffit. Parcours B : validation manuelle en deux temps."},
+  {n:6,role:"logistique",t:"Approvisionnement",d:"Besoins par catégorie, choix stock ou commande fournisseur, contrôle stock validé."},
+  {n:7,role:"logistique",t:"Planification",d:"Semaines de fabrication + livraisons au jour près, tournées auto-liées."},
+  {n:8,role:"atelier",t:"Bon de Préparation",d:"1 SO = 1 BP. Composition détaillée par unité, remis à l'atelier."},
+  {n:9,role:"atelier",t:"Bon de Chargement",d:"1 BP peut donner N BC. Chargements partiels supportés, rappel J-7."},
+  {n:10,role:"chauffeur",t:"Batch livraison (BL)",d:"N BC groupés par client. Document à faire signer par le client."},
+  {n:11,role:"comptable",t:"Facture + BL signé",d:"BL signé copié en pièce jointe de la facture. Boucle fermée et tracée."}
+ ],
+ carte:[
+  {tag:"Slide 2",title:"Avant / Maintenant",kind:"compare",data:{
+   head:["Avant","Maintenant"],rows:[
+    ["1 seul PDF papier « BL » servait de BP + BC + BL","3 docs distincts (BP, BC, BL) traçables dans Odoo"],
+    ["Recopie manuelle sur chaque document","Chaîne : SO → BP → BC → Batch → Facture"],
+    ["Pas de signature électronique intégrée","Widget signature client + auto-copie du PDF sur la facture"],
+    ["Suivi livraison sur Excel / papier","Menu « Livraisons planifiées » + activités auto J-7"],
+    ["Import PROF2 : produit unique à corriger à la main","Bouton ⇄ « Changer produit sans altérer la ligne »"],
+    ["Pas de trace client multi-commandes camion","Batch livraison groupe plusieurs SO d'un même client"],
+    ["Pas de rappel logistique","Cron J-7 crée une activité pour Anna-Laura"]
+  ]}},
+  {tag:"Annexe",title:"Rôles & responsabilités",kind:"roles",colLabel:"Étapes",data:[
+   ["commercial","Commercial","1–4","Création devis, qualification produits, envoi signature, gestion acompte"],
+   ["logistique","Anna-Laura (logistique)","5–10","Validation appro, planification livraisons, création BC + batches, impressions"],
+   ["atelier","Atelier","8–9","Préparation matières (BP), chargement camion (BC)"],
+   ["chauffeur","Chauffeur","10–11","Livraison, faire signer le BL par le client"],
+   ["comptable","Comptable","11","Facturation, archivage Zeendoc, encaissement du solde"]
+  ]},
+  {tag:"Slide 11",title:"Points clés à retenir",kind:"kp",data:[
+   "<b>1 SO = 1 BP</b> unique — le bouton stat ouvre le BP existant s'il est déjà créé.",
+   "<b>1 BP → N BC</b> — les chargements successifs partiels sont supportés.",
+   "<b>1 BC = 1 SO</b> — mais N BC peuvent être groupés dans 1 batch (par client).",
+   "Boutons stat SO, gauche→droite : Ordre fab · BP · BC · Batch · Livraison native · Factures.",
+   "Couleur des boutons : <b>gris</b> = 0 doc, <b>violet Odoo</b> = ≥ 1 doc.",
+   "Rappel <b>J-7 automatique</b> sur une activité assignée à Anna-Laura.",
+   "3 impressions PDF : BP (atelier, portrait) · BC (atelier+chauffeur, paysage) · BL (chauffeur+client, paysage).",
+   "Composition produit : configurée une fois par produit, puis auto-remplie sur tous les BP."
+  ]}
+ ],
+ slides:[
+  {kick:"Slide 1 · Étapes 1 → 11",role:"logistique",title:"Vue d'ensemble du workflow",goal:"De la demande de devis à la livraison signée, en 11 étapes.",body:`
+   <h4>La chaîne documentaire</h4>
+   <ul><li><code>SO</code> → <code>Bon de Préparation</code> → <code>Bon de Chargement</code> → <code>Batch livraison</code> → <code>Facture</code></li>
+   <li>Chaque maillon laisse une trace et une preuve papier attachée</li></ul>
+   <h4>Rôles impliqués</h4>
+   <ul><li><b>Commercial</b> — étapes 1 à 4</li><li><b>Anna-Laura (logistique)</b> — étapes 5 à 10</li>
+   <li><b>Atelier</b> — étapes 8 à 9</li><li><b>Chauffeur</b> — étapes 10 à 11</li><li><b>Comptable</b> — étape 11</li></ul>`},
+  {kick:"Slide 2 · Le changement",role:"commercial",title:"Avant / Maintenant",goal:"Un seul PDF papier faisait tout. Désormais chaque étape est distincte et tracée.",body:`
+   <h4>Avant</h4><ul><li>1 PDF « BL » servait de BP + BC + BL, recopié à la main</li>
+   <li>Pas de signature électronique, suivi sur Excel / papier</li>
+   <li>Import PROF2 à corriger à la main, aucun rappel logistique</li></ul>
+   <h4>Maintenant</h4><ul><li>3 documents distincts traçables : BP, BC, BL</li>
+   <li>Chaîne <code>SO → BP → BC → Batch → Facture</code></li>
+   <li>Signature client + auto-copie du PDF sur la facture</li>
+   <li>Menu « Livraisons planifiées », rappel cron J-7, batch multi-SO par client</li></ul>`},
+  {kick:"Slide 3 · Étapes 1-2",role:"commercial",title:"Demande de devis & Devis",goal:"Réceptionner une demande, la qualifier en CRM, produire le devis dans Ventes.",body:`
+   <h4>Flux</h4><ul><li>Demande client (tél, email, RDV) → <b>CRM Lead</b> → <b>Qualification & devis</b> (Ventes) → <b>Envoi</b> au client</li></ul>
+   <h4>Actions clés du commercial</h4><ul><li>Réceptionner la demande (téléphone, email, contact commercial)</li>
+   <li>Créer un <b>CRM Lead</b> : nom du chantier, contact, description du besoin</li>
+   <li>Depuis le lead → « Nouveau devis » → un <code>sale.order</code> en Brouillon lié à l'opportunité</li>
+   <li>Compléter le devis : lignes, quantités, prix, TVA</li>
+   <li>Renseigner Nom chantier, Zone de livraison, Adresse chantier, contact sur place</li>
+   <li>Choisir le parcours de validation (A direct / B deux temps) dans la checklist</li>
+   <li>Envoyer au client pour validation</li></ul>
+   <div class="res"><b>Note :</b> l'import PRO-F2 et le portail client sont hors périmètre de formation actuel — on y reviendra plus tard.</div>`},
+  {kick:"Slide 4 · Étapes 3-4",role:"commercial",title:"Signature & Acompte",goal:"Officialiser la commande, puis gérer l'acompte en deux temps.",body:`
+   <h4>Signature commande</h4><ul><li>Bouton Confirmer → wizard signature, mode « signature »</li>
+   <li>PDF envoyé à l'adresse Zeendoc dédiée (SIAL / Isula)</li>
+   <li>Au retour signé : cocher « Commande signée » dans la checklist</li></ul>
+   <h4>Acompte — flux en 2 temps</h4>
+   <ul><li><b>A · Demande</b> — bouton « Demande d'acompte » (<code>sale.deposit.wizard</code>) : envoie une demande au client (message + email), <b>ne crée PAS de facture</b> à ce stade. → <code>x_acompte_requis = True</code>, <code>x_acompte_date_demande</code> renseigné</li>
+   <li><b>B · Facture (une fois encaissé)</b> — le client paie → l'encaissement bascule <code>x_acompte_encaisse = True</code> (rapprochement ou manuel). Alors seulement : générer la vraie facture d'acompte (posted, FA#####), déduite ensuite de la facture de solde</li></ul>
+   <h4>Menu Acomptes (Ventes → Acomptes)</h4>
+   <ul><li><b>À demander</b> : <code>x_acompte_requis=True</code>, date de demande vide</li>
+   <li><b>Demandés non payés</b> : demande envoyée, pas encore encaissée</li></ul>
+   <div class="res"><b>Pas d'acompte :</b> cocher <code>x_acompte_dispense = True</code> — case retirée automatiquement si un acompte est encaissé.</div>`},
+  {kick:"Slide 5 · Étapes 5-6",role:"logistique",title:"Validation & Approvisionnement",goal:"Autoriser la fabrication, puis sécuriser la matière.",body:`
+   <h4>Validation Appro/Fab</h4><ul><li><b>Parcours A (direct)</b> — la signature vaut validation automatiquement</li>
+   <li><b>Parcours B (deux temps)</b> — cocher explicitement « Validation Appro/Fab effectuée »</li></ul>
+   <h4>Bloc Approvisionnement</h4><ul><li>« Besoins » : cocher les 7 catégories (Profils alu, PVC, Quincaillerie, Poignées, Vitrage, Pattes, Volets)</li>
+   <li>Cocher « Besoin matière établi » → fige la liste</li>
+   <li>« Statut » : Stock et/ou Commande fournisseur par catégorie</li>
+   <li>Si un Stock coché → « Contrôle stock demandé » auto ; valider après audit physique</li>
+   <li>« Appro complet » ✅ quand tout est satisfait</li></ul>`},
+  {kick:"Slide 6 · Étape 7",role:"logistique",title:"Planification livraisons + tournées",goal:"Définir quand fabriquer et livrer, avec tournée auto-liée.",body:`
+   <h4>Bloc Livraison</h4><ul><li>Tableau « Livraisons planifiées » — 1 ligne par livraison, au jour précis</li>
+   <li>Colonnes : Jour · Semaine (auto) · Tournée (auto) · Transporteur · Adresse validée · Client prévenu · J-7 · Livré · BL signé · Réserves</li></ul>
+   <h4>Tournée = triplet (Semaine + Zone + Transporteur)</h4><ul><li>Auto-création si combinaison inexistante · ré-utilisation si existante · 1 tournée = 1 camion</li></ul>
+   <h4>Menu dédié logistique</h4><ul><li>Ventes → Livraisons &amp; Tournées : Livraisons planifiées · Tournées · Transporteurs</li></ul>`},
+  {kick:"Slide 7 · Étape 8",role:"atelier",title:"Bon de Préparation (BP)",goal:"Produire le document atelier avec compositions détaillées.",body:`
+   <h4>Création</h4><ul><li>Sur SO état <code>sale</code> → bouton stat « Bon de préparation »</li>
+   <li>Aucun BP : création + prefill 1 ligne par ligne SO (services / non livrables exclus)</li>
+   <li>BP existant : ouverture directe (pas de doublon)</li></ul>
+   <h4>Édition</h4><ul><li>Clic sur une ligne → popup composition (par unité)</li>
+   <li>Composition = types × qté par unité (ex : 1 Dormant + 2 Ouvrants + 2 Vitrages)</li>
+   <li>Total = Par unité × Qté commandée</li></ul>
+   <div class="res">Validation : <b>« Marquer prêt »</b>. Impression : PDF portrait A4 avec cases à cocher, remis à l'atelier.</div>`},
+  {kick:"Slide 8 · Étape 9",role:"atelier",title:"Bon de Chargement (BC)",goal:"Produire le doc atelier + chauffeur pour un chargement précis.",body:`
+   <h4>Rappel automatique</h4><ul><li>Cron quotidien : activité « Préparer le BC » sur le BP, assignée à Anna-Laura, 7 jours avant la livraison</li></ul>
+   <h4>Création</h4><ul><li>Sur BP état « Prêt » → bouton orange « Nouveau bon de chargement »</li>
+   <li>Wizard : cocher les lignes + ajuster ; saisir Date · Transporteur · Immat · Poids · Palettes · Cartons</li></ul>
+   <h4>Après chargement physique</h4><ul><li>« Confirmer le chargement » → met à jour les qtés sur le BP</li>
+   <li>Le bouton orange reste visible tant qu'il reste des qtés (2ᵉ camion)</li></ul>
+   <div class="res">Impression : PDF paysage A4 style VISTA (4 colonnes).</div>`},
+  {kick:"Slide 9 · Étape 10",role:"chauffeur",title:"Batch livraison (BL client)",goal:"Le document client à faire signer à la livraison.",body:`
+   <h4>Création par Anna-Laura</h4><ul><li>Menu Ventes → Bons de chargement, filtre « Chargés »</li>
+   <li>Cocher plusieurs BC → Actions → « Créer batch de livraison » → wizard groupé par client</li>
+   <li>Chaque batch = 1 client + N pickings inclus</li></ul>
+   <h4>Sur le batch</h4><ul><li>Champs auto : Client · Adresse · Transporteur · Immat</li>
+   <li>Widget signature client (dessin sur tablette possible)</li></ul>
+   <div class="res">Impression : PDF paysage A4 titré « <b>BON DE LIVRAISON</b> ». Le chauffeur repart avec les BL à faire signer.</div>`},
+  {kick:"Slide 10 · Étape 11",role:"comptable",title:"Signature + Facturation",goal:"Clôturer, tracer la preuve, transmettre à la comptabilité.",body:`
+   <h4>Retour du chauffeur</h4><ul><li>Anna-Laura récupère les BL papier signés</li>
+   <li>Scan PDF → chatter du batch (ou signature Odoo directe)</li>
+   <li>« Marquer signé » → <code>x_signature_bool = True</code>, <code>x_bl_signe = True</code>, copie des PDF vers les factures des SO couvertes</li></ul>
+   <h4>Facturation</h4><ul><li>SO → « Créer facture » (BL signé déjà en pièce jointe)</li>
+   <li>Respecte l'invoice_policy et les lignes <code>x_non_livrable</code></li></ul>
+   <div class="res"><b>Chaîne complète tracée :</b> SO → BP → BC → Batch → Facture.</div>`},
+  {kick:"Slide 11 · Bonus",role:"logistique",title:"Points clés à retenir",goal:"Les huit réflexes du workflow.",body:`
+   <ul><li><b>1 SO = 1 BP</b> unique — le bouton stat rouvre le BP existant</li>
+   <li><b>1 BP → N BC</b> — chargements successifs partiels supportés</li>
+   <li><b>1 BC = 1 SO</b> — mais N BC groupables dans 1 batch (par client)</li>
+   <li>Boutons stat SO : Ordre fab · BP · BC · Batch · Livraison native · Factures</li>
+   <li>Couleur boutons : gris = 0 doc, violet Odoo = ≥ 1 doc</li>
+   <li>Rappel <b>J-7 automatique</b> sur activité Anna-Laura</li>
+   <li>3 impressions PDF : BP (portrait) · BC (paysage) · BL (paysage)</li>
+   <li>Composition produit : configurée une fois, auto-remplie ensuite</li></ul>`}
+ ],
+ chapters:[
+  {n:1,role:"commercial",by:"annalaura",title:"Créer une demande de devis",obj:"Recevoir une demande client et créer le devis dans Odoo (saisie manuelle via CRM Lead).",prereq:"Contact client existant dans Odoo (ou créé à la volée).",body:`
+   <ol class="steps"><li>Réception de la demande : téléphone, email, RDV commercial, visite chantier</li>
+   <li><b>Créer le CRM Lead</b> (CRM → Opportunités, ou Ventes → Ma pipeline → « Nouveau ») :
+     <ul><li>Nom opportunité (ex : « Fenêtres coulissantes maison DURAND »)</li>
+     <li>Client : sélectionner ou créer (« Créer et modifier »)</li>
+     <li>Nom du chantier (<code>x_nom_chantier</code>) · Description du besoin · Vendeur assigné</li>
+     <li>Étape pipeline : Nouveau / Qualifié / Devis envoyé / Signé</li></ul></li>
+   <li><b>Créer le devis depuis le lead</b> : bouton « Nouveau devis » → <code>sale.order</code> en Brouillon lié à l'opportunité (<code>opportunity_id</code>) ; le nom du chantier est propagé</li>
+   <li><b>Compléter le devis</b> (Ventes) :
+     <ul><li>Vérifier Client, Date, Vendeur, Société (SIAL / VISTA / Isula)</li>
+     <li>Ajouter les lignes : Produit · Description · Quantité · Prix unitaire · TVA</li>
+     <li>Onglet Livraison : Zone livraison · Adresse chantier · Contact sur place</li>
+     <li>Checklist → bloc COMMERCIAL : Parcours validation (A direct / B deux temps)</li></ul></li>
+   <li><b>Envoyer</b> : « Envoyer par email » → le devis passe en « Devis envoyé »</li></ol>
+   <div class="res-final"><b>Résultat :</b> devis envoyé au client, prêt à être signé (chap. 3).</div>`,
+   faq:[["Pourquoi passer par le CRM Lead ?","Traçabilité de l'origine commerciale, statistiques pipeline, historique des interactions avant devis."],["Le client n'existe pas encore ?","Le créer à la volée depuis le lead ou le devis."],["Brouillon vs Devis envoyé ?","Un brouillon n'a pas été partagé ; un devis envoyé est officiellement transmis au client."]]},
+  {n:2,role:"commercial",by:"marianne",title:"Créer le devis Odoo depuis PRO F2",obj:"Transcrire dans Odoo un devis PRO F2 validé (chiffrage + marge).",prereq:"Devis PDF PRO F2 avec marge validée · CRM Lead créé par Anna-Laura. 📍 Ventes → Devis.",body:`
+   <ol class="steps"><li>Menu « Ventes → Devis » → bouton « Nouveau »</li>
+   <li>Formulaire : Client · Vendeur (Marianne) · date d'expiration (optionnel)</li>
+   <li>Bloc « Informations complémentaires » : <b>Opportunité (CRM Lead)</b> créé par Anna-Laura → le nom du chantier se propage automatiquement</li>
+   <li>Bloc « Livraison » : Zone de livraison · Adresse chantier · Créneau</li>
+   <li>Ajouter les lignes : Produit (« Menuiserie sur-mesure » temporaire si pas encore configuré) · Description = libellé PRO F2 · Quantité · Prix unitaire · TVA</li>
+   <li>Onglet « Checklist » → Parcours validation : A (direct) ou B (deux temps)</li>
+   <li>Sauver (nuage)</li></ol>
+   <div class="res-final"><b>Résultat :</b> devis en état « Devis », prêt à envoyer pour signature (chap. 3).</div>`,
+   warn:"Le chiffrage se fait dans PRO F2 (hors Odoo) — Marianne en primary, Michaël en soutien. Odoo prend le relais à la transcription du devis. Oublier la zone de livraison → tournée non auto-liée plus tard.",faq:[]},
+  {n:3,role:"commercial",by:"marianne",title:"Envoyer le devis client pour signature",obj:"Envoyer le devis pour signature — cette signature vaut engagement de commande.",prereq:"Devis en état « Devis » ou « Devis envoyé ». 📍 Ventes → Devis.",body:`
+   <ol class="steps"><li>Ouvrir le devis (Ventes → Devis)</li>
+   <li>Bouton « Envoyer par email » (ou « Confirmer ») → wizard</li>
+   <li>Mode « Signature électronique via ZEENDOC » (recommandé) ou « email simple »</li>
+   <li>Vérifier le destinataire → « Envoyer »</li>
+   <li>PDF envoyé à <code>commandes.pj.sial_apertura@zeenmail.com</code> (SIAL) → <code>x_signature_sent = True</code>, date remplie</li>
+   <li>Devis en état « Devis envoyé »</li></ol>
+   <div class="route">Retour de signature</div>
+   <ol class="steps"><li>Le client signe (retour papier ou plateforme)</li>
+   <li>Ouvrir le devis signé → Checklist → bloc COMMERCIAL → cocher « Commande signée » (<code>x_commande_signee_date</code> remplie)</li>
+   <li><b>Anna-Laura</b> clique « Confirmer » → le devis devient Commande (<code>state = sale</code>)</li></ol>
+   <div class="res-final"><b>Résultat :</b> commande officialisée, le workflow avance. La signature du devis = engagement de commande.</div>`,
+   faq:[["Le mail Zeendoc ne part pas ?","Vérifier la config Microsoft 365 OAuth2 et <code>email_from = m.massiani@groupe-vista.fr</code>."],["Signature papier ?","Scanner le devis signé, l'attacher au chatter, puis cocher « Commande signée »."]]},
+  {n:4,role:"commercial",title:"Demander et facturer l'acompte",obj:"Anna-Laura envoie la demande ; Émilie suit l'encaissement puis facture.",prereq:"SO signée, <code>x_commande_signee = True</code>.",body:`
+   <div class="route">Phase A — Demande d'acompte · 👤 Anna-Laura</div>
+   <ol class="steps"><li>Ouvrir la SO signée</li>
+   <li>Bouton « Demande d'acompte » (icône fa-money, si <code>state = sale</code>)</li>
+   <li>Wizard <code>sale.deposit.wizard</code> : pourcentage ou montant fixe (30-40 % HT) + description libre</li>
+   <li>« Valider » → un message est envoyé au client (email + chatter) — c'est une <b>demande</b>, pas une facture officielle. → <code>x_acompte_requis = True</code>, <code>x_acompte_date_demande = today</code></li>
+   <li>Le client reçoit la demande → paie sous quelques jours</li></ol>
+   <div class="route">Phase B — Suivi & encaissement · 👤 Émilie</div>
+   <ol class="steps"><li>Émilie surveille les entrées bancaires via le rapprochement (Compta → Banque)</li>
+   <li>Quand l'acompte arrive et est rapproché → <code>x_acompte_encaisse = True</code> automatiquement</li></ol>
+   <div class="route">Phase C — Facturation · 👤 Émilie (une fois encaissé)</div>
+   <ol class="steps"><li>Une fois <code>x_acompte_encaisse = True</code> : SO → « Créer facture » → « Acompte (pourcentage) » ou « (montant fixe) »</li>
+   <li>Valider → facture d'acompte en Brouillon</li>
+   <li>Vérifier + « Confirmer » → posted → FA##### (matérialise juridiquement l'acompte reçu)</li>
+   <li>Envoyer au client + archiver ZEENDOC</li></ol>
+   <div class="res-final"><b>Résultat :</b> acompte demandé (Anna-Laura), payé (client), facturé (Émilie, 48h). Il sera déduit de la facture de solde. Pas d'acompte : cocher « Acompte non requis (dispense) » (retirée si un acompte est encaissé).</div>`,
+   warn:"Ne PAS créer la facture d'acompte AVANT l'encaissement (sinon on facture ce qui n'est pas payé). Toujours faire la demande d'abord. Régime TVA cash basis SIAL : la TVA de l'acompte n'est due qu'à l'encaissement, pas à la facturation posted.",
+   faq:[["Le client a payé avant la demande officielle ?","Faire la demande a posteriori pour la cohérence, puis facturer immédiatement."],["L'acompte diffère du % demandé ?","Ajuster le wizard « Créer facture » avec le montant réellement encaissé."],["Plusieurs acomptes échelonnés ?","Faire plusieurs demandes + plusieurs factures d'acompte selon les paiements."]]},
+  {n:5,role:"logistique",title:"Validation Appro/Fab",obj:"Signal formel : la commande peut passer en appro / fabrication.",prereq:"SO signée, parcours choisi.",body:`
+   <div class="route">Parcours A (direct)</div>
+   <ol class="steps"><li>Rien à faire — cocher « Commande signée » suffit</li><li>→ <code>x_ck_validee_appro_ou_fab = True</code> automatiquement</li></ol>
+   <div class="route">Parcours B (deux temps)</div>
+   <ol class="steps"><li>SO → Checklist → bloc COMMERCIAL</li><li>Vérifier « Parcours validation » = « Deux temps »</li>
+   <li>Cocher « Validation Appro/Fab effectuée » (<code>x_appro_fab_validee</code>)</li>
+   <li>→ date remplie, <code>x_ck_validee_appro_ou_fab</code> bascule à True</li></ol>
+   <div class="res-final"><b>Filtre utile :</b> Ventes → Commandes → « Validation Appro/Fab en attente (parcours B) ».</div>`,faq:[]},
+  {n:6,role:"logistique",title:"Approvisionnement",obj:"Identifier les besoins, choisir stock vs commande, valider le contrôle stock.",prereq:"SO signée + validation Appro/Fab OK.",body:`
+   <ol class="steps"><li>SO → Checklist → bloc APPROVISIONNEMENT</li>
+   <li>« Besoins » : cocher les catégories (Profils alu, PVC, Quincaillerie, Poignées, Vitrage, Pattes, Volets) + « Besoin matière établi »</li>
+   <li>« Statut » : Stock et/ou Commande fournisseur (les deux possibles)</li>
+   <li>Contrôle stock : un « Stock » coché → « Contrôle stock demandé » auto ; valider après vérif physique</li>
+   <li>« Appro complet » (<code>x_ck_appro_complet</code>) → True quand tout est satisfait</li></ol>
+   <div class="res-final"><b>Filtre utile :</b> « Besoin matière pas établi » / « Commandes matière pas passées ».</div>`,
+   warn:"Une fois « Besoin matière établi » coché, si vous modifiez la liste des besoins, réajustez-la manuellement (pas de gel automatique).",faq:[]},
+  {n:7,role:"logistique",title:"Planifier fab + livraisons + tournées",obj:"Définir quand fabriquer et livrer, avec auto-liaison à la tournée.",prereq:"Appro OK, commande signée.",body:`
+   <ol class="steps"><li>SO → Checklist → bloc FABRICATION</li>
+   <li>« Semaines de fabrication planifiées » : Ajouter une ligne → date ; cocher « Dossier fab prêt » et « QC terminé »</li>
+   <li>Bloc LIVRAISON — la <b>Zone livraison</b> doit être renseignée (sinon la tournée ne s'auto-lie pas)</li>
+   <li>« Livraisons planifiées » : Jour (date précise) · Semaine (auto « S30/2026 ») · Tournée (auto) · Transporteur (<code>x.transporteur</code>)</li>
+   <li>Colonnes optionnelles : Adresse validée · Client prévenu · J-7 · Livré · BL signé · Réserves</li>
+   <li>Plusieurs livraisons la même semaine : plusieurs lignes à des jours différents</li></ol>
+   <div class="res-final"><b>Menu Anna-Laura :</b> Ventes → Livraisons &amp; Tournées (À venir · Passées · À préparer J-7 · À signer · Signées · Avec réserves).</div>`,faq:[]},
+  {n:8,role:"atelier",by:"marianne",title:"Créer et imprimer le Bon de Préparation",obj:"Produire le document atelier avec compositions détaillées (dossier fab technique).",prereq:"SO en état « sale ». Rôle : Marianne, pas Anna-Laura. Détail complet dans le thème Fabrication (chap. F1).",body:`
+   <ol class="steps"><li>Ouvrir la SO</li>
+   <li>Bouton stat « Bon de préparation » (<code>fa-list-ol</code>) : aucun BP → création auto + prefill ; BP existant → ouverture directe</li>
+   <li>Sur le BP « Brouillon » : clic ligne → popup composition (Type + Qté par unité) ; « Qté totale » = par unité × Qté commandée</li>
+   <li>Composition par défaut du produit → tout pré-rempli, ajuster ponctuellement</li>
+   <li>Vérifier l'onglet « Résumé par type »</li>
+   <li>« Marquer prêt » → état « Prêt »</li>
+   <li>Imprimer → « Bon de préparation » (PDF portrait A4, cases ☐, bas de page Date/Opérateur/CQ)</li></ol>
+   <div class="res-final"><b>Résultat :</b> l'atelier a la liste précise et cochable de tout ce qu'il doit préparer.</div>`,
+   faq:[["« Repeupler depuis la commande » ?","Efface les lignes et re-prefill depuis la SO — uniquement en Brouillon si la SO a changé."],["Composition par défaut d'un produit ?","Produit → onglet « Composition chargement » → ajouter types et qtés par unité."]]},
+  {n:9,role:"atelier",title:"Créer et imprimer le Bon de Chargement",obj:"Produire le doc atelier + chauffeur pour un chargement précis.",prereq:"BP en état « Prêt ».",body:`
+   <div class="callout note"><span class="ic">⏰</span><span><b>Rappel J-7 :</b> chaque matin, si une livraison est prévue dans 7 jours sans BC lié, une activité « Préparer le bon de chargement » est créée sur le BP et assignée à Anna-Laura.</span></div>
+   <ol class="steps"><li>Ouvrir le BP (via l'activité ou Ventes → Bons de préparation)</li>
+   <li>Bouton orange « Nouveau bon de chargement »</li>
+   <li>Wizard : Date · Transporteur · Immat · Poids · Palettes · Cartons ; tableau par ligne</li>
+   <li>Décocher les lignes qui ne partent PAS dans ce camion</li>
+   <li>Ajuster les qtés si partiel</li>
+   <li>« Créer le bon de chargement » → BC en Brouillon</li>
+   <li>Imprimer → « Bon de chargement » (PDF paysage A4, 4 colonnes) pour l'atelier</li>
+   <li>Après chargement : ajuster les qtés → « Confirmer le chargement » → « Chargé »</li>
+   <li>2ᵉ chargement : bouton orange visible tant que <code>x_fully_loaded = False</code></li></ol>
+   <div class="res-final"><b>Résultat :</b> BC confirmés, prêts à être groupés en batch.</div>`,
+   warn:"Ne confirmer le BC qu'après validation physique par l'atelier — le chargement est-il conforme au BC papier ?",faq:[]},
+  {n:10,role:"chauffeur",title:"Créer et imprimer le Batch livraison",obj:"Produire le document client à faire signer, éventuellement multi-SO.",prereq:"Au moins 1 BC en état « Chargé ».",body:`
+   <ol class="steps"><li>Menu Ventes → Bons de chargement</li><li>Filtre « Chargés »</li>
+   <li>Cocher plusieurs BC (même SO, SO différentes, un ou plusieurs clients)</li>
+   <li>Actions → « Créer batch de livraison »</li>
+   <li>Wizard : nombre de batches (1 par client distinct)</li>
+   <li>Vérifier la liste des clients</li>
+   <li>« Créer » : 1 <code>stock.picking.batch</code> par client ; adresse/transporteur/immat copiés du 1ᵉʳ BC</li>
+   <li>Ouvrir le batch (Inventaire → Transferts par lots)</li>
+   <li>Vérifier : Adresse · Transporteur · Immat</li>
+   <li>Imprimer → « Bon de livraison » (zones signature réceptionnaire + chauffeur)</li>
+   <li>Remettre au chauffeur : « faire signer par le client »</li></ol>
+   <div class="res-final"><b>Résultat :</b> le camion peut partir avec les BL à signer.</div>`,
+   faq:[["Un BC déjà dans un batch réapparaît ?","Le wizard le refuse (anti-doublon)."],["Contrainte « même client par batch » ?","Oui — <code>_check_same_partner</code> empêche 2 clients dans un même batch."]]},
+  {n:11,role:"comptable",title:"Signature client + Facturation",obj:"Clôturer la livraison, tracer la preuve, transmettre à la comptable.",prereq:"Batch créé, chauffeur revenu avec le BL signé.",body:`
+   <div class="route">Option A — Signature papier scannée</div>
+   <ol class="steps"><li>Anna-Laura scanne le BL signé</li><li>Ouvre le batch (Inventaire → Transferts par lots)</li><li>Glisser-déposer le PDF dans le chatter</li></ol>
+   <div class="route">Option B — Signature électronique</div>
+   <ol class="steps"><li>Ouvrir le batch sur tablette</li><li>Widget signature dans <code>x_signature_image</code></li></ol>
+   <div class="route">Puis : clôturer et facturer</div>
+   <ol class="steps"><li>Nom du signataire (<code>x_signature_nom</code>) + Date</li>
+   <li>« Marquer signé » → <code>x_signature_bool = True</code>, <code>x_bl_signe = True</code>, PDF copiés vers les factures (<code>_propagate_signature</code>)</li>
+   <li>Facturation : SO → « Créer facture » (BL signé déjà attaché) ; <code>x_non_livrable</code> facturées si <code>invoice_policy = order</code></li>
+   <li>La comptable envoie + archive Zeendoc (<code>x_zeendoc_archived</code>)</li></ol>
+   <div class="res-final"><b>Boucle fermée :</b> SO → BP → BC → Batch → Picking natif → Facture avec BL signé attaché.</div>`,
+   faq:[["Où retrouver le BL signé ?","Chatter du batch + pièces jointes de la facture."],["Le client refuse de signer ?","Cocher « Réserves = Oui » sur la livraison planifiée, ajouter des notes."],["Signature partielle ?","Ne « Marquer signé » que si toute la livraison est acceptée. Sinon créer un batch pour le reliquat."]]}
+ ]
+};
+
+/* =================== WORKFLOW 2 · FACTURATION =================== */
+const WF_FACTURATION={
+ id:"facturation", name:"Facturation & comptabilité", sub:"De la commande signée à la facture soldée",
+ railH:"Les 9 étapes",
+ eyebrow:"Vue d'ensemble", pageTitle:"De la commande signée à la facture soldée",
+ lead:"Neuf étapes, de la génération de la facture au reporting de trésorerie. Régime TVA SIAL sur les <b>encaissements</b> : la TVA n'est due qu'au paiement, pas à la facturation.",
+ roles:{
+  commercial:{short:"Commercial",scope:"Étape 1",color:"#C27A4A"},
+  comptable:{short:"Comptable",scope:"Étapes 2–8",color:"#4F6B8B"},
+  recouvrement:{short:"Recouvrement",scope:"Étape 5",color:"#B0862B"},
+  direction:{short:"Direction",scope:"Étape 9",color:"#7A5C8E"}
+ },
+ steps:[
+  {n:1,label:"Génération facture",sub:"acompte · situation · solde · avoir",role:"commercial",deck:2,chap:0,who:"emilie",delai:"48h"},
+  {n:2,label:"Validation (posted)",sub:"numérotation FA#####",role:"comptable",deck:2,chap:0,who:"emilie"},
+  {n:3,label:"Envoi client + ZEENDOC",sub:"archivage légal",role:"comptable",deck:3,chap:2,who:"emilie",delai:"48h"},
+  {n:4,label:"Suivi paiement",sub:"échéancier",role:"comptable",deck:4,chap:3,who:"emilie",delai:"continu"},
+  {n:5,label:"Relance client",sub:"N1 → N2 → escalade",role:"recouvrement",deck:5,chap:4,who:"emilie",to:"marianne",delai:"N1 J+10 · N2 J+25 · N3 J+40"},
+  {n:6,label:"Encaissement",sub:"chèque · virement · prélèvement",role:"comptable",deck:6,chap:5,who:"emilie",delai:"continu"},
+  {n:7,label:"Rapprochement + lettrage",sub:"comptes 411",role:"comptable",deck:6,chap:6,who:"emilie",delai:"mensuel"},
+  {n:8,label:"TVA & CA3",sub:"cash basis",role:"comptable",deck:7,chap:8,who:"emilie",delai:"mensuel"},
+  {n:9,label:"Reporting & trésorerie",sub:"prévisionnel",role:"direction",deck:8,chap:9,who:"emilie",to:"erwan",delai:"hebdo · mensuel avant le 10"}
+ ],
+ flow:[
+  {n:1,role:"commercial",t:"Génération facture",d:"Acompte, situation de chantier, solde ou avoir — selon le stade du marché."},
+  {n:2,role:"comptable",t:"Validation (posted)",d:"La facture passe posted et reçoit son numéro FA#####, immuable."},
+  {n:3,role:"comptable",t:"Envoi + ZEENDOC",d:"Email client depuis m.massiani + archivage légal ZEENDOC, routé par société."},
+  {n:4,role:"comptable",t:"Suivi paiement",d:"Échéancier client, payment_state, amount_residual, module suivi factures."},
+  {n:5,role:"recouvrement",t:"Relance client",d:"Relance tracée (tél / email / courrier / recommandé) — manuelle pour l'instant."},
+  {n:6,role:"comptable",t:"Encaissement",d:"Chèque, virement ou prélèvement, via le compte d'attente 511100."},
+  {n:7,role:"comptable",t:"Rapprochement + lettrage",d:"Match relevé bancaire ↔ paiements, lettrage des comptes 411 par client."},
+  {n:8,role:"comptable",t:"TVA & CA3",d:"Régime encaissements (cash basis) : la TVA est due au paiement du client."},
+  {n:9,role:"direction",t:"Reporting & trésorerie",d:"Dashboards fiscaux + trésorerie prévisionnelle (cron quotidien 4 h)."}
+ ],
+ carte:[
+  {tag:"Slide 2",title:"Les types de factures",kind:"gtable",data:{cols:["Type","Quand","Journal","Séquence"],rows:[
+   ["Facture d'acompte","Une fois l'acompte encaissé (après la demande)","Customer Invoices SIAL (id=9)","<code>FA#####</code>"],
+   ["Facture de situation","Avancement chantier — cumulé HT × (RG 5 % + CP 2 %) déduits","Idem","<code>FA#####</code>"],
+   ["Facture de solde","À la livraison signée","Idem","<code>FA#####</code>"],
+   ["Avoir client","Litige, annulation, correction","Idem","<code>AV#####</code>"],
+   ["Import Sage historique","Écritures pré-Odoo (22-23, 23-24)","Idem","<code>FACS/25-26/####</code>"]
+  ]}},
+  {tag:"Annexe",title:"Rôles & responsabilités",kind:"roles",colLabel:"Chapitres",data:[
+   ["commercial","Commercial","1–2","Créer la facture (acompte + solde) depuis la SO"],
+   ["comptable","Comptable (Marianne)","3–9","Valider, envoyer, ZEENDOC, encaissement, lettrage, TVA"],
+   ["recouvrement","Chargé recouvrement","5","Relancer les clients en retard, gérer les litiges"],
+   ["direction","Direction","10","Piloter via les dashboards & la trésorerie prévisionnelle"]
+  ]},
+  {tag:"Annexe",title:"Journaux importants",kind:"gtable",data:{cols:["Société","Journal","Séquences"],rows:[
+   ["<span class='em'>SIAL</span>","Customer Invoices (id=9)","<code>FA#####</code> + <code>FACS/25-26/####</code>"],
+   ["<span class='em'>VISTA</span>","id=1 renommé « Compensations intra-groupe »","<code>FAC/25-26/####</code> (24 factures)"],
+   ["<span class='em'>Isula</span>","Customer Invoices ISULA","<code>FA#####</code>"],
+   ["<span class='em'>Banque SIAL</span>","BQS (unique)","Crédit Agricole — feed live"]
+  ]}},
+  {tag:"Annexe",title:"Comptes de configuration",kind:"gtable",data:{cols:["Compte","Usage"],rows:[
+   ["<code>411XXX</code> (153)","1 par client — grand livre auxiliaire"],
+   ["<code>411102</code>","Compensation intra-groupe SIAL / ISULA / VISTA"],
+   ["<code>401XXX</code> (218)","1 par fournisseur (180 SIAL + 33 Isula + 5 VISTA)"],
+   ["<code>401900</code>","Litiges fournisseurs"],
+   ["<code>401901</code>","Compensations intra-groupe fournisseurs"],
+   ["<code>511100</code>","Compte d'attente — paiements manuels"],
+   ["<code>445</code> spécifiques","TVA cash basis (6 taxes 10 % S)"],
+   ["<code>627</code>","Frais bancaires"]
+  ]}},
+  {tag:"Slide 10",title:"Points clés à retenir",kind:"kp",data:[
+   "<b>Facture posted = numéro attribué</b> (FA#####), immuable — utiliser un avoir pour corriger.",
+   "Le <b>BL signé</b> est attaché automatiquement à la facture (<code>_propagate_signature</code>).",
+   "<b>ZEENDOC obligatoire</b> pour SIAL et ISULA (routing par société).",
+   "<code>email_from = m.massiani@groupe-vista.fr</code> <b>obligatoire</b> (SMTP Microsoft 365).",
+   "<b>TVA cash basis</b> : TVA due à l'encaissement, pas à la facturation.",
+   "Relances <b>manuelles</b> pour l'instant (automations désactivées).",
+   "Rapprochement : compte <code>511100</code> obligatoire sur la payment.method.line.",
+   "Compensations intra-groupe : journal VISTA id=1 dédié.",
+   "Dashboards : exercice courant + précédent (01/08 – 31/07).",
+   "Cron trésorerie : refresh quotidien à 4 h 00."
+  ]},
+  {tag:"Annexe",title:"Points d'attention majeurs",kind:"attention",data:[
+   "<b>email_from obligatoire</b> — m.massiani@groupe-vista.fr (SMTP Microsoft 365 OAuth2).",
+   "<b>Régime TVA SIAL = encaissements</b> : la TVA n'est due qu'au paiement.",
+   "<b>ZEENDOC par société</b> : ne pas mélanger les adresses.",
+   "<b>Automations d'activités désactivées</b> depuis le 2026-06-02 : relances manuelles.",
+   "<b>Journaux hash chain</b> : activation de <code>restrict_mode_hash_table</code> à faire (fin juin / juillet 2026).",
+   "<b>Régularisations Sage</b> : 99 codes en écart, 920 k€ absolus à investiguer avec la comptable."
+  ]}
+ ],
+ slides:[
+  {kick:"Slide 1 · Étapes 1 → 9",role:"comptable",title:"Vue d'ensemble",goal:"De la commande signée + acompte reçu à la facture soldée, en 9 étapes.",body:`
+   <h4>La chaîne comptable</h4><ul><li>Génération → Validation → Envoi/ZEENDOC → Suivi → Relance → Encaissement → Rapprochement → TVA → Reporting</li></ul>
+   <h4>Rôles impliqués</h4><ul><li><b>Commercial</b> — déclenche la facture depuis la SO signée</li>
+   <li><b>Comptable (Marianne)</b> — validation, envoi, encaissement, lettrage, TVA</li>
+   <li><b>Chargé de recouvrement</b> — relances client</li><li><b>Direction</b> — reporting trésorerie & pilotage</li></ul>`},
+  {kick:"Slide 2 · Référentiel",role:"commercial",title:"Les types de factures",goal:"Cinq natures de factures cohabitent dans le journal SIAL (id=9).",body:`
+   <div id="slide-types"></div>
+   <h4>Coexistence des séquences (journal id=9 SIAL)</h4><ul><li>Factures Odoo natives → <code>FA#####</code> (après FA17574 → FA17575…)</li>
+   <li>Écritures Sage importées → <code>FACS/25-26/####</code></li></ul>
+   <div class="res"><b>Régime TVA SIAL :</b> sur les encaissements (cash basis). La CA3 est due quand le client règle. Comptes 445 spécifiques.</div>`},
+  {kick:"Slide 3 · Étapes 1-2",role:"comptable",title:"Génération & validation",goal:"Créer la facture depuis la SO, puis la valider.",body:`
+   <h4>Depuis la SO</h4><ul><li>Bouton « Créer facture » (ou wizard « Facturer les commandes »)</li>
+   <li>invoice_policy : <code>order</code> (facturé même sans livraison) · <code>delivery</code> (au fil des BL)</li>
+   <li>Lignes <code>x_non_livrable</code> facturées via <code>invoice_policy=order</code></li></ul>
+   <h4>Choix du mode</h4><ul><li>Facture régulière · Acompte (<code>sale.deposit.wizard</code>) · Situation (<code>vista_marches_collectifs</code>, RG/CP sur HT)</li></ul>
+   <h4>Validation</h4><ul><li>Facture en <b>draft</b> — vérifier lignes, date, TVA</li>
+   <li>« Confirmer » → <b>posted</b> → numéro FA#####</li>
+   <li>BL signé déjà attaché (<code>_copy_bl_attachments_to_invoices</code>)</li></ul>`},
+  {kick:"Slide 4 · Étape 3",role:"comptable",title:"Envoi client + ZEENDOC",goal:"Transmettre au client et garantir la traçabilité légale.",body:`
+   <h4>Envoi email</h4><ul><li>Facture posted → « Envoyer » → wizard email</li>
+   <li>Expéditeur <code>m.massiani@groupe-vista.fr</code> (contrainte SMTP from_filter)</li><li>Reply-To libre</li></ul>
+   <h4>Archivage ZEENDOC (<code>vista_zeendoc</code>)</h4><ul><li>Bouton « Envoyer sur ZEENDOC »</li>
+   <li>Routing par société :
+     <ul><li>VISTA → <code>fact.clts.pj_n1.sial_apertura@zeenmail.com</code></li>
+     <li>SIAL → <code>fact.clts.pj.sial_apertura@zeenmail.com</code></li>
+     <li>Isula → <code>isula.fact.clts.sial_apertura@zeenmail.com</code></li></ul></li>
+   <li><code>x_zeendoc_archived = True</code> empêche le double envoi</li></ul>
+   <div class="res">Facture envoyée au client <b>+</b> copie archivée dans ZEENDOC.</div>`},
+  {kick:"Slide 5 · Étape 4",role:"comptable",title:"Suivi paiement attendu",goal:"Vision claire des factures à encaisser et de leurs échéances.",body:`
+   <h4>Menus clés</h4><ul><li>Reporting → Balance âgée client (30 / 60 / 90 / +)</li>
+   <li>Clients → Factures : « À payer » / « En retard » / « Payées »</li>
+   <li>Dashboard fiscal : exercice courant + précédent (01/08 → 31/07)</li></ul>
+   <h4>Champs account.move</h4><ul><li><code>invoice_date_due</code> · <code>payment_state</code> · <code>amount_residual</code></li></ul>
+   <h4>vista_suivi_factures</h4><ul><li>2229 lignes importées · 1231 relances · kanban À relancer / Relancé / Litige / Payé</li></ul>`},
+  {kick:"Slide 6 · Étape 5",role:"recouvrement",title:"Relance client",goal:"Enregistrer une relance et garder la trace de la démarche.",body:`
+   <h4>Où</h4><ul><li>Comptabilité → Clients → Suivi factures (<code>vista_suivi_factures</code>)</li></ul>
+   <h4>Actions</h4><ul><li>Consulter les retards par client</li>
+   <li>Enregistrer une relance : type (Téléphone / Email / Courrier / Recommandé) + note → mail.message</li>
+   <li>Litige : bloque les relances auto · Report : nouvelle échéance négociée</li></ul>
+   <div class="res"><b>Note :</b> automations d'activités (ACT-*) désactivées depuis le 2026-06-02 — relances manuelles.</div>`},
+  {kick:"Slide 7 · Étapes 6-7",role:"comptable",title:"Encaissement & Rapprochement",goal:"Enregistrer les règlements et matcher la banque.",body:`
+   <h4>Enregistrer un paiement</h4><ul><li>Facture → « Enregistrer le paiement »</li>
+   <li>Journal (Banque SIAL / VISTA / Isula) · Mode (chèque, virement, prélèvement)</li>
+   <li>Compte d'attente <code>511100</code> obligatoire</li></ul>
+   <h4>Rapprochement bancaire</h4><ul><li>Comptabilité → Banque → Rapprochement · import CSV / relevé</li>
+   <li>Matchs auto (montant + date + partenaire) ; manuel pour regroupés / split</li></ul>
+   <h4>Lettrage 411</h4><ul><li>Comptes <code>411XXX</code> (153 depuis 2026-06-24) · avoirs · compensations (<code>411102</code>)</li></ul>`},
+  {kick:"Slide 8 · Étape 8",role:"comptable",title:"TVA & déclarations",goal:"Régime encaissements — la TVA n'est due qu'au paiement.",body:`
+   <h4>TVA sur les encaissements (SIAL)</h4><ul><li>Cash basis actif depuis le 2026-06-03 · 6 taxes 10 % S</li>
+   <li>Position fiscale SIAL mappe G → S · 143 comptes 70x/6xx configurés</li></ul>
+   <h4>Déclaration CA3 mensuelle</h4><ul><li>Reporting → Rapports fiscaux → Déclaration TVA · par période + société</li>
+   <li>Vérifier bases HT et taxes · export FEC / DGFiP</li></ul>
+   <h4>Points d'attention</h4><ul><li>Seules les factures encaissées génèrent la TVA due</li>
+   <li>CA intra-communautaire : country group « EU hors France/Monaco »</li>
+   <li>Crédit reporté fin avril 2026 = 10 964 €</li></ul>`},
+  {kick:"Slide 9 · Étape 9",role:"direction",title:"Reporting & Trésorerie prévisionnelle",goal:"Piloter la trésorerie et la performance mensuelle.",body:`
+   <h4>Dashboards (vista_dashboard_fiscal)</h4><ul><li>Ventes · Factures clients · Achats fournisseurs</li>
+   <li>Filtres par défaut : exercice courant + précédent</li></ul>
+   <h4>Trésorerie prévisionnelle (vista_tresorerie_previ)</h4><ul><li><code>vista.frais.fixe</code> : 17 lignes de flux récurrents</li>
+   <li>Onglet dédié (dashboard id=16) · <code>refresh_treso_dashboard()</code> · cron 4 h 00</li></ul>
+   <h4>Grand livre auxiliaire</h4><ul><li>153 comptes <code>411XXX</code> (1 par client)</li></ul>`},
+  {kick:"Slide 10 · Bonus",role:"comptable",title:"Points clés à retenir",goal:"Les dix réflexes de la chaîne facturation-comptabilité.",body:`
+   <ul><li><b>Facture posted</b> = numéro FA##### immuable — corriger par avoir</li>
+   <li><b>BL signé</b> attaché automatiquement</li><li><b>ZEENDOC obligatoire</b> pour SIAL et ISULA</li>
+   <li><code>email_from = m.massiani@groupe-vista.fr</code> obligatoire</li>
+   <li><b>TVA cash basis</b> : due à l'encaissement</li><li>Relances <b>manuelles</b></li>
+   <li>Rapprochement : compte <code>511100</code> obligatoire</li><li>Compensations : journal VISTA id=1</li>
+   <li>Dashboards : exercice courant + précédent</li><li>Cron trésorerie : 4 h 00</li></ul>`}
+ ],
+ chapters:[
+  {n:1,role:"commercial",title:"Créer une facture depuis une SO",obj:"Générer une facture client à partir d'une commande signée.",prereq:"SO en « sale » ou « done », commande signée, produits avec bonne TVA.",body:`
+   <ol class="steps"><li>Ventes → Commandes, ou ouvrir la SO</li>
+   <li>Bouton « Créer facture »</li>
+   <li>Wizard → Type : Facture normale · Acompte (%) · Acompte (montant fixe)</li>
+   <li>« Créer et voir la facture » → Brouillon</li>
+   <li>Vérifier : lignes · TVA (position fiscale ou « Changer TVA ») · dates (<code>payment_term_id</code>) · notes</li>
+   <li>Cas : <code>x_non_livrable</code> facturées si <code>order</code> · acompte déjà facturé déduit · marchés → <code>vista_marches_collectifs</code></li></ol>
+   <div class="res-final"><b>Résultat :</b> facture en Brouillon, prête à valider.</div>`,
+   faq:[["La facture est vide ?","Vérifier que la SO a des lignes non facturées (<code>invoice_status ≠ invoiced</code>)."],["La TVA est fausse ?","Vérifier <code>x_default_sale_tax_id</code> du client, ou bouton « Changer TVA »."],["Pose facturée sans livraison ?","<code>invoice_policy = order</code> — correct pour les services."]]},
+  {n:2,role:"commercial",title:"Facturer un acompte",obj:"Demander un acompte, puis le facturer une fois encaissé (souvent 30-40 % HT).",prereq:"SO signée, <code>x_commande_signee = True</code>.",body:`
+   <div class="route">A · Demande (pas de facture encore)</div>
+   <ol class="steps"><li>SO signée → bouton « Demande d'acompte » (<code>sale.deposit.wizard</code>)</li>
+   <li>% ou montant fixe + description → « Valider »</li>
+   <li>Message + email envoyés au client. → <code>x_acompte_requis = True</code>, <code>x_acompte_date_demande</code> renseigné (aucune facture posted à ce stade)</li></ol>
+   <div class="route">B · Encaissement</div>
+   <ol class="steps"><li>Ventes → Acomptes → « Demandés non payés »</li>
+   <li>Paiement reçu → enregistrer (chap. 6) → <code>x_acompte_encaisse = True</code></li></ol>
+   <div class="route">C · Facturation (une fois encaissé)</div>
+   <ol class="steps"><li>SO → « Créer facture » → « Acompte (pourcentage) » ou « (montant fixe) »</li>
+   <li>Brouillon → « Confirmer » → posted → FA#####</li>
+   <li>Envoyer + archiver ZEENDOC (chap. 3)</li></ol>
+   <div class="res-final"><b>Résultat :</b> acompte demandé, encaissé, puis facturé ; déduit ensuite de la facture de solde.</div>`,
+   warn:"Ne PAS facturer l'acompte avant l'encaissement (régime TVA cash basis SIAL : la TVA est due au paiement, pas à la facturation posted). L'acompte facturé est déduit automatiquement de la facture de solde — ne pas le re-facturer.",faq:[]},
+  {n:3,role:"comptable",title:"Envoyer la facture + archiver ZEENDOC",obj:"Transmettre au client et garantir la traçabilité légale via ZEENDOC.",prereq:"Facture Posted (validée, numérotée FA#####).",body:`
+   <div class="route">Envoi client</div>
+   <ol class="steps"><li>Ouvrir la facture</li><li>« Envoyer & Imprimer » ou « Envoyer par email »</li>
+   <li>De : <code>m.massiani@groupe-vista.fr</code> (obligatoire) · À : contact client · Reply-To libre</li>
+   <li>Pièces jointes auto : PDF facture + BL signé</li><li>« Envoyer »</li></ol>
+   <div class="route">Archivage ZEENDOC</div>
+   <ol class="steps"><li>Bouton « Envoyer sur ZEENDOC »</li>
+   <li>Mail auto selon société :
+     <ul><li>VISTA → <code>fact.clts.pj_n1.sial_apertura@zeenmail.com</code></li>
+     <li>SIAL → <code>fact.clts.pj.sial_apertura@zeenmail.com</code></li>
+     <li>Isula → <code>isula.fact.clts.sial_apertura@zeenmail.com</code></li></ul></li>
+   <li><code>x_zeendoc_archived = True</code> empêche le double envoi</li></ol>
+   <div class="res-final"><b>Résultat :</b> facture envoyée + archivée légalement.</div>`,
+   faq:[["Erreur SMTP ?","Vérifier <code>email_from = m.massiani@groupe-vista.fr</code>."],["ZEENDOC « déjà reçu » ?","<code>x_zeendoc_archived</code> déjà True — éviter le re-envoi."]]},
+  {n:4,role:"comptable",title:"Suivre les paiements attendus",obj:"Vision claire des factures à encaisser et de leur échéance.",prereq:"Factures postées.",body:`
+   <div class="route">Balance âgée native</div>
+   <ol class="steps"><li>Reporting → Balance âgée client</li><li>Filtres : date · société</li><li>Tranches Courant / 30 / 60 / 90 / +90j</li></ol>
+   <div class="route">Filtres factures & dashboard</div>
+   <ol class="steps"><li>Clients → Factures : « Non payées » / « En retard » / « Payées »</li>
+   <li>Dashboard fiscal : exercice courant + précédent</li>
+   <li>Grand livre → <code>411XXX</code> (153 comptes, 1 par client)</li></ol>
+   <div class="res-final"><b>Résultat :</b> liste consolidée par client / échéance / société.</div>`,faq:[]},
+  {n:5,role:"recouvrement",title:"Relancer un client en retard",obj:"Enregistrer une relance et garder une trace.",prereq:"Facture posted, en retard, <code>not_paid</code> ou <code>partial</code>.",body:`
+   <ol class="steps"><li>Comptabilité → Clients → Suivi factures</li>
+   <li>Filtres : « À relancer » (>15j ou aucune) · « En litige »</li>
+   <li>Clic ligne → fiche <code>vista.suivi.facture</code></li>
+   <li>« Enregistrer une relance » → <code>vista.suivi.echeance</code> : Type · date · note</li>
+   <li>Valider → relance + mail.message sur la facture</li>
+   <li>Email de relance (optionnel) depuis <code>m.massiani@groupe-vista.fr</code></li>
+   <li>Litige : marquer « En litige » + note du motif</li></ol>
+   <div class="callout note"><span class="ic">👥</span><span><b>Qui relance ? —</b> Les relances sont la responsabilité <b>exclusive d'Émilie</b> (N1 à J+10, N2 à J+25). <b>Anna-Laura</b> a un accès en <b>lecture seule</b> au module Suivi Factures : uniquement pour renseigner un client qui l'appelle (où en est sa facture, est-elle payée, quelle est la prochaine échéance) — elle ne relance pas. <b>Backup :</b> Anna-Laura ne fait une relance que si Émilie est absente et qu'un client insiste, et elle prévient Émilie dès son retour.</span></div>
+   <div class="res-final"><b>Résultat :</b> relance tracée, historique conservé.</div>`,
+   warn:"Automations d'activités (ACT-*) désactivées depuis le 2026-06-02 : relances manuelles, à réactiver progressivement.",faq:[]},
+  {n:6,role:"comptable",by:"emilie",title:"Enregistrer un paiement (secours)",obj:"Solution de secours : le rapprochement bancaire (chap. 7) est la voie normale et marque les factures payées automatiquement.",prereq:"Facture posted, règlement reçu hors feed bancaire (rare).",body:`
+   <div class="callout note"><span class="ic">ℹ️</span><span>En principe, <b>pas de saisie manuelle</b> : le rapprochement bancaire (chap. 7) suffit et marque la facture payée. N'utiliser ce chapitre que pour un cas particulier (chèque non rapproché, régularisation).</span></div>
+   <ol class="steps"><li>Ouvrir la facture → « Enregistrer le paiement »</li>
+   <li>Wizard : Journal (Banque SIAL / VISTA / Isula) · Mode · <code>511100</code> obligatoire · Montant · date · mémo</li>
+   <li>« Créer le paiement » → écriture (débit banque, crédit 411) → <code>in_payment</code></li>
+   <li>Après rapprochement → <code>paid</code></li></ol>
+   <div class="route">Cas particuliers</div>
+   <ol class="steps"><li>Partiel : montant < résiduel → <code>partial</code></li><li>Multi-factures : depuis le contact client → ventilation auto</li></ol>
+   <div class="res-final"><b>Résultat :</b> facture payée (ou en attente de rapprochement).</div>`,
+   warn:"Le compte 511100 est OBLIGATOIRE sur la payment.method.line, sinon la facture reste ouverte même après paiement.",faq:[]},
+  {n:7,role:"comptable",by:"emilie",title:"Rapprocher un relevé bancaire",obj:"Voie normale des règlements : matcher la banque et laisser Odoo marquer les factures payées automatiquement.",prereq:"Feed bancaire actif (SIAL) ou CSV / OFX disponible. ⏰ quotidien recommandé.",body:`
+   <div class="callout note"><span class="ic">📡</span><span><b>Feed live SIAL :</b> compte Crédit Agricole (journal BQS unique) alimenté automatiquement depuis le 2026-06-03.</span></div>
+   <ol class="steps"><li>Comptabilité → Banque (dashboard) : widget « X éléments à rapprocher »</li>
+   <li>Import manuel si besoin : « Importer un relevé » → fichier → relevé + lignes</li>
+   <li>« Rapprocher X éléments »</li>
+   <li>Match auto (montant + partenaire) → « Valider » · sinon manuel / split</li>
+   <li>Cas spéciaux : frais bancaires → compte <code>627</code> · split (1 virement / N factures) · non identifiable → suspens</li>
+   <li>Après validation d'une ligne : la facture passe à <code>payment_state = paid</code> <b>automatiquement</b> — pas de saisie manuelle. Le compte d'attente <code>511100</code> est utilisé automatiquement dans le flux</li></ol>
+   <div class="res-final"><b>Résultat :</b> compta bancaire à jour, factures marquées payées automatiquement.</div>`,
+   faq:[["Faut-il enregistrer le paiement à la main ?","Non — le rapprochement suffit et alimente écritures + statut facture. La saisie manuelle (chap. 6) est réservée aux cas particuliers."],["Beaucoup de lignes non matchées ?","Vérifier les libellés (chèques anonymes = manuel)."],["Écart bancaire ?","Contrôler que BQS n'a pas de doublons (feed live + import manuel)."]]},
+  {n:8,role:"comptable",title:"Lettrage manuel / auto",obj:"Lier une facture à son paiement (débit ↔ crédit).",prereq:"Factures postées + paiements enregistrés.",body:`
+   <div class="route">Automatique</div>
+   <ol class="steps"><li>À l'enregistrement du paiement via wizard</li><li>Écritures liées via <code>full_reconcile_id</code></li></ol>
+   <div class="route">Manuel</div>
+   <ol class="steps"><li>Clients → Rapprochement de compte, ou Grand livre filtré sur <code>411XXX</code></li>
+   <li>Sélectionner un client → écritures ouvertes</li><li>Cocher 1 facture + 1 ou N paiements</li>
+   <li>Somme = 0 → « Lettrer »</li></ol>
+   <div class="route">Cas particuliers</div>
+   <ol class="steps"><li>Avoir + facture ensemble</li><li>Compensation intra-groupe : <code>411102</code> / <code>401901</code>, journal VISTA id=1, OD</li><li>Résidus < 0,01 € : ajustement auto</li></ol>
+   <div class="callout note"><span class="ic">🔍</span><span><b>Audit :</b> 250 anomalies (2026-06-29) → 196 corrigées, 54 restantes = compensations légitimes.</span></div>
+   <div class="res-final"><b>Résultat :</b> grand livre client propre, contentieux identifiés.</div>`,faq:[]},
+  {n:9,role:"comptable",title:"Vérifier la TVA du mois (CA3 cash basis)",obj:"Préparer et vérifier la déclaration TVA mensuelle.",prereq:"Mois clôturé.",body:`
+   <ol class="steps"><li>Reporting → Rapports fiscaux → Déclaration TVA (CA3)</li>
+   <li>Filtres : période M-1 · société (déclaration séparée)</li>
+   <li>Lignes CA3 : 1 (bases HT) · 8 (TVA collectée) · 19 (déductible) · 27 (à payer / crédit)</li>
+   <li>Cash basis : seules les factures encaissées génèrent la TVA due · position fiscale G → S</li>
+   <li>Vérifier : journal des ventes · avoirs · CA intra-communautaire</li>
+   <li>Générer le FEC (export CSV DGFiP)</li>
+   <li>Envoyer sur impots.gouv.fr + payer (SEPA prélèvement)</li></ol>
+   <div class="callout note"><span class="ic">📈</span><span><b>Suivi :</b> crédit reporté surveillé — fin avril 2026 = 10 964 €.</span></div>
+   <div class="res-final"><b>Résultat :</b> déclaration CA3 fiable, payée à temps.</div>`,
+   warn:"Ne pas déclarer sur des factures non encaissées (régime encaissements). Achats intra-communautaires : autoliquidation via ligne 3B / 24.",faq:[]},
+  {n:10,role:"direction",title:"Lire les dashboards & la trésorerie prévisionnelle",obj:"Piloter la trésorerie et la performance mensuelle.",prereq:"Écritures et paiements à jour.",body:`
+   <div class="route">Dashboards (vista_dashboard_fiscal)</div>
+   <ol class="steps"><li>Comptabilité → Vue d'ensemble</li>
+   <li>Filtre auto : exercice courant (01/08/2025 → 31/07/2026) + précédent</li>
+   <li>Widgets : CA du mois · encours client · encours fournisseur · trésorerie · TVA à payer</li></ol>
+   <div class="route">Trésorerie prévisionnelle (vista_tresorerie_previ)</div>
+   <ol class="steps"><li>Comptabilité → Analyse → Frais fixes / Flux récurrents</li>
+   <li><code>vista.frais.fixe</code> : 17 lignes (loyers, salaires, charges, prêts…)</li>
+   <li>Onglet dédié (dashboard id=16) · <code>refresh_treso_dashboard()</code> · filtres comptes (exclut TVA, intra-groupe, Sage)</li>
+   <li>Cron 4 h 00 ou action serveur « Rafraîchir le tableau de trésorerie »</li></ol>
+   <div class="route">Grand livre & reportings VISTA</div>
+   <ol class="steps"><li>Grand livre → <code>411XXX</code> (153, 1 par client)</li>
+   <li>Rapprochement Sage ↔ Odoo SIAL 25-26 : 4417/5823 (76 %)</li>
+   <li>Rapprochement CA SIAL : écart 30 184 € (à investiguer)</li>
+   <li>Comparaison Sage/Odoo 22-24 : 99 codes en écart, 920 k€ absolus</li></ol>
+   <div class="res-final"><b>Résultat :</b> pilotage consolidé, trésorerie projetée.</div>`,faq:[]}
+ ]
+};
+
+/* =================== ENGINE =================== */
+/* =================== WORKFLOW 3 · CONTACTS =================== */
+const WF_CONTACTS={
+ id:"contacts", name:"Contacts, clients & fournisseurs", sub:"Créer & qualifier une fiche res.partner",
+ railH:"Les 6 fiches",
+ eyebrow:"Vue d'ensemble", pageTitle:"Un seul modèle, plusieurs rôles",
+ lead:"Tous les contacts vivent dans le même modèle <code>res.partner</code>. Ce qui les distingue : les rangs <code>customer_rank</code> / <code>supplier_rank</code>, le type Individu / Société, les tags et le compte auxiliaire (411 client, 401 fournisseur).",
+ roles:{
+  generique:{short:"Contact générique",scope:"Fiche A",color:"#6E7B63"},
+  particulier:{short:"Client particulier",scope:"Fiche B",color:"#C27A4A"},
+  pro:{short:"Client pro",scope:"Fiche C",color:"#3E6B8B"},
+  prescripteur:{short:"Prescripteur",scope:"Fiche D",color:"#7A5C8E"},
+  fournisseur:{short:"Fournisseur",scope:"Fiche E",color:"#B0862B"},
+  fusion:{short:"Fusion doublons",scope:"Fiche F",color:"#8A6D5A"}
+ },
+ steps:[
+  {n:"A",label:"Contact générique",sub:"res.partner minimal",role:"generique",deck:1,chap:0},
+  {n:"B",label:"Client particulier",sub:"personne physique",role:"particulier",deck:2,chap:1},
+  {n:"C",label:"Client pro",sub:"société + SIRET",role:"pro",deck:3,chap:2},
+  {n:"D",label:"Prescripteur",sub:"architecte, apporteur",role:"prescripteur",deck:4,chap:3},
+  {n:"E",label:"Fournisseur",sub:"401XXX + RIB",role:"fournisseur",deck:5,chap:4},
+  {n:"F",label:"Fusion de doublons",sub:"nettoyage des fiches",role:"fusion",deck:6,chap:5}
+ ],
+ flow:[
+  {n:"A",role:"generique",t:"Contact générique",d:"Entrée res.partner minimale, pas encore qualifiée client ou fournisseur."},
+  {n:"B",role:"particulier",t:"Client particulier",d:"Personne physique. Mobile + email obligatoires, TVA travaux selon éligibilité."},
+  {n:"C",role:"pro",t:"Client pro (société)",d:"SIRET + TVA intra, contacts internes, compte 411XXX dédié, payment term négocié."},
+  {n:"D",role:"prescripteur",t:"Prescripteur",d:"Architecte, apporteur, agent : recommande sans acheter. Tag pour segmentation."},
+  {n:"E",role:"fournisseur",t:"Fournisseur",d:"Compte 401XXX dédié + RIB, catalogue d'achat, marques et certifications."},
+  {n:"F",role:"fusion",t:"Fusion de doublons",d:"Nettoyage de fiches créées en double. Irréversible — sauvegarder avant."}
+ ],
+ carte:[
+  {tag:"Référentiel",title:"Comment Odoo distingue les rôles",kind:"gtable",data:{cols:["Rôle","Marqueurs dans res.partner"],rows:[
+   ["<span class='em'>Client particulier</span>","<code>customer_rank &gt; 0</code> + tag « Client particulier » + <code>company_type=Person</code>"],
+   ["<span class='em'>Client pro</span>","<code>customer_rank &gt; 0</code> + tag « Client pro » + <code>company_type=Company</code> + SIRET/TVA"],
+   ["<span class='em'>Prescripteur</span>","tag « Prescripteur » (architecte, apporteur d'affaires, agent)"],
+   ["<span class='em'>Fournisseur</span>","<code>supplier_rank &gt; 0</code> + tag « Fournisseur » + compte 401XXX"],
+   ["<span class='em'>Transporteur</span>","modèle <code>x.transporteur</code> (séparé — voir tuto tournées)"]
+  ]}},
+  {tag:"Référentiel",title:"Tags & comptes auxiliaires",kind:"kp",data:[
+   "<b>4 tags</b> (res.partner.category) : Client particulier · Client pro · Prescripteur · Fournisseur.",
+   "<b>Clients</b> : compte <code>411XXX</code> unique par client (153 créés au rebalance 2026-06-24).",
+   "<b>Fournisseurs</b> : compte <code>401XXX</code> unique par fournisseur (218 créés).",
+   "<code>customer_rank</code> s'incrémente au 1ᵉʳ devis/facture ; <code>supplier_rank</code> au 1ᵉʳ bon de commande."
+  ]},
+  {tag:"Annexe",title:"Champs obligatoires vs optionnels",kind:"gtable",data:{cols:["Champ","Générique","Particulier","Pro","Prescripteur","Fournisseur"],rows:[
+   ["Type Individu / Société","✅","Individu","Société","Selon","Société"],
+   ["Nom / Raison sociale","✅","✅","✅","✅","✅"],
+   ["Adresse principale","🟡","✅","✅","✅","✅"],
+   ["Adresse livraison","❌","🟡 si diff.","✅","❌","❌"],
+   ["SIRET","❌","❌","✅","🟡 si société","✅"],
+   ["N° TVA intra","❌","❌","✅","🟡","✅"],
+   ["Téléphone / Mobile","🟡","✅ mobile","✅","✅","✅"],
+   ["Email","✅","✅","✅","✅","✅"],
+   ["Vendeur assigné","🟡","✅","✅","✅","Acheteur"],
+   ["Payment term","❌","🟡","✅","🟡","✅"],
+   ["Compte 411XXX","❌","✅ dédié","✅ dédié","❌","—"],
+   ["Compte 401XXX","❌","—","—","—","✅ dédié"],
+   ["Zone livraison VISTA","❌","✅","✅","❌","❌"],
+   ["TVA par défaut","❌","✅","✅","🟡","❌"],
+   ["Tag catégorie","❌","Client particulier","Client pro","Prescripteur","Fournisseur"],
+   ["RIB (bank_account)","❌","❌","🟡","❌","✅ virements"],
+   ["Notes internes","🟡","🟡","🟡","✅","✅"]
+  ]}},
+  {tag:"Légende",title:"Lecture de la matrice",kind:"kp",data:[
+   "✅ obligatoire &nbsp;·&nbsp; 🟡 recommandé &nbsp;·&nbsp; ❌ optionnel ou non applicable &nbsp;·&nbsp; — sans objet."
+  ]},
+  {tag:"Annexe",title:"Erreurs fréquentes à éviter",kind:"attention",data:[
+   "Ne pas mettre de tag catégorie → segmentation mailing / reporting cassée.",
+   "Utiliser <code>411100</code> générique pour un client récurrent → grand livre auxiliaire inutilisable.",
+   "Oublier le mobile d'un particulier → livraison ratée.",
+   "Ne pas séparer adresse facturation / livraison pour un pro → factures perdues.",
+   "SIRET manquant pour un pro → contrôle fiscal problématique.",
+   "Créer un doublon → toujours rechercher avant création (SIRET, email, téléphone).",
+   "Zone livraison vide → tournée non auto-liée dans le workflow Livraison.",
+   "TVA par défaut mal configurée → toutes les factures futures avec la mauvaise TVA."
+  ]},
+  {tag:"Annexe",title:"Points communs & après création",kind:"kp",data:[
+   "Photo / logo recommandé · langue FR · devise EUR · pays France par défaut.",
+   "Créer le compte <b>411 / 401 en même temps</b> que la fiche, pour éviter les oublis.",
+   "Après création — <b>Client</b> → workflow devis · <b>Fournisseur</b> → catalogue d'achat (<code>vista_produit_achat</code>).",
+   "<b>Prescripteur</b> → lier à ses opportunités CRM · <b>Générique</b> → qualifié à la 1ᵉʳᵉ transaction."
+  ]}
+ ],
+ slides:[
+  {kick:"Fiche · Vue d'ensemble",role:"generique",title:"Un seul modèle res.partner",goal:"Particuliers, sociétés, prescripteurs, fournisseurs, transporteurs : un seul modèle, des marqueurs qui les distinguent.",body:`
+   <h4>Ce qui distingue les rôles</h4><ul><li>Rangs <code>customer_rank</code> / <code>supplier_rank</code> · type <code>company_type</code> (Person / Company) · tags · compte auxiliaire</li></ul>
+   <h4>4 tags (res.partner.category)</h4><ul><li>Client particulier · Client pro · Prescripteur · Fournisseur</li></ul>
+   <h4>Comptes auxiliaires</h4><ul><li>Clients → <code>411XXX</code> unique (153 créés le 2026-06-24)</li>
+   <li>Fournisseurs → <code>401XXX</code> unique (218 créés)</li></ul>
+   <div class="res">Le transporteur est à part : modèle <code>x.transporteur</code>.</div>`},
+  {kick:"Fiche A",role:"generique",title:"Contact générique",goal:"Créer une entrée res.partner minimale, pas encore qualifiée.",body:`
+   <h4>Étapes</h4><ul><li>Contacts → « Nouveau » · type Individu ou Société</li>
+   <li>Nom / raison sociale · coordonnées (adresse, tél, email, site)</li>
+   <li>Onglet Contact & adresses (sociétés) : facturation · livraison · contact · autre</li>
+   <li>Ventes & achats : vendeur · position fiscale · payment term · comptes par défaut</li>
+   <li>Infos complémentaires : devise · langue · référence</li></ul>
+   <div class="res">À ce stade, ni client ni fournisseur : <code>customer_rank</code> s'incrémente au 1ᵉʳ devis/facture, <code>supplier_rank</code> au 1ᵉʳ PO.</div>`},
+  {kick:"Fiche B",role:"particulier",title:"Client particulier",goal:"Personne physique achetant pour son propre usage.",body:`
+   <h4>Points clés</h4><ul><li>Type <b>Individu</b> · nom « Prénom + NOM »</li>
+   <li><b>Mobile + email obligatoires</b> (joindre le jour de la livraison, envoi devis/facture)</li>
+   <li>Adresse de livraison distincte si le chantier ≠ domicile</li>
+   <li>Payment term : paiement immédiat / à la livraison · compte <code>411XXX</code> dédié conseillé</li>
+   <li>Tag « Client particulier » · zone livraison · TVA par défaut (10 % / 5,5 % travaux éligibles, sinon 20 %)</li></ul>
+   <div class="res"><b>TVA 10 % travaux :</b> logement &gt; 2 ans + résidence principale → attestation TVA à jour. Ne pas stocker de coordonnées bancaires (RGPD).</div>`},
+  {kick:"Fiche C",role:"pro",title:"Client professionnel (société)",goal:"Entreprise, société civile ou association.",body:`
+   <h4>Points clés</h4><ul><li>Type <b>Société</b> · raison sociale exacte (forme juridique)</li>
+   <li><b>SIRET</b> + N° TVA intra + NAF/APE + RCS</li>
+   <li>Contact & adresses <b>crucial</b> : facturation · livraison · contacts internes (gérant, comptable, chef de chantier, acheteur)</li>
+   <li>Payment term 30/60/90 j FDM · compte <code>411XXX</code> dédié obligatoire · tag « Client pro »</li>
+   <li>TVA 20 % (ou 10 % selon marché)</li></ul>
+   <div class="res"><b>Marchés collectifs :</b> module <code>vista_marches_collectifs</code> (RG 5 % + CP 2 % sur HT). Facturation et livraison peuvent viser 2 adresses/sociétés distinctes.</div>`},
+  {kick:"Fiche D",role:"prescripteur",title:"Prescripteur",goal:"Architecte, maître d'œuvre, apporteur : recommande sans acheter directement.",body:`
+   <h4>Points clés</h4><ul><li>Société ou Individu · légal si société (NAF 712B pour architectes)</li>
+   <li>Contact principal + coordonnées directes</li>
+   <li><b>Pas de compte 411XXX dédié</b> s'il n'achète jamais → laisser <code>411100</code> générique</li>
+   <li>Tag « Prescripteur » <b>obligatoire</b> (segmentation mailing)</li>
+   <li>Notes cruciales : type · accord commercial (commission %) · zones · type de projets · historique</li></ul>
+   <div class="res"><b>Usage :</b> renseigner le référent sur le devis ; mailings ciblés via le segment « Prescripteur » ; commissions suivies en note (module dédié plus tard).</div>`},
+  {kick:"Fiche E",role:"fournisseur",title:"Fournisseur",goal:"Marchandises, services, sous-traitants.",body:`
+   <h4>Points clés</h4><ul><li>Type Société · raison sociale exacte · <b>SIRET + TVA intra obligatoires</b></li>
+   <li>Contact & adresses : commercial VISTA · comptabilité fournisseur · SAV · logistique</li>
+   <li>Section <b>Achats</b> : acheteur · payment term (30-60 j FDM) · position fiscale d'achat</li>
+   <li>Compte <code>401XXX</code> <b>dédié obligatoire</b> (218 créés : 180 SIAL + 33 Isula + 5 VISTA)</li>
+   <li>Tag « Fournisseur » · délai de livraison moyen · <b>RIB</b> (IBAN + BIC) pour virements SEPA</li>
+   <li>Notes : type · marques · catégories · certifications · dépôts · litiges</li></ul>
+   <div class="res"><b>Modules :</b> <code>vista_produit_achat</code> (catalogue) · <code>vista_retour_fournisseur</code> · <code>vista_litige</code>. Intra-groupe SIAL ↔ VISTA → comptes 411901 / 401901.</div>`},
+  {kick:"Fiche F",role:"fusion",title:"Fusion de doublons",goal:"Nettoyer des fiches créées en double pour un même contact.",body:`
+   <h4>Étapes</h4><ul><li>Contacts → cocher les 2 fiches (ou +) → Actions → « Fusionner les contacts »</li>
+   <li>Le wizard propose une fiche « master » (la plus ancienne) — ajustable</li>
+   <li>Impacts : SO / factures / paiements / activités rattachés au master · adresses distinctes conservées</li>
+   <li>« Fusionner » → historique conservé, doublons archivés</li></ul>
+   <div class="res"><b>Irréversible</b> — faire un <code>pg_dump</code> avant si volume important. Cas mixte 131 BAMPA / DEMEURES CORSES : séparation manuelle (voir <code>split_bampa_demeures_corses.md</code>). 9 fusions faites lors de l'audit 2026-06-29.</div>`},
+  {kick:"Fiche · Bonus",role:"generique",title:"Erreurs fréquentes & points clés",goal:"Les réflexes à garder à chaque création de fiche.",body:`
+   <h4>À éviter</h4><ul><li>Pas de tag → segmentation cassée</li>
+   <li><code>411100</code> générique pour un client récurrent → grand livre inutilisable</li>
+   <li>Mobile particulier oublié → livraison ratée · adresses fact./livr. non séparées → factures perdues</li>
+   <li>SIRET pro manquant · doublon non recherché · zone livraison vide · TVA par défaut mal réglée</li></ul>
+   <h4>Points communs</h4><ul><li>Photo · langue FR · devise EUR · pays France</li>
+   <li>Créer le compte 411 / 401 en même temps que la fiche</li></ul>`}
+ ],
+ chapters:[
+  {n:"A",role:"generique",title:"Créer un contact générique (basique)",obj:"Créer une entrée res.partner minimale, utile pour tout contact pas encore qualifié.",prereq:"Application Contacts.",body:`
+   <ol class="steps"><li>Menu Contacts → « Nouveau »</li>
+   <li>Type : <b>Individu</b> (personne physique) ou <b>Société</b> (personne morale)</li>
+   <li>Champs de base : Nom / raison sociale (+ photo / logo pour les sociétés)</li>
+   <li>Coordonnées : rue, complément, CP, ville, pays · téléphone, mobile · email · site web</li>
+   <li>Onglet « Contact & adresses » (sociétés) : sous-contacts — Adresse de facturation · Adresse de livraison · Contact (personnes) · Autre</li>
+   <li>Onglet « Ventes & achats » : vendeur · position fiscale (auto via l'adresse) · payment term · comptes par défaut</li>
+   <li>Onglet « Informations complémentaires » : devise · langue · référence interne</li>
+   <li>Onglet « Notes internes » · Sauver</li></ol>
+   <div class="res-final"><b>Résultat :</b> contact réutilisable pour CRM, ventes, achats.</div>`,
+   warn:"À ce stade, ni client ni fournisseur. Il devient client dès qu'un devis/facture lui est associé (customer_rank), fournisseur dès qu'un PO lui est associé (supplier_rank).",faq:[]},
+  {n:"B",role:"particulier",title:"Créer un client particulier",obj:"Enregistrer une personne physique achetant pour son propre usage.",prereq:"Application Contacts.",body:`
+   <ol class="steps"><li>Contacts → « Nouveau » · type <b>Individu</b></li>
+   <li>Nom : « Prénom + NOM DE FAMILLE » (nom en majuscules recommandé)</li>
+   <li>Coordonnées : adresse domicile (souvent = chantier) · téléphone fixe · <b>mobile (obligatoire)</b> · <b>email (obligatoire)</b></li>
+   <li>Adresse de livraison distincte si le chantier n'est pas l'adresse principale (+ contact sur place)</li>
+   <li>Ventes & achats : vendeur référent · payment term « paiement immédiat » / « à la livraison » · position fiscale France · <b>compte <code>411XXX</code> dédié</b> conseillé (sinon 411100)</li>
+   <li>Tag « Client particulier »</li>
+   <li>Champs VISTA : <code>x_zone_livraison</code> (Bastia / Ajaccio / Balagne / Porto-Vecchio / Plaine / Corte / Continent / Dépôt SIAL) · <code>x_default_sale_tax_id</code> (10 % ou 5,5 % travaux éligibles, sinon 20 %)</li>
+   <li>Notes : type de logement · contraintes d'accès · habitudes de paiement · Sauver</li></ol>
+   <div class="res-final"><b>Résultat :</b> particulier prêt à recevoir devis, facture, livraison.</div>`,
+   warn:"TVA 10 % travaux : logement > 2 ans + résidence principale → attestation TVA à jour. Ne pas stocker de coordonnées bancaires (RGPD). Mobile indispensable. Adresse chantier ≠ domicile → adresse de livraison séparée.",faq:[]},
+  {n:"C",role:"pro",title:"Créer un client professionnel (société)",obj:"Enregistrer une entreprise, société civile ou association.",prereq:"Application Contacts.",body:`
+   <ol class="steps"><li>Contacts → « Nouveau » · type <b>Société</b></li>
+   <li>Raison sociale exacte (ex : « BAMPA SARL ») + forme juridique</li>
+   <li>Légal : <b>SIRET</b> (14 chiffres) · N° TVA intra (ex FR…) · NAF/APE · RCS</li>
+   <li>Adresse siège + téléphone standard + email générique + site</li>
+   <li>Onglet Contact & adresses <b>crucial</b> : Adresse de facturation · Adresse de livraison · Contacts internes (gérant, comptable, chef de chantier, acheteur) avec fonction + mobile + email direct</li>
+   <li>Ventes & achats : vendeur · payment term 30/60/90 j FDM · position fiscale · <b>compte <code>411XXX</code> dédié obligatoire</b> · groupement des factures</li>
+   <li>Tag « Client pro » · zone livraison · TVA 20 % (ou 10 % selon marché)</li>
+   <li>Notes : négociations tarifaires · modalités · historique · Sauver</li></ol>
+   <div class="res-final"><b>Résultat :</b> client pro prêt pour devis récurrents et marchés collectifs.</div>`,
+   warn:"SIRET obligatoire (contrôle Odoo si l'API SIRET est activée). Marchés collectifs → vista_marches_collectifs (RG 5 % + CP 2 %). Facturation / livraison peuvent viser 2 sociétés → renseigner les 2 adresses. Éviter les doublons (rechercher avant ; 9 doublons fusionnés le 2026-06-24).",faq:[]},
+  {n:"D",role:"prescripteur",title:"Créer un prescripteur",obj:"Enregistrer un prescripteur qui recommande VISTA sans acheter directement.",prereq:"Application Contacts.",body:`
+   <ol class="steps"><li>Contacts → « Nouveau » · Société (ou Individu pour un architecte indépendant)</li>
+   <li>Nom / raison sociale · légal si société (NAF 712B architectes, TVA intra)</li>
+   <li>Coordonnées + contact principal (emails / téléphones directs)</li>
+   <li>Ventes & achats : vendeur · <b>pas de compte 411XXX dédié</b> s'il n'achète jamais → laisser <code>411100</code></li>
+   <li>Tag « Prescripteur » <b>obligatoire</b> (segmentation mailing)</li>
+   <li>Notes <b>cruciales</b> : type (architecte / MOE / décorateur / agent / apporteur) · accord commercial (commission %, remise) · zones · type de projets · historique · Sauver</li></ol>
+   <div class="res-final"><b>Usage :</b> renseigner le référent sur le devis d'un client apporté ; mailings ciblés via le segment « Prescripteur » ; commissions suivies en note (module dédié plus tard).</div>`,faq:[]},
+  {n:"E",role:"fournisseur",title:"Créer un fournisseur",obj:"Enregistrer un fournisseur (marchandises, services, sous-traitants).",prereq:"Application Contacts ou Achats → Fournisseurs.",body:`
+   <ol class="steps"><li>Contacts → « Nouveau » · type Société</li>
+   <li>Raison sociale exacte (ex : « KAWNEER FRANCE SAS »)</li>
+   <li>Légal : <b>SIRET + TVA intra obligatoires</b> (surtout UE hors France) · NAF/APE</li>
+   <li>Adresse siège + dépôts régionaux</li>
+   <li>Contact & adresses : commercial dédié VISTA · comptabilité fournisseur · SAV · logistique</li>
+   <li>Section <b>Achats</b> : acheteur · payment term (30 j FDM, 60 pour gros) · position fiscale d'achat · <b>compte <code>401XXX</code> dédié obligatoire</b> (218 créés)</li>
+   <li>Tag « Fournisseur » · devise EUR · délai de livraison moyen</li>
+   <li><b>RIB</b> (IBAN + BIC) via <code>res.partner.bank</code> — nécessaire aux virements SEPA</li>
+   <li>Notes : type · marques (KAWNEER, REHAU, TECHNAL, SCHÜCO, VEKA, ROTO, MACO…) · catégories · certifications (Qualibat, NF, CE) · dépôts · litiges · Sauver</li></ol>
+   <div class="res-final"><b>Modules :</b> <code>vista_produit_achat</code> (catalogue) · <code>vista_retour_fournisseur</code> · <code>vista_litige</code>.</div>`,
+   warn:"Compte 401XXX dédié obligatoire (sinon grand livre auxiliaire impossible). RIB obligatoire pour les virements. Vérifier les doublons (audit 2026-06-29 : 250 anomalies dont 9 fusions). Intra-groupe SIAL ↔ VISTA → comptes 411901 / 401901. Sous-traitants : catégorie séparée + module vista_soustraitant si applicable.",faq:[]},
+  {n:"F",role:"fusion",title:"Fusionner des doublons",obj:"Nettoyer des fiches créées en double pour un même client / fournisseur.",prereq:"Deux fiches (ou +) identifiées comme doublons.",body:`
+   <ol class="steps"><li>Contacts → cocher les 2 fiches (ou plus) à fusionner</li>
+   <li>Menu Actions → « Fusionner les contacts »</li>
+   <li>Le wizard propose la fiche « master » (la plus ancienne) — ajustable manuellement</li>
+   <li>Impacts : SO / factures / paiements / activités rattachés au master · adresses distinctes conservées</li>
+   <li>« Fusionner » → historique conservé, doublons archivés</li></ol>
+   <div class="res-final"><b>Cas complexe :</b> fiche 131 BAMPA / DEMEURES CORSES (2026-07-01) mêlant 2 clients → séparation manuelle (<code>split_bampa_demeures_corses.md</code>). 9 fusions lors de l'audit 2026-06-29.</div>`,
+   warn:"La fusion est irréversible. Toujours faire un pg_dump avant si le volume est important.",faq:[]}
+ ]
+};
+
+/* =================== THÈMES 4-8 · ATTRIBUTION ÉQUIPE =================== */
+const R_DIR={short:"Direction",scope:"Marianne",color:"#4F5E46"};
+const R_BE={short:"Bureau d'Études",scope:"Michaël",color:"#7A5C8E"};
+const R_ADV={short:"ADV",scope:"Anna-Laura",color:"#B0862B"};
+const R_ATE={short:"Atelier / Qualité",scope:"Ange-Joseph",color:"#3E6B8B"};
+const R_CPT={short:"Compta",scope:"Émilie",color:"#5B8A72"};
+const R_DAF={short:"DAF",scope:"Erwan",color:"#8A6D5A"};
+const R_POSE={short:"Pose",scope:"Laurent",color:"#C27A4A"};
+const R_EXT={short:"Externe",scope:"Chauffeurs",color:"#9A968C"};
+
+const WF_EQUIPE={
+ id:"equipe", name:"Équipe & attributions", sub:"Qui fait quoi chez VISTA",
+ railH:"L'équipe (7 rôles)",
+ eyebrow:"Organisation", pageTitle:"L'équipe et ses rôles",
+ lead:"Sept rôles se partagent les workflows VISTA. Anna-Laura est le pivot ADV / logistique / SAV ; les chauffeurs sont externes (pas de compte Odoo).",
+ roles:{marianne:R_DIR,michael:R_BE,annalaura:R_ADV,angejoseph:R_ATE,emilie:R_CPT,erwan:R_DAF,laurent:R_POSE,chauffeur:R_EXT},
+ steps:[
+  {n:1,label:"Marianne Massiani",sub:"Direction",role:"marianne"},
+  {n:2,label:"Michaël Pierre",sub:"Bureau d'Études",role:"michael"},
+  {n:3,label:"Anna-Laura Filippi",sub:"ADV & Accueil",role:"annalaura"},
+  {n:4,label:"Ange-Joseph Achilli",sub:"Production & Qualité",role:"angejoseph"},
+  {n:5,label:"Émilie Secchi",sub:"Compta & Admin",role:"emilie"},
+  {n:6,label:"Erwan Anger",sub:"DAF",role:"erwan"},
+  {n:7,label:"Laurent Deveze",sub:"Pose chantier",role:"laurent"},
+  {n:8,label:"Chauffeurs",sub:"externes",role:"chauffeur"}
+ ],
+ flow:[
+  {n:1,role:"marianne",t:"Marianne Massiani",d:"Direction + chiffrage PRO F2 + dossiers de fabrication + fichiers CNC + besoins matière. (uid=2)"},
+  {n:2,role:"michael",t:"Michaël Pierre",d:"Bureau d'Études : chiffrage PRO F2, études / plans, débits, dossiers de pose, support Laurent."},
+  {n:3,role:"annalaura",t:"Anna-Laura Filippi",d:"ADV & Accueil — le pivot : 1er contact, devis→commande, acompte, tournées, réceptions fourn., litiges, SAV. (uid=25)"},
+  {n:4,role:"angejoseph",t:"Ange-Joseph Achilli",d:"Production & Qualité : planif OF, visa QC, réception + contrôle des livraisons fournisseurs. Organise et contrôle — n'exécute pas la fabrication."},
+  {n:5,role:"emilie",t:"Émilie Secchi",d:"Compta & Admin : factures, relances, trésorerie, paie, factures fournisseurs."},
+  {n:6,role:"erwan",t:"Erwan Anger",d:"DAF — destinataire du reporting."},
+  {n:7,role:"laurent",t:"Laurent Deveze",d:"Pose sur chantier (hors périmètre des tutoriels vente / livraison actuels)."},
+  {n:8,role:"chauffeur",t:"Chauffeurs",d:"Externes — pas de compte Odoo. BL papier remis par Anna-Laura, retour signé à Anna-Laura."}
+ ],
+ carte:[
+  {tag:"Cadence",title:"Délais critiques à respecter",kind:"kp",data:[
+   "Anna-Laura → Émilie : <b>24h</b> pour transmettre le BL signé.",
+   "Émilie facturation : <b>48h</b> après le BL signé.",
+   "Émilie factures fournisseurs : <b>5 j max</b> après le BL contrôlé.",
+   "SAV : ticket ouvert → Ange-Joseph sous <b>24h</b>.",
+   "Atelier : confirmation de délai à Anna-Laura sous <b>24h</b>.",
+   "Relances : <b>N1 J+10</b> · <b>N2 J+25</b> · <b>N3 J+40</b> (escalade Marianne).",
+   "Reporting mensuel consolidé : <b>avant le 10</b>."
+  ]},
+  {tag:"À mettre en avant",title:"Insights clés",kind:"attention",data:[
+   "Les devis sont saisis dans <b>PRO F2</b> (pas Odoo), puis transformés en commande Odoo par Anna-Laura. Le workflow Odoo démarre à « commande signée ».",
+   "Marianne fait les devis <b>et</b> les dossiers de fab + CNC — très active en amont technique.",
+   "Michaël Pierre = référent BE : chiffrage complexe, études, plans, débits, support pose.",
+   "Ange-Joseph <b>ne fabrique pas</b> : il conçoit, teste, forme, contrôle. S'il exécute régulièrement, c'est un signal à remonter à Marianne.",
+   "Anna-Laura est le pivot : 1er contact, ADV, logistique, réceptions fourn., litiges, SAV — transmet tout à Émilie sous 24h.",
+   "Ange-Joseph <b>signe</b> les BL fournisseurs et les transmet à Anna-Laura le soir (ce n'est pas Anna-Laura qui les reçoit à réception).",
+   "Visa qualité final d'Ange-Joseph <b>obligatoire</b> avant chaque expédition.",
+   "Chauffeurs externes : pas d'accès Odoo. BL papier, retour signé à Anna-Laura, transmission Émilie sous 24h.",
+   "Relances = responsabilité <b>exclusive d'Émilie</b>. Anna-Laura a un accès <b>lecture seule</b> au Suivi Factures (renseigner un client), et ne relance qu'en backup si Émilie est absente — en la prévenant à son retour.",
+   "Laurent Deveze assure la pose — hors périmètre des tutoriels vente / livraison actuels."
+  ]}
+ ],
+ slides:[], chapters:[]
+};
+
+const WF_ACHATS={
+ id:"achats", name:"Achats fournisseurs", sub:"De la détection du besoin au paiement SEPA",
+ railH:"Achats (33 étapes)",
+ eyebrow:"Attribution", pageTitle:"Achats fournisseurs",
+ lead:"Trente-trois étapes en huit phases, de la détection du besoin au paiement. Garde-fous : Ange-Joseph signe et valide la réception, Anna-Laura compare BL ↔ PO et bloque le règlement en cas de litige, Marianne valide le SEPA.",
+ roles:{marianne:R_DIR,annalaura:R_ADV,angejoseph:R_ATE,emilie:R_CPT},
+ steps:[
+  {n:1,label:"Alerte seuil réappro",sub:"stock mini",role:"angejoseph",who:"angejoseph",to:"marianne",delai:"continu",chap:0},
+  {n:2,label:"Besoin détecté sur commande",sub:"SO « Commande fournisseur »",role:"marianne",who:"marianne",delai:"après SO",chap:0},
+  {n:3,label:"Consolidation du besoin",sub:"par fournisseur / catégorie",role:"marianne",who:"marianne",chap:0},
+  {n:4,label:"Consultation catalogue",sub:"vista_produit_achat",role:"marianne",who:"marianne",chap:0},
+  {n:5,label:"Création RFQ",sub:"demande de prix",role:"marianne",who:"marianne",chap:0},
+  {n:6,label:"Envoi RFQ au fournisseur",sub:"email",role:"marianne",who:"marianne",chap:0},
+  {n:7,label:"Négociation prix / délais",sub:"hors Odoo",role:"marianne",who:"marianne",chap:0},
+  {n:8,label:"Transformation RFQ → PO",sub:"confirmer",role:"marianne",who:"marianne",chap:1},
+  {n:9,label:"Transmission besoins à Émilie",sub:"anticipation tréso",role:"marianne",who:"marianne",to:"emilie",delai:"à la confirmation",chap:1},
+  {n:10,label:"Envoi PO au fournisseur",sub:"",role:"marianne",who:"marianne",chap:1},
+  {n:11,label:"Suivi ARC fournisseur",sub:"accusé de réception",role:"annalaura",who:"annalaura",delai:"continu",chap:2},
+  {n:12,label:"Confirmation date livraison",sub:"sur PO",role:"annalaura",who:"annalaura",chap:2},
+  {n:13,label:"Alerte retard si ARC dépasse",sub:"",role:"annalaura",who:"annalaura",to:"marianne",delai:"si > 5j",chap:2},
+  {n:14,label:"Coordination créneau réception",sub:"",role:"annalaura",who:"annalaura",to:"angejoseph",delai:"avant livraison",chap:2},
+  {n:15,label:"Réception physique",sub:"entrepôt",role:"angejoseph",who:"angejoseph",delai:"jour livraison",chap:3},
+  {n:16,label:"Contrôle physique",sub:"références + quantités vs BL",role:"angejoseph",who:"angejoseph",chap:3},
+  {n:17,label:"Signature BL fourn.",sub:"si conforme",role:"angejoseph",who:"angejoseph",chap:3},
+  {n:18,label:"Validation réception Odoo",sub:"picking incoming",role:"angejoseph",who:"angejoseph",chap:3},
+  {n:19,label:"Transmission BL à l'ADV",sub:"",role:"angejoseph",who:"angejoseph",to:"annalaura",delai:"fin de journée",chap:3},
+  {n:20,label:"Comparaison BL vs PO",sub:"ligne par ligne",role:"annalaura",who:"annalaura",delai:"le lendemain",chap:4},
+  {n:21,label:"Cas conforme : archivage BL",sub:"chatter PO / GED",role:"annalaura",who:"annalaura",chap:4},
+  {n:22,label:"Cas écart : gestion litige",sub:"contact fourn.",role:"annalaura",who:"annalaura",chap:4},
+  {n:23,label:"Info Émilie : blocage règlement",sub:"si litige",role:"annalaura",who:"annalaura",to:"emilie",delai:"immédiat",chap:4},
+  {n:24,label:"Réception facture fourn.",sub:"email / ZEENDOC",role:"emilie",who:"emilie",chap:5},
+  {n:25,label:"Saisie facture en compta",sub:"depuis le PO",role:"emilie",who:"emilie",delai:"5j max post-BL",chap:5},
+  {n:26,label:"Contrôle prix / qté / TVA vs PO",sub:"",role:"emilie",who:"emilie",chap:5},
+  {n:27,label:"Si écart : blocage + info AL",sub:"",role:"emilie",who:"emilie",to:"annalaura",delai:"immédiat",chap:5},
+  {n:28,label:"Validation facture (posted)",sub:"si conforme",role:"emilie",who:"emilie",chap:5},
+  {n:29,label:"Balance âgée fourn.",sub:"",role:"emilie",who:"emilie",delai:"hebdo",chap:6},
+  {n:30,label:"Préparation SEPA fourn.",sub:"",role:"emilie",who:"emilie",delai:"hebdo",chap:6},
+  {n:31,label:"Validation SEPA",sub:"",role:"marianne",who:"marianne",delai:"hebdo",chap:6},
+  {n:32,label:"Envoi SEPA à la banque",sub:"",role:"emilie",who:"emilie",delai:"hebdo",chap:6},
+  {n:33,label:"Rapprochement → payé",sub:"facture fourn. paid",role:"emilie",who:"emilie",delai:"continu",chap:6}
+ ],
+ flow:[
+  {n:1,ph:"Phase 1 · Détection du besoin",role:"angejoseph",t:"Alerte seuil de réapprovisionnement",d:"Stock mini atteint → alerte à Marianne. Inventaire → Rapports → Stock à réapprovisionner."},
+  {n:2,role:"marianne",t:"Besoin détecté sur commande",d:"Une ligne SO cochée « Commande fournisseur » génère un besoin."},
+  {n:3,role:"marianne",t:"Consolidation du besoin",d:"Regroupement par fournisseur / catégorie (fichier interne ou PRO F2)."},
+  {n:4,ph:"Phase 2 · Demande de prix (RFQ)",role:"marianne",t:"Consultation du catalogue fournisseur",d:"Achats → Produits (vista_produit_achat)."},
+  {n:5,role:"marianne",t:"Création de la RFQ",d:"Achats → Demandes de prix → Nouveau."},
+  {n:6,role:"marianne",t:"Envoi de la RFQ au fournisseur",d:"Bouton « Envoyer » sur la RFQ (email direct)."},
+  {n:7,role:"marianne",t:"Négociation prix / délais",d:"Téléphone / email — hors Odoo."},
+  {n:8,ph:"Phase 3 · Confirmation PO",role:"marianne",t:"Transformation RFQ → PO",d:"Bouton « Confirmer » → bon de commande, n° PO attribué."},
+  {n:9,role:"marianne",t:"Transmission des besoins à Émilie",d:"Message chatter, pour l'anticipation trésorerie."},
+  {n:10,role:"marianne",t:"Envoi du PO au fournisseur",d:"Bouton « Envoyer »."},
+  {n:11,ph:"Phase 4 · Suivi commande",role:"annalaura",t:"Suivi de l'ARC fournisseur",d:"Achats → PO → chatter. Relance si pas d'ARC sous 3 j."},
+  {n:12,role:"annalaura",t:"Confirmation de la date de livraison",d:"Champ « Date de livraison » sur le PO."},
+  {n:13,role:"annalaura",t:"Alerte retard",d:"PO sans ARC > 5 j → alerte Marianne."},
+  {n:14,role:"annalaura",t:"Coordination du créneau de réception",d:"Avec Ange-Joseph, ~3 j avant la livraison."},
+  {n:15,ph:"Phase 5 · Réception & contrôle",role:"angejoseph",t:"Réception physique à l'entrepôt",d:"Inventaire → Réceptions."},
+  {n:16,role:"angejoseph",t:"Contrôle physique",d:"Références + quantités vs BL papier et PO."},
+  {n:17,role:"angejoseph",t:"Signature du BL fournisseur",d:"Si conforme (sinon « sous réserve » + observations)."},
+  {n:18,role:"angejoseph",t:"Validation de la réception dans Odoo",d:"Achats → Réceptions → « Valider » le picking incoming (reliquat si partiel)."},
+  {n:19,role:"angejoseph",t:"Transmission du BL à l'ADV",d:"Tous les BL du jour à Anna-Laura, en fin de journée."},
+  {n:20,ph:"Phase 6 · Comparaison PO ↔ BL",role:"annalaura",t:"Comparaison BL vs PO Odoo",d:"Ligne par ligne : références, quantités, prix."},
+  {n:21,role:"annalaura",t:"Cas conforme : archivage du BL",d:"PDF dans le chatter du PO + message « conforme, transmis à Émilie »."},
+  {n:22,role:"annalaura",t:"Cas écart : gestion du litige",d:"Contact fournisseur, avoir / complément, tracé dans le chatter du PO."},
+  {n:23,role:"annalaura",t:"Blocage du règlement si litige",d:"Tag @Émilie : « NE PAS régler jusqu'à résolution »."},
+  {n:24,ph:"Phase 7 · Compta fournisseur",role:"emilie",t:"Réception de la facture fournisseur",d:"Email direct ou dépôt ZEENDOC."},
+  {n:25,role:"emilie",t:"Saisie de la facture en compta",d:"Compta → Fournisseurs → Factures, import des lignes depuis le PO."},
+  {n:26,role:"emilie",t:"Contrôle prix / quantité / TVA vs PO",d:"Rapprochement facture ↔ PO ↔ réception."},
+  {n:27,role:"emilie",t:"Si écart : blocage + info Anna-Laura",d:"Facture laissée en Brouillon, tag @Anna-Laura."},
+  {n:28,role:"emilie",t:"Validation de la facture (posted)",d:"Si conforme → « Confirmer », PDF attaché au chatter."},
+  {n:29,ph:"Phase 8 · Paiement",role:"emilie",t:"Balance âgée fournisseur",d:"Compta → Rapports → Balance âgée fourn."},
+  {n:30,role:"emilie",t:"Préparation du SEPA fournisseurs",d:"Sélection des factures échues → « Enregistrer paiement » (SEPA Credit)."},
+  {n:31,role:"marianne",t:"Validation du SEPA",d:"Marianne vérifie montants / bénéficiaires puis « Valider »."},
+  {n:32,role:"emilie",t:"Envoi du fichier SEPA à la banque",d:"Génération XML → upload Crédit Agricole → signature."},
+  {n:33,role:"emilie",t:"Rapprochement → facture payée",d:"Les débits arrivent → factures fourn marquées payées automatiquement."}
+ ],
+ carte:[
+  {tag:"À retenir",title:"Les garde-fous",kind:"kp",data:[
+   "Ange-Joseph <b>réceptionne, contrôle, signe</b> le BL et valide le picking dans Odoo.",
+   "Anna-Laura <b>compare BL ↔ PO</b> avant toute transmission à la compta (fonction pivot achats).",
+   "Anna-Laura <b>bloque le règlement</b> en cas de litige ; Émilie ne paie pas tant que non résolu.",
+   "Marianne <b>valide le SEPA</b> fournisseurs avant émission."
+  ]},
+  {tag:"Cadence",title:"Délais critiques",kind:"kp",data:[
+   "Suivi ARC : continu, alerte si > 5 j sans accusé.",
+   "Transmission BL Ange-Joseph → Anna-Laura : fin de journée.",
+   "Comparaison BL vs PO : le lendemain matin.",
+   "Saisie facture fournisseur : 5 j max après BL contrôlé.",
+   "SEPA : hebdo (Émilie prépare → Marianne valide)."
+  ]}
+ ],
+ slides:[],
+ chapters:[
+  {n:"A1",role:"marianne",by:"marianne",title:"Créer une demande de devis (RFQ)",obj:"Formaliser une demande de prix à un fournisseur.",prereq:"Besoin identifié, fournisseur connu. 📍 Achats → Demandes de prix.",body:`
+   <ol class="steps"><li>Achats → « Commandes → Demandes de prix » → « Nouveau »</li>
+   <li>Fournisseur (ou « Créer ») · référence · date de commande · date de livraison prévue</li>
+   <li>Lignes : Produit (catalogue filtré si vista_produit_achat) · Description · Quantité · Prix unitaire (0 possible en attente) · TVA auto</li>
+   <li>Infos complémentaires : Société (SIAL / VISTA / Isula) · position fiscale · conditions de paiement</li>
+   <li>Sauver → « Envoyer par email » depuis <code>m.massiani@groupe-vista.fr</code></li>
+   <li>La RFQ passe en « Devis fournisseur envoyé »</li></ol>
+   <div class="res-final"><b>Résultat :</b> demande envoyée, en attente du devis retour.</div>`,faq:[]},
+  {n:"A2",role:"marianne",by:"marianne",title:"Transformer une RFQ en PO",obj:"Confirmer la commande au fournisseur après négociation.",prereq:"RFQ créée, prix négociés. 📍 Achats → Demandes de prix.",body:`
+   <ol class="steps"><li>Ouvrir la RFQ → ajuster prix finalisés + date de livraison confirmée</li>
+   <li>« Confirmer la commande » → devient PO (n° attribué, ex PO-SIAL-2026-XXX)</li>
+   <li>« Envoyer par email » au fournisseur (commercial + compta si besoin)</li>
+   <li><b>Anticipation tréso :</b> chatter du PO → mentionner @Émilie : « PO validé, montant X€, échéance [date] »</li></ol>
+   <div class="res-final"><b>Résultat :</b> PO validé et envoyé, trésorerie anticipée.</div>`,faq:[]},
+  {n:"A3",role:"annalaura",by:"annalaura",title:"Suivre les ARC fournisseurs",obj:"S'assurer que chaque PO envoyé est bien reçu et confirmé.",prereq:"PO envoyés. ⏰ suivi continu. 📍 Achats → Commandes.",body:`
+   <ol class="steps"><li>Achats → Commandes · filtres « Envoyés » / « Confirmés » / « En retard »</li>
+   <li>Pour chaque PO en attente : vérifier l'email de confirmation → noter « ARC reçu le [date] » dans le chatter</li>
+   <li>Ajuster la date de livraison si le fournisseur en propose une autre</li>
+   <li>Pas d'ARC depuis > 3 j → relance téléphone (tracée) ; > 5 j → alerter Marianne</li>
+   <li>~3 j avant la livraison : prévenir Ange-Joseph pour le créneau de réception</li></ol>
+   <div class="res-final"><b>Résultat :</b> aucune commande fournisseur ne dort sans suivi.</div>`,faq:[]},
+  {n:"A4",role:"angejoseph",by:"angejoseph",title:"Réceptionner une livraison fournisseur",obj:"Réceptionner physiquement puis valider dans Odoo.",prereq:"PO confirmé, livraison prévue. 📍 Inventaire → Réceptions.",body:`
+   <div class="route">Physique</div>
+   <ol class="steps"><li>Fournisseur arrive avec la marchandise + BL papier ; sortir le PO Odoo</li>
+   <li>Contrôle ligne par ligne : références, quantités, état</li>
+   <li>Conforme → signer le BL + tampon date ; écart → noter « sous réserve » + photos</li></ol>
+   <div class="route">Odoo</div>
+   <ol class="steps"><li>Inventaire → Opérations → Réceptions → ouvrir le picking du PO</li>
+   <li>Ajuster « Quantité effectuée » (= prévue si conforme, sinon réel)</li>
+   <li>« Valider » ; si partiel → « Créer reliquat » (backorder) → picking « Terminé »</li>
+   <li>Fin de journée : transmettre tous les BL signés à Anna-Laura</li></ol>
+   <div class="res-final"><b>Résultat :</b> réception en stock, BL en attente de contrôle Anna-Laura.</div>`,faq:[]},
+  {n:"A5",role:"annalaura",by:"annalaura",title:"Comparer BL fournisseur vs PO Odoo",obj:"Vérifier la conformité BL ↔ PO avant transmission à la compta.",prereq:"BL transmis par Ange-Joseph la veille. ⏰ le lendemain matin. 📍 Achats → Commandes.",body:`
+   <ol class="steps"><li>Repérer le n° PO sur le BL → ouvrir le PO (Achats → Commandes)</li>
+   <li>Comparer ligne par ligne : références · quantités livrées (vs picking validé) · prix</li>
+   <li><b>Conforme :</b> PDF du BL dans le chatter du PO + message « conforme, transmis à Émilie » → tag @Émilie</li>
+   <li><b>Partiel conforme :</b> vérifier le backorder du reliquat, le suivre</li>
+   <li><b>Écart :</b> contacter le fournisseur (avoir / complément), tout tracer dans le chatter ; tag @Émilie « litige en cours, NE PAS régler »</li>
+   <li>Archiver le BL (classeur ou GED) · statut PO à jour</li></ol>
+   <div class="res-final"><b>Résultat :</b> traçabilité complète, écarts traités, Émilie informée.</div>`,
+   warn:"Ne jamais transmettre à Émilie sans comparaison BL ↔ PO — c'est la fonction pivot d'Anna-Laura sur les achats. Toujours documenter l'écart dans le chatter du PO.",faq:[]},
+  {n:"A6",role:"emilie",by:"emilie",title:"Saisir une facture fournisseur",obj:"Intégrer la facture en compta, contrôle prix / TVA.",prereq:"BL conforme contrôlé. ⏰ 5 j max. 📍 Compta → Fournisseurs → Factures.",body:`
+   <ol class="steps"><li>Compta → Fournisseurs → Factures → « Nouveau »</li>
+   <li>Fournisseur → Odoo propose les PO liés → sélectionner ; date, échéance (payment_term), référence facture</li>
+   <li>Import auto des lignes depuis le PO (selon quantités réceptionnées)</li>
+   <li>Contrôle : description · quantité · prix HT · TVA (France / Intracom / autoliquidation) · total</li>
+   <li><b>Conforme :</b> « Confirmer » → posted + PDF attaché → entre en balance âgée</li>
+   <li><b>Écart :</b> laisser en Brouillon, chatter « écart [type] », tag @Anna-Laura ; ajuster puis valider après résolution</li></ol>
+   <div class="res-final"><b>Résultat :</b> facture fournisseur en compta, prête au paiement hebdo.</div>`,faq:[]},
+  {n:"A7",role:"emilie",by:"emilie",title:"Préparer le SEPA fournisseurs",obj:"Préparer le batch de paiements hebdo (Émilie prépare, Marianne valide).",prereq:"Factures fournisseurs postées. ⏰ hebdo (ex. mardi matin). 📍 Compta → Fournisseurs.",body:`
+   <ol class="steps"><li>Compta → Fournisseurs → Factures · filtre « À payer » / « Échues » · trier par échéance</li>
+   <li>Cocher les factures de la semaine → Actions → « Enregistrer paiement » (mass action)</li>
+   <li>Journal (Banque SIAL…) · Mode « SEPA Credit Transfer » · date · grouper par fournisseur</li>
+   <li>« Créer le paiement » → paiements en attente de validation</li>
+   <li><b>Validation Marianne :</b> Émilie prévient → Marianne vérifie montants / bénéficiaires → « Valider »</li>
+   <li>Générer le fichier SEPA (XML) → upload banque Crédit Agricole → signer + envoyer</li>
+   <li>Les débits arrivent → rapprochement auto → factures fourn <code>paid</code></li></ol>
+   <div class="res-final"><b>Résultat :</b> fournisseurs payés, factures marquées payées automatiquement.</div>`,faq:[]}
+ ]
+};
+
+const WF_SAV={
+ id:"sav", name:"SAV", sub:"De la demande client à la clôture",
+ railH:"SAV (1 → 6)",
+ eyebrow:"Attribution", pageTitle:"Service après-vente",
+ lead:"Six étapes. Anna-Laura ouvre et suit le ticket ; Ange-Joseph traite (Michaël si complexe) ; les non-conformités chantier remontent au BE.",
+ roles:{annalaura:R_ADV,angejoseph:R_ATE,michael:R_BE},
+ steps:[
+  {n:"SAV1",label:"Réception demande SAV",sub:"client",role:"annalaura",who:"annalaura"},
+  {n:"SAV2",label:"Ouverture ticket Odoo",sub:"",role:"annalaura",who:"annalaura"},
+  {n:"SAV3",label:"Transmission du ticket",sub:"à l'atelier",role:"annalaura",who:"annalaura",to:"angejoseph",delai:"24h"},
+  {n:"SAV4",label:"Analyse + intervention",sub:"technique",role:"angejoseph",who:"angejoseph"},
+  {n:"SAV5",label:"Suivi + info client",sub:"jusqu'à clôture",role:"annalaura",who:"annalaura",delai:"continu"},
+  {n:"SAV6",label:"Analyse non-conformités",sub:"chantiers",role:"michael",who:"michael",delai:"continu"}
+ ],
+ flow:[
+  {n:"SAV1",role:"annalaura",t:"Réception de la demande SAV",d:"Anna-Laura reçoit la demande du client."},
+  {n:"SAV2",role:"annalaura",t:"Ouverture du ticket Odoo",d:"Enregistrement et création du ticket."},
+  {n:"SAV3",role:"annalaura",t:"Transmission du ticket",d:"Transmis à Ange-Joseph sous 24h."},
+  {n:"SAV4",role:"angejoseph",t:"Analyse technique + intervention",d:"Ange-Joseph traite — Michaël si le cas est complexe."},
+  {n:"SAV5",role:"annalaura",t:"Suivi + information client",d:"Anna-Laura suit et informe le client jusqu'à la clôture."},
+  {n:"SAV6",role:"michael",t:"Analyse des non-conformités",d:"Michaël analyse les non-conformités remontées des chantiers."}
+ ],
+ carte:[],
+ slides:[], chapters:[]
+};
+
+const WF_REPORTING={
+ id:"reporting", name:"Reporting & trésorerie", sub:"Pilotage financier consolidé",
+ railH:"Reporting (RP1 → RP9)",
+ eyebrow:"Attribution", pageTitle:"Reporting & trésorerie",
+ lead:"Neuf flux de pilotage. Émilie produit, Erwan (DAF) reçoit les balances hebdo, Marianne est alertée dès J-21 en cas de tension.",
+ roles:{emilie:R_CPT,erwan:R_DAF,marianne:R_DIR},
+ steps:[
+  {n:"RP1",label:"Balance âgée client",sub:"hebdo",role:"emilie",who:"emilie",to:"erwan",delai:"hebdo"},
+  {n:"RP2",label:"Balance âgée fournisseur",sub:"hebdo",role:"emilie",who:"emilie",to:"erwan",delai:"hebdo"},
+  {n:"RP3",label:"Éléments trésorerie",sub:"hebdo",role:"emilie",who:"emilie",to:"erwan",delai:"hebdo"},
+  {n:"RP4",label:"Anticipation encaissements",sub:"",role:"emilie",who:"emilie",delai:"continu"},
+  {n:"RP5",label:"Alerte tension tréso",sub:"J-21",role:"emilie",who:"emilie",to:"marianne",delai:"dès J-21"},
+  {n:"RP6",label:"Reporting mensuel consolidé",sub:"→ Marianne + Erwan",role:"emilie",who:"emilie",to:"marianne",delai:"avant le 10"},
+  {n:"RP7",label:"Compta analytique",sub:"marge / affaire",role:"emilie",who:"emilie",delai:"continu"},
+  {n:"RP8",label:"Déclaration CA3",sub:"TVA cash basis",role:"emilie",who:"emilie",delai:"mensuelle"},
+  {n:"RP9",label:"Retenues garantie & cautions",sub:"",role:"emilie",who:"emilie",delai:"continu"}
+ ],
+ flow:[
+  {n:"RP1",role:"emilie",t:"Balance âgée client (hebdo)",d:"Produite par Émilie, transmise à Erwan."},
+  {n:"RP2",role:"emilie",t:"Balance âgée fournisseur (hebdo)",d:"Produite par Émilie, transmise à Erwan."},
+  {n:"RP3",role:"emilie",t:"Éléments de trésorerie (hebdo)",d:"Synthèse hebdo transmise à Erwan."},
+  {n:"RP4",role:"emilie",t:"Anticipation des encaissements",d:"Suivi continu des rentrées attendues."},
+  {n:"RP5",role:"emilie",t:"Alerte tension trésorerie J-21",d:"Émilie alerte Marianne dès J-21."},
+  {n:"RP6",role:"emilie",t:"Reporting mensuel consolidé",d:"Transmis à Marianne + Erwan avant le 10."},
+  {n:"RP7",role:"emilie",t:"Comptabilité analytique",d:"Marge réelle par affaire, en continu."},
+  {n:"RP8",role:"emilie",t:"Déclaration CA3 (TVA cash basis)",d:"Mensuelle."},
+  {n:"RP9",role:"emilie",t:"Suivi des retenues de garantie & cautions",d:"Suivi continu des RG et cautions."}
+ ],
+ carte:[],
+ slides:[], chapters:[]
+};
+
+const WF_PAIE={
+ id:"paie", name:"Paie & personnel", sub:"Du pointage à la DSN",
+ railH:"Paie (P1 → P8)",
+ eyebrow:"Attribution", pageTitle:"Paie & personnel",
+ lead:"Huit étapes. Le pointage atelier se fait sur pointeuse physique (hors Odoo) ; Émilie porte tout le reste et Marianne valide les bulletins.",
+ roles:{emilie:R_CPT,marianne:R_DIR,horsodoo:{short:"Hors Odoo",scope:"pointeuse",color:"#9A968C"}},
+ steps:[
+  {n:"P1",label:"Pointage atelier",sub:"pointeuse physique (hors Odoo)",role:"horsodoo"},
+  {n:"P2",label:"Vérif hebdo pointages",sub:"extrait pointeuse",role:"emilie",who:"emilie",delai:"hebdo"},
+  {n:"P3",label:"Collecte éléments variables",sub:"",role:"emilie",who:"emilie"},
+  {n:"P4",label:"Saisie Sage Paie",sub:"en ligne",role:"emilie",who:"emilie"},
+  {n:"P5",label:"Contrôle bulletins",sub:"validation",role:"emilie",who:"emilie",to:"marianne"},
+  {n:"P6",label:"OD paie + SEPA salaires",sub:"dans Odoo",role:"emilie",who:"emilie"},
+  {n:"P7",label:"DSN, DPAE, mutuelles",sub:"mensuel",role:"emilie",who:"emilie"},
+  {n:"P8",label:"Formations & habilitations",sub:"visites médicales",role:"emilie",who:"emilie"}
+ ],
+ flow:[
+  {n:"P1",role:"horsodoo",t:"Pointage atelier",d:"Saisie sur pointeuse physique — hors Odoo."},
+  {n:"P2",role:"emilie",t:"Vérification hebdo des pointages",d:"Émilie contrôle l'extrait de la pointeuse (hebdo)."},
+  {n:"P3",role:"emilie",t:"Collecte des éléments variables de paie",d:"Primes, heures, absences…"},
+  {n:"P4",role:"emilie",t:"Saisie dans Sage Paie en ligne",d:"Préparation des bulletins."},
+  {n:"P5",role:"emilie",t:"Contrôle des bulletins",d:"Émilie contrôle → Marianne valide."},
+  {n:"P6",role:"emilie",t:"OD de paie + SEPA salaires",d:"Écriture dans Odoo et virement des salaires."},
+  {n:"P7",role:"emilie",t:"DSN mensuelle, DPAE, mutuelles",d:"Déclarations sociales mensuelles."},
+  {n:"P8",role:"emilie",t:"Formations, habilitations, visites médicales",d:"Suivi RH continu."}
+ ],
+ carte:[],
+ slides:[], chapters:[]
+};
+
+const WF_FABRICATION={
+ id:"fabrication", name:"Lancement en fabrication", sub:"Du dossier fab à la mise à disposition",
+ railH:"Fabrication (25 étapes)",
+ eyebrow:"Attribution", pageTitle:"Lancement en fabrication",
+ lead:"Vingt-cinq étapes en sept phases, du dossier de fabrication à la mise à disposition pour livraison. Trois jalons : Marianne crée le Bon de Préparation, Ange-Joseph valide techniquement et planifie l'OF (délai confirmé sous 24 h), et le visa qualité QC-4 est bloquant avant toute expédition.",
+ roles:{marianne:R_DIR,michael:R_BE,angejoseph:R_ATE,atelier:{short:"Atelier",scope:"Opérateurs",color:"#8AA0AE"}},
+ steps:[
+  {n:1,label:"Chiffrage + validation devis",sub:"côté commercial",role:"marianne",who:"marianne",chap:0},
+  {n:2,label:"Production des débits",sub:"longueurs de coupe",role:"michael",who:"michael",chap:0},
+  {n:3,label:"Production fichiers CNC",sub:"commande numérique",role:"marianne",who:"marianne",chap:0},
+  {n:4,label:"Constitution dossier fab",sub:"complet",role:"marianne",who:"marianne",to:"michael",chap:0},
+  {n:5,label:"Création du BP dans Odoo",sub:"bouton stat sur SO",role:"marianne",who:"marianne",delai:"à signature commande",chap:0},
+  {n:6,label:"Configuration compositions",sub:"types × qté / unité",role:"marianne",who:"marianne",chap:0},
+  {n:7,label:"Contrôle « Résumé par type »",sub:"totaux agrégés",role:"marianne",who:"marianne",chap:0},
+  {n:8,label:"Marquer BP prêt",sub:"state=ready",role:"marianne",who:"marianne",chap:0},
+  {n:9,label:"Impression + transmission",sub:"à Ange-Joseph",role:"marianne",who:"marianne",to:"angejoseph",chap:0},
+  {n:10,label:"Validation technique dossier",sub:"",role:"angejoseph",who:"angejoseph",chap:1},
+  {n:11,label:"Création OF dans Odoo",sub:"mrp.production",role:"angejoseph",who:"angejoseph",chap:1},
+  {n:12,label:"Planification OF",sub:"capacité atelier",role:"angejoseph",who:"angejoseph",chap:1},
+  {n:13,label:"Confirmation délai",sub:"à l'ADV",role:"angejoseph",who:"angejoseph",to:"annalaura",delai:"24h",chap:1},
+  {n:14,label:"Distribution ordres de travail",sub:"opérateurs",role:"angejoseph",who:"angejoseph",chap:2},
+  {n:15,label:"Fabrication physique",sub:"opérateurs",role:"atelier",who:"atelier",delai:"durée selon OF",chap:2},
+  {n:16,label:"Suivi avancement",sub:"heures, difficultés",role:"angejoseph",who:"angejoseph",delai:"continu",chap:2},
+  {n:17,label:"QC-1 matière première",sub:"avant démarrage",role:"angejoseph",who:"angejoseph",chap:3},
+  {n:18,label:"QC-2 usinage",sub:"en cours fab",role:"angejoseph",who:"angejoseph",chap:3},
+  {n:19,label:"QC-3 assemblage",sub:"fin assemblage",role:"angejoseph",who:"angejoseph",chap:3},
+  {n:20,label:"QC-4 + Visa qualité final",sub:"bloquant, avant expédition",role:"angejoseph",who:"angejoseph",chap:3},
+  {n:21,label:"Traçabilité CEKAL",sub:"lots vitrages",role:"angejoseph",who:"angejoseph",chap:3},
+  {n:22,label:"Étiquetage Window.ID",sub:"identification",role:"angejoseph",who:"angejoseph",chap:3},
+  {n:23,label:"Mise à dispo zone tampon",sub:"T-S1 / T-S2",role:"angejoseph",who:"angejoseph",chap:3},
+  {n:24,label:"OF marqué « Terminé »",sub:"Odoo",role:"angejoseph",who:"angejoseph",chap:3},
+  {n:25,label:"Info ADV : prêt à charger",sub:"",role:"angejoseph",who:"angejoseph",to:"annalaura",chap:3}
+ ],
+ flow:[
+  {n:1,ph:"Phase 1 · Préparation du dossier de fabrication",role:"marianne",t:"Chiffrage + validation du devis",d:"Côté commercial (Marianne / Michaël), dans PRO F2."},
+  {n:2,role:"michael",t:"Production des débits",d:"Calcul des longueurs de coupe (BE, PRO F2)."},
+  {n:3,role:"marianne",t:"Production des fichiers CNC",d:"Machines à commande numérique (Smart Assembly)."},
+  {n:4,role:"marianne",t:"Constitution du dossier fab complet",d:"Marianne + Michaël (PRO F2 + fichiers)."},
+  {n:5,ph:"Phase 2 · Bon de préparation Odoo",role:"marianne",t:"Création du BP dans Odoo",d:"Bouton stat « Bon de préparation » sur la SO (à signature commande)."},
+  {n:6,role:"marianne",t:"Configuration des compositions",d:"Par ligne SO : types × quantité par unité."},
+  {n:7,role:"marianne",t:"Contrôle « Résumé par type »",d:"Vérification des totaux agrégés."},
+  {n:8,role:"marianne",t:"Marquer le BP prêt",d:"Bouton « Marquer prêt » → state=ready."},
+  {n:9,role:"marianne",t:"Impression + transmission",d:"PDF « Bon de préparation » → Ange-Joseph."},
+  {n:10,ph:"Phase 3 · Validation technique & planification",role:"angejoseph",t:"Validation technique du dossier",d:"Compositions, débits, CNC, matière : cohérence contrôlée."},
+  {n:11,role:"angejoseph",t:"Création de l'Ordre de Fabrication",d:"Fabrication → OF → Nouveau (mrp.production)."},
+  {n:12,role:"angejoseph",t:"Planification de l'OF",d:"Selon capacité atelier, charge machine, matière."},
+  {n:13,role:"angejoseph",t:"Confirmation du délai à l'ADV",d:"Chatter → @Anna-Laura : livraison possible à partir de [date] (24 h)."},
+  {n:14,ph:"Phase 4 · Fabrication",role:"angejoseph",t:"Distribution des ordres de travail",d:"BP + débits + fichiers CNC transmis aux opérateurs."},
+  {n:15,role:"atelier",t:"Fabrication physique",d:"Par les opérateurs — Ange-Joseph encadre, ne fabrique pas."},
+  {n:16,role:"angejoseph",t:"Suivi de l'avancement",d:"Heures, difficultés, consommation matière (OF Odoo)."},
+  {n:17,ph:"Phase 5 · Contrôle qualité",role:"angejoseph",t:"QC-1 — matière première",d:"Composants réceptionnés conformes → x_qc1_ok."},
+  {n:18,role:"angejoseph",t:"QC-2 — usinage",d:"Dimensions découpes + tolérances → x_qc2_ok."},
+  {n:19,role:"angejoseph",t:"QC-3 — assemblage",d:"Étanchéité AEV, mécanisme, esthétique → x_qc3_ok."},
+  {n:20,role:"angejoseph",t:"QC-4 — visa qualité final",d:"Conformité dossier, Window.ID, CE, CEKAL → x_qc4_ok. Bloquant : sans lui, pas d'expédition."},
+  {n:21,ph:"Phase 6 · Traçabilité",role:"angejoseph",t:"Traçabilité vitrages CEKAL",d:"Enregistrement des n° de lots (registres CE)."},
+  {n:22,role:"angejoseph",t:"Étiquetage Window.ID",d:"Identification des menuiseries."},
+  {n:23,role:"angejoseph",t:"Mise à disposition zone tampon",d:"T-S1 (entrée) ou T-S2 (sortie)."},
+  {n:24,ph:"Phase 7 · Prêt pour livraison",role:"angejoseph",t:"OF marqué « Terminé »",d:"« Marquer comme fait » → consommation matière figée."},
+  {n:25,role:"angejoseph",t:"Info ADV : prêt à charger",d:"Chatter → @Anna-Laura, qui peut créer le BC."}
+ ],
+ carte:[
+  {tag:"À retenir",title:"Les jalons bloquants",kind:"kp",data:[
+   "Le <b>Bon de Préparation</b> est créé par Marianne (dossier fab technique), pas par l'ADV.",
+   "Ange-Joseph <b>valide techniquement</b> le dossier avant de créer et planifier l'OF.",
+   "Confirmation du <b>délai à Anna-Laura sous 24 h</b> après réception du BP.",
+   "<b>QC-4 (visa qualité final) bloquant</b> : sans <code>x_qc4_ok</code>, aucune expédition.",
+   "Ange-Joseph <b>encadre et contrôle</b> — il ne fabrique pas lui-même."
+  ]}
+ ],
+ slides:[],
+ chapters:[
+  {n:"F1",role:"marianne",by:"marianne",title:"Créer un Bon de Préparation depuis la SO",obj:"Générer le BP atelier avec composition détaillée à partir de la commande signée.",prereq:"SO signée (state=sale), dossier fab prêt (PRO F2 + CNC). 📍 Ventes → Commandes.",body:`
+   <ol class="steps"><li>Ouvrir la SO (nom client / chantier) → bouton stat « Bon de préparation »</li>
+   <li>Aucun BP : Odoo en crée un en Brouillon (1 ligne par ligne SO ; service et x_non_livrable exclus). Compositions par défaut auto-remplies si configurées sur product.template</li>
+   <li>BP existant : Odoo l'ouvre (pas de doublon)</li>
+   <li><b>Éditer les compositions :</b> clic sur chaque ligne → pop-up : Type de chargement (Dormant Coul 2R / Ouvrant Coul-Gal / Vitrage…) · Qté par unité (ex. Fenêtre coul. 2R → 1 dormant + 2 ouvrants + 2 vitrages) · Qté totale (auto)</li>
+   <li>Onglet « Résumé par type » : vérifier les totaux agrégés</li>
+   <li>« Marquer prêt » → état « Prêt »</li>
+   <li>Imprimer → « Bon de préparation » (PDF A4 : compo + cases à cocher + zone fab/opérateur/QC) → envoyer à Ange-Joseph</li></ol>
+   <div class="res-final"><b>Résultat :</b> BP prêt, atelier en attente de validation technique (F2).</div>`,faq:[]},
+  {n:"F2",role:"angejoseph",by:"angejoseph",title:"Valider techniquement et planifier l'OF",obj:"Valider le dossier de Marianne, créer et planifier l'Ordre de Fabrication.",prereq:"BP reçu. ⏰ 24 h entre réception du BP et confirmation du délai à Anna-Laura. 📍 Fabrication → OF.",body:`
+   <div class="route">Validation technique</div>
+   <ol class="steps"><li>Ouvrir le BP (Ventes → Bons de préparation) : compositions cohérentes avec les débits, CNC disponibles, matière dispo, cohérence plans Michaël ↔ dossier Marianne</li>
+   <li>Problème → chatter @Marianne (décrire précisément) et attendre correction avant de planifier</li></ol>
+   <div class="route">Création & planification de l'OF</div>
+   <ol class="steps"><li>Fabrication → Ordres de fabrication → « Nouveau » : Produit · Quantité · Nomenclature (BOM) · Origine = SO · date prévue · responsable</li>
+   <li>Ajouter les composants matière si pas de BOM (profils, quincaillerie, vitrages)</li>
+   <li>Planifier selon capacité atelier (priorités livraison, charge machine, matière, congés)</li>
+   <li><b>Confirmer le délai :</b> chatter du BP/OF → @Anna-Laura : « OF planifié pour [date], livraison possible à partir de [date + fab] »</li></ol>
+   <div class="res-final"><b>Résultat :</b> OF validé, planifié, Anna-Laura informée du délai.</div>`,faq:[]},
+  {n:"F3",role:"angejoseph",by:"angejoseph",title:"Distribuer les ordres et suivre la fabrication",obj:"Lancer la fabrication et suivre son avancement.",prereq:"OF confirmé, matière disponible. 📍 Fabrication → OF.",body:`
+   <ol class="steps"><li>Ouvrir l'OF (filtre « Confirmés » / « Planifiés ») → « Marquer comme prêt » → « En cours »</li>
+   <li>Distribution : imprimer l'OF (papier atelier) ou informer l'opérateur ; transmettre BP + débits + fichiers CNC</li>
+   <li>Consignes : priorité, points de vigilance qualité, deadline</li>
+   <li>Suivi : tour d'atelier ; mettre à jour consommation matière / heures / avancement sur l'OF</li></ol>
+   <div class="callout warn"><span class="ic">⚠️</span><span>Ange-Joseph <b>ne fabrique pas</b> lui-même : il pilote, contrôle, forme. S'il exécute régulièrement, c'est un signal (manque d'effectif, non-conformité process) à remonter à Marianne.</span></div>
+   <div class="res-final"><b>Résultat :</b> fabrication en cours, avancement suivi.</div>`,faq:[]},
+  {n:"F4",role:"angejoseph",by:"angejoseph",title:"Contrôle qualité QC-1 à QC-4 + Visa final",obj:"Contrôler la qualité à chaque étape et apposer le visa final bloquant.",prereq:"OF en cours, module vista_qualite installé. 📍 mrp.production / vista_qualite.",body:`
+   <ol class="steps"><li><b>QC-1 · matière première</b> (avant démarrage) : composants conformes → cocher <code>x_qc1_ok</code></li>
+   <li><b>QC-2 · usinage</b> : dimensions découpes + tolérances → <code>x_qc2_ok</code></li>
+   <li><b>QC-3 · assemblage</b> : étanchéité AEV, mécanisme (ouverture/verrouillage), esthétique → <code>x_qc3_ok</code></li>
+   <li><b>QC-4 · visa final</b> (avant expédition) : conformité dossier (dimensions, coloris, options), Window.ID apposés, étiquettes CE, fiches CEKAL vitrages, emballage transport → <code>x_qc4_ok</code></li></ol>
+   <div class="callout warn"><span class="ic">🚫</span><span>Sans <code>x_qc4_ok</code> coché : <b>aucune expédition possible</b>.</span></div>
+   <div class="route">Traçabilité & clôture</div>
+   <ol class="steps"><li>Enregistrer les n° de lots vitrages (CEKAL) · coller les étiquettes Window.ID · photos si audit</li>
+   <li>OF → « Marquer comme fait » → « Terminé » (consommation matière figée)</li>
+   <li>Chatter : « Fabrication terminée, QC OK, prêt à charger » → tag @Anna-Laura</li></ol>
+   <div class="res-final"><b>Résultat :</b> produits prêts à expédier, traçabilité complète, Anna-Laura peut créer le BC.</div>`,faq:[]},
+  {n:"F5",role:"angejoseph",by:"angejoseph",title:"Alerte seuil de réapprovisionnement",obj:"Alerter Marianne quand un composant tombe sous le seuil mini.",prereq:"Règles de réappro configurées sur les produits critiques. 📍 Inventaire → Rapports.",body:`
+   <ol class="steps"><li>Automatique : Inventaire → Rapports → « Stock à réapprovisionner » (produits sous seuil) — Odoo peut proposer des RFQ</li>
+   <li>Manuel : tour du dépôt matière ; Inventaire → « Stock disponible » filtré par catégorie (Profils alu, Quincaillerie…)</li>
+   <li>Alerter Marianne : liste des produits sous seuil, quantités restantes vs mini, urgence — idéalement consolidée 1×/semaine (mardi)</li>
+   <li>Tenir à jour les zones tampons T-S1 (entrée) / T-S2 (sortie) ; alerter si débordement ou rupture</li></ol>
+   <div class="res-final"><b>Résultat :</b> Marianne informée, elle passe les PO nécessaires (voir Achats A1/A2).</div>`,faq:[]}
+ ]
+};
+
+const WORKFLOWS=[WF_LIVRAISON,WF_FACTURATION,WF_CONTACTS,WF_EQUIPE,WF_ACHATS,WF_FABRICATION,WF_SAV,WF_REPORTING,WF_PAIE];
+const PEOPLE={
+ marianne:{name:"Marianne",color:"#4F5E46"},
+ michael:{name:"Michaël",color:"#7A5C8E"},
+ annalaura:{name:"Anna-Laura",color:"#B0862B"},
+ angejoseph:{name:"Ange-Joseph",color:"#3E6B8B"},
+ emilie:{name:"Émilie",color:"#5B8A72"},
+ erwan:{name:"Erwan",color:"#8A6D5A"},
+ laurent:{name:"Laurent",color:"#C27A4A"},
+ atelier:{name:"Équipe atelier",color:"#8AA0AE"},
+ chauffeur:{name:"Chauffeur externe",color:"#9A968C"}
+};
+function attribHTML(step,cls){
+ if(!step||(!step.who&&!step.delai))return'';
+ const p=k=>PEOPLE[k]?`<span class="who"><span class="wd" style="background:${PEOPLE[k].color}"></span>${PEOPLE[k].name}</span>`:'';
+ let s='';
+ if(step.who)s+=p(step.who);
+ if(step.to)s+=`<span class="arrow">→</span>`+p(step.to);
+ if(step.delai)s+=`<span class="delai">⏱ ${step.delai}</span>`;
+ return`<div class="attrib ${cls||''}">${s}</div>`;
+}
+let wfIdx=0, mode="carte", slideIdx=0, chapIdx=0;
+const WF=()=>WORKFLOWS[wfIdx];
+const rc=k=>(WF().roles[k]||{}).color||"#999";
+const disp=n=>{const s=String(n);const m=s.match(/^([A-Za-z]+)(\d+)$/);return m?m[1][0]+m[2]:s;};
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const gtable=o=>`<div class="tbl-scroll"><table class="gt"><thead><tr>${o.cols.map(c=>`<th>${c}</th>`).join('')}</tr></thead><tbody>${o.rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+
+// theme menu
+$('#theme').innerHTML=WORKFLOWS.map((w,i)=>`<option value="${i}">${w.name}</option>`).join('');
+$('#theme').onchange=e=>switchWF(+e.target.value);
+
+function rebuildChrome(){
+ const wf=WF();
+ $('#brand-sub').textContent=wf.sub;
+ $('#rail-h').textContent=wf.railH;
+ $('#spine').innerHTML=wf.steps.map(s=>`
+  <li class="node" data-step="${s.n}" style="--role:${rc(s.role)}">
+   <button class="node-btn"><span class="dot">${disp(s.n)}</span>
+    <span class="node-txt"><span class="nl">${s.label}</span><span class="ns">${s.sub}</span></span></button></li>`).join('');
+ $('#legend').innerHTML=Object.entries(wf.roles).map(([k,r])=>`
+  <div class="leg-item"><span class="leg-swatch" style="background:${r.color}"></span><b>${r.short}</b><span>${r.scope}</span></div>`).join('');
+ $('#dots').innerHTML=wf.slides.map((_,i)=>`<button class="pdot" data-i="${i}" aria-label="Slide ${i+1}"></button>`).join('');
+ const hasDeck=(wf.slides||[]).length>0, hasGuide=(wf.chapters||[]).length>0;
+ $('.mode-btn[data-mode="deck"]').style.display=hasDeck?'':'none';
+ $('.mode-btn[data-mode="guide"]').style.display=hasGuide?'':'none';
+}
+
+function renderSection(el,sec){
+ if(sec.kind==='compare'){
+  el.innerHTML=`<div class="aa">
+   <div class="aa-col before"><div class="aa-head">${sec.data.head[0]}</div>${sec.data.rows.map(r=>`<div class="aa-row">${r[0]}</div>`).join('')}</div>
+   <div class="aa-col after"><div class="aa-head">${sec.data.head[1]}</div>${sec.data.rows.map(r=>`<div class="aa-row">${r[1]}</div>`).join('')}</div></div>`;
+ }else if(sec.kind==='gtable'){el.innerHTML=gtable(sec.data);}
+ else if(sec.kind==='roles'){
+  el.innerHTML=`<div class="rtable">
+   <div class="rrow head"><div class="rcell">Rôle</div><div class="rcell">${sec.colLabel}</div><div class="rcell">Actions principales</div></div>
+   ${sec.data.map(r=>`<div class="rrow" style="--role:${rc(r[0])}">
+     <div class="rcell role"><b><span class="cd"></span>${r[1]}</b></div>
+     <div class="rcell steps" data-label="${sec.colLabel}">${r[2]}</div><div class="rcell act">${r[3]}</div></div>`).join('')}</div>`;
+ }else if(sec.kind==='kp'){el.innerHTML=`<div class="kp">${sec.data.map(k=>`<div class="kp-item">${k}</div>`).join('')}</div>`;}
+ else if(sec.kind==='attention'){el.innerHTML=`<div class="attn">${sec.data.map(a=>`<div class="attn-item"><span class="ic">⚠️</span><span>${a}</span></div>`).join('')}</div>`;}
+}
+
+function renderCarte(){
+ const wf=WF();
+ let html=`<span class="eyebrow">${wf.eyebrow}</span><h1 class="page">${wf.pageTitle}</h1><p class="lead">${wf.lead}</p><div class="flow" id="flow"></div>`;
+ wf.carte.forEach((sec,i)=>{html+=`<h2 class="block-h"><span class="e">${sec.tag}</span>${sec.title}</h2><div id="csec-${i}"></div>`;});
+ $('#carte-wrap').innerHTML=html;
+ $('#flow').innerHTML=wf.flow.map(f=>{
+   const stp=wf.steps.find(s=>String(s.n)===String(f.n))||{};
+   const badge=wf.roles[f.role]?`<span class="rbadge">${wf.roles[f.role].short}</span>`:'';
+   return `<div class="flow-step" data-step="${f.n}" style="--role:${rc(f.role)}">
+   <div class="flow-num">${disp(f.n)}</div>
+   <div class="flow-card">${f.ph?`<div class="flow-ph">${f.ph}</div>`:''}<h3>${f.t}</h3><p>${f.d}</p>${badge}${attribHTML(stp)}</div></div>`;
+ }).join('');
+ wf.carte.forEach((sec,i)=>renderSection(document.getElementById('csec-'+i),sec));
+}
+
+function renderSlide(){
+ const wf=WF(),s=wf.slides[slideIdx],el=$('#slide');
+ el.style.setProperty('--role',rc(s.role));
+ const attribRow=wf.steps.filter(s=>s.deck===slideIdx).map(s=>attribHTML(s,'slide-attrib')).join('');
+ el.innerHTML=`<div class="slide-num">${String(slideIdx+1).padStart(2,'0')}</div>
+  <div class="slide-kick">${s.kick}</div>${attribRow}<h2>${s.title}</h2><div class="goal">${s.goal}</div>${s.body}`;
+ const st=el.querySelector('#slide-types'); if(st){const tsec=wf.carte.find(c=>c.title==='Les types de factures'); if(tsec) st.innerHTML=gtable(tsec.data);}
+ $('#counter').textContent=`${slideIdx+1} / ${wf.slides.length}`;
+ $('#prevSlide').disabled=slideIdx===0;
+ $('#nextSlide').disabled=slideIdx===wf.slides.length-1;
+ $$('#dots .pdot').forEach((d,i)=>d.classList.toggle('on',i===slideIdx));
+ syncSpine();
+}
+
+function faqHTML(faq){return(!faq||!faq.length)?'':`<div class="sub-h">FAQ</div>`+faq.map(f=>`<details class="faq"><summary>${f[0]}</summary><div class="fa-body">${f[1]}</div></details>`).join('');}
+function renderChapter(){
+ const wf=WF(),c=wf.chapters[chapIdx],prev=wf.chapters[chapIdx-1],next=wf.chapters[chapIdx+1];
+ $('#guide-wrap').innerHTML=`
+  <div class="guide-head" style="--role:${rc(c.role)}">
+   <span class="chip" style="background:${rc(c.role)}">${wf.roles[c.role].short}</span>${c.by&&PEOPLE[c.by]?`<span class="chip" style="background:${PEOPLE[c.by].color}">👤 ${PEOPLE[c.by].name}</span>`:''}
+   <div class="chap-num">Chapitre ${c.n} / ${wf.chapters.length}</div>
+   <h2 class="chap">${c.title}</h2></div>
+  <div class="callout obj"><span class="ic">🎯</span><span><b>Objectif —</b> ${c.obj}</span></div>
+  <div class="callout prereq"><span class="ic">✓</span><span><b>Prérequis —</b> ${c.prereq}</span></div>
+  ${c.body}
+  ${c.warn?`<div class="callout warn"><span class="ic">⚠️</span><span>${c.warn}</span></div>`:''}
+  ${faqHTML(c.faq)}
+  <div class="chap-foot">
+   <button class="foot-btn prev" ${prev?'':'disabled'} onclick="goChap(${chapIdx-1})"><div class="fl">← Chapitre précédent</div><div class="ft">${prev?prev.title:'—'}</div></button>
+   <button class="foot-btn next" ${next?'':'disabled'} onclick="goChap(${chapIdx+1})"><div class="fl">Chapitre suivant →</div><div class="ft">${next?next.title:'—'}</div></button></div>`;
+ $('#view-guide').scrollIntoView({block:'start'});
+ syncSpine();
+}
+window.goChap=i=>{if(i>=0&&i<WF().chapters.length){chapIdx=i;renderChapter();}};
+
+function syncSpine(){
+ const wf=WF(); let active=[];
+ if(mode==='deck')active=wf.steps.filter(s=>s.deck===slideIdx).map(s=>String(s.n));
+ else if(mode==='guide')active=wf.steps.filter(s=>s.chap===chapIdx).map(s=>String(s.n));
+ $$('.node').forEach(n=>n.classList.toggle('on',active.includes(n.dataset.step)));
+}
+
+$('#spine').onclick=e=>{
+ const li=e.target.closest('.node');if(!li)return;
+ const step=WF().steps.find(s=>String(s.n)===li.dataset.step);
+ if(mode==='deck'){slideIdx=step.deck;renderSlide();}
+ else if(mode==='guide'){chapIdx=step.chap;renderChapter();}
+ else{const t=$(`#flow .flow-step[data-step="${step.n}"]`);if(t)t.scrollIntoView({block:'center'});$$('.node').forEach(n=>n.classList.toggle('on',n===li));}
+ closeRail();
+};
+
+$('#dots').onclick=e=>{const b=e.target.closest('.pdot');if(b){slideIdx=+b.dataset.i;renderSlide();}};
+$('#prevSlide').onclick=()=>{if(slideIdx>0){slideIdx--;renderSlide();}};
+$('#nextSlide').onclick=()=>{if(slideIdx<WF().slides.length-1){slideIdx++;renderSlide();}};
+document.addEventListener('keydown',e=>{
+ if(mode!=='deck')return;
+ if(e.key==='ArrowRight'&&slideIdx<WF().slides.length-1){slideIdx++;renderSlide();}
+ if(e.key==='ArrowLeft'&&slideIdx>0){slideIdx--;renderSlide();}
+});
+
+function setMode(m){
+ mode=m;
+ $$('.mode-btn').forEach(b=>b.classList.toggle('active',b.dataset.mode===m));
+ $$('.view').forEach(v=>v.classList.remove('active'));
+ $('#view-'+m).classList.add('active');
+ if(m==='carte')renderCarte();
+ else if(m==='deck')renderSlide();
+ else renderChapter();
+ window.scrollTo({top:0}); closeRail();
+}
+$$('.mode-btn').forEach(b=>b.onclick=()=>setMode(b.dataset.mode));
+
+function switchWF(i){
+ wfIdx=i; slideIdx=0; chapIdx=0;
+ rebuildChrome();
+ const wf=WF();
+ if(mode==='deck'&&!(wf.slides||[]).length)mode='carte';
+ if(mode==='guide'&&!(wf.chapters||[]).length)mode='carte';
+ setMode(mode);
+}
+
+function openRail(){$('#rail').classList.add('open');$('#scrim').classList.add('show');}
+function closeRail(){$('#rail').classList.remove('open');$('#scrim').classList.remove('show');}
+$('#burger').onclick=openRail;$('#scrim').onclick=closeRail;
+$('#printBtn').onclick=()=>window.print();
+
+rebuildChrome(); setMode('carte');
+</script>
+</body>
+</html>
