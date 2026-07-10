@@ -19,7 +19,7 @@ import { generateEtiquettesCE, generateEtiquettesAtelier, generateEtiquettesPost
 import { generateOptimVerrePDF } from '../vitrage/generateOptimPDF';
 import {
   fetchCommandes, insertCommande, patchCommande, removeCommande,
-  fetchSettings, type Settings,
+  fetchSettings, saveSettings, type Settings,
   fetchGlassProducts, upsertGlassProduct, deleteGlassProduct,
   fetchStockPlates, upsertStockPlate, deleteStockPlate,
 } from '../vitrage/store';
@@ -338,6 +338,8 @@ function useOptimization(vitrages: Vitrage[], glass: GlassSettings) {
             plate_height: glass.plateHeight,
             edge_margin: glass.edgeTrimMargin ?? 15,
             cutting_gap: glass.cuttingGap,
+            algorithm: 'staged_dp',
+            machine: glass.machine || 'lisec',
           });
           if (!cancelled) {
             setGlassResult(mapBackendResults(resp.results as Record<string, unknown>[]));
@@ -751,7 +753,7 @@ function TabTracabilite({ commandeRef }: { commandeRef: string }) {
 // ── Tab: Glass Optimization ──────────────────────────────────────────
 
 function TabGlass({ results, loading, backend, commandeLabel }: { results: GlassOptimResult[]; loading?: boolean; backend?: boolean; commandeLabel?: string }) {
-  if (loading) return <p className="text-blue-400 text-sm">Optimisation en cours (rectpack)...</p>;
+  if (loading) return <p className="text-blue-400 text-sm">Optimisation en cours...</p>;
   if (results.length === 0) return <p className="text-gray-500 text-sm">Importez des vitrages pour voir l'optimisation.</p>;
 
   const totalInterdit = results.reduce((s, r) => s + r.plates.filter(p => p.hasInterdit).length, 0);
@@ -764,7 +766,7 @@ function TabGlass({ results, loading, backend, commandeLabel }: { results: Glass
           <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-amber-500/30 border border-amber-500/50" /> Surveiller (250-300)</span>
           <span className="flex items-center gap-1"><span className="w-3 h-2 rounded bg-red-500/30 border border-red-500/50" /> Interdit (50-250)</span>
           {totalInterdit > 0 && <span className="text-red-400 font-semibold ml-4">{totalInterdit} plaque(s) avec chutes interdites</span>}
-          {backend && <span className="text-green-400 text-[10px] px-2 py-0.5 rounded bg-green-500/10 border border-green-500/20">rectpack (serveur)</span>}
+          {backend && <span className="text-green-400 text-[10px] px-2 py-0.5 rounded bg-green-500/10 border border-green-500/20">Guillotine DP (serveur)</span>}
           {!backend && <span className="text-gray-500 text-[10px] px-2 py-0.5 rounded bg-gray-500/10 border border-gray-500/20">JS local</span>}
         </div>
         <button onClick={async () => { const blob = await generateOptimVerrePDF(results, commandeLabel || ''); download(blob, 'optimisation_verre.pdf'); }}
@@ -1007,10 +1009,12 @@ function BatchView({ commandes, onBack, avery, we, glass }: {
   avery: AverySettings; we: WESettings; glass: GlassSettings;
 }) {
   const [tab, setTab] = useState(0);
+  const [machine, setMachine] = useState<'lisec' | 'bottero'>(glass.machine || 'lisec');
   const allVitrages = useMemo(() => commandes.flatMap(c => c.vitrages), [commandes]);
   const batchLabel = commandes.map(c => c.reference).join(' + ');
   const weResult = useMemo(() => allVitrages.length > 0 ? optimizeWE(allVitrages, we) : [], [allVitrages, we]);
-  const { glassResult, loading: optimLoading, backend: usingBackend } = useOptimization(allVitrages, glass);
+  const glassWithMachine = useMemo(() => ({ ...glass, machine }), [glass, machine]);
+  const { glassResult, loading: optimLoading, backend: usingBackend } = useOptimization(allVitrages, glassWithMachine);
   const allPlates = useMemo(() => glassResult.flatMap(g => g.plates), [glassResult]);
 
   const [sending, setSending] = useState(false);
@@ -1029,7 +1033,7 @@ function BatchView({ commandes, onBack, avery, we, glass }: {
           vitrage_ref: p.vitrageRef, vitrage_id: p.vitrageId,
           largeur: p.width, hauteur: p.height, composition: '',
           face: p.face, material: p.material,
-          machine: p.noRotation ? 'lisec' : 'bottero', plaque_no: plate.numero,
+          machine, plaque_no: plate.numero,
         }))
       );
 
@@ -1078,10 +1082,18 @@ function BatchView({ commandes, onBack, avery, we, glass }: {
         <h2 className="text-xl font-bold text-amber-400">Lot de coupe</h2>
         <span className="text-xs text-gray-400">{commandes.length} commandes — {allVitrages.length} vitrages</span>
         {allVitrages.length > 0 && (
-          <button onClick={envoyerEnProduction} disabled={sending}
-            className="ml-auto px-4 py-2 bg-green-600 hover:bg-green-500 text-white text-sm rounded-lg transition-colors disabled:opacity-50">
-            {sending ? 'Envoi...' : 'Envoyer en production'}
-          </button>
+          <div className="ml-auto flex items-center gap-3">
+            <label className="text-xs text-gray-400">Machine :</label>
+            <select value={machine} onChange={e => setMachine(e.target.value as 'lisec' | 'bottero')}
+              className="px-3 py-2 bg-[#181a20] border border-[#2a2d35] text-white text-sm rounded-lg">
+              <option value="lisec">LISEC (3-stages)</option>
+              <option value="bottero">Bottero (2-stages)</option>
+            </select>
+            <button onClick={envoyerEnProduction} disabled={sending}
+              className="px-4 py-2 bg-green-600 hover:bg-green-500 text-white text-sm rounded-lg transition-colors disabled:opacity-50">
+              {sending ? 'Envoi...' : 'Envoyer en production'}
+            </button>
+          </div>
         )}
       </div>
 
@@ -1347,9 +1359,124 @@ function StockView({ onBack }: { onBack: () => void }) {
   );
 }
 
+// ── Settings View ──────────────────────────────────────────────────
+
+function SettingsView({ settings, onSave, onBack }: {
+  settings: Settings;
+  onSave: (s: Settings) => void;
+  onBack: () => void;
+}) {
+  const [glass, setGlass] = useState({ ...settings.glassSettings });
+  const [saved, setSaved] = useState(false);
+
+  const save = () => {
+    onSave({ ...settings, glassSettings: glass });
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
+
+  return (
+    <div className="max-w-2xl mx-auto py-8 px-6 space-y-6">
+      <div className="flex items-center gap-4">
+        <button onClick={onBack} className="text-gray-500 hover:text-white text-sm">&larr; Retour</button>
+        <h2 className="text-xl font-bold text-white">Parametres optimisation</h2>
+        {saved && <span className="text-green-400 text-sm ml-auto">Enregistre</span>}
+      </div>
+
+      <div className="bg-[#181a20] rounded-lg p-5 border border-[#2a2d35] space-y-4">
+        <h3 className="text-sm font-bold text-amber-400">Machine de coupe</h3>
+        <div className="grid grid-cols-2 gap-3">
+          <button onClick={() => setGlass(g => ({ ...g, machine: 'lisec' }))}
+            className={`p-4 rounded-xl border-2 text-left transition-colors ${glass.machine === 'lisec'
+              ? 'border-blue-500 bg-blue-600/10' : 'border-[#2a2d35] hover:border-gray-600'}`}>
+            <div className="text-white font-bold">LISEC</div>
+            <div className="text-xs text-gray-400 mt-1">3 stages — coupe 2 axes</div>
+            <div className="text-xs text-gray-500 mt-1">Float, feuillete mince</div>
+          </button>
+          <button onClick={() => setGlass(g => ({ ...g, machine: 'bottero' }))}
+            className={`p-4 rounded-xl border-2 text-left transition-colors ${glass.machine === 'bottero'
+              ? 'border-green-500 bg-green-600/10' : 'border-[#2a2d35] hover:border-gray-600'}`}>
+            <div className="text-white font-bold">Bottero</div>
+            <div className="text-xs text-gray-400 mt-1">2 stages — coupe axe unique</div>
+            <div className="text-xs text-gray-500 mt-1">Feuillete epais</div>
+          </button>
+        </div>
+      </div>
+
+      <div className="bg-[#181a20] rounded-lg p-5 border border-[#2a2d35] space-y-4">
+        <h3 className="text-sm font-bold text-amber-400">Parametres de coupe</h3>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="text-xs text-gray-400 block mb-1">Marge de bord (mm)</label>
+            <input type="number" value={glass.edgeTrimMargin} min={0} max={50}
+              onChange={e => setGlass(g => ({ ...g, edgeTrimMargin: Number(e.target.value) }))}
+              className="w-full px-3 py-2 bg-[#14161d] border border-[#2a2d35] rounded text-white text-sm" />
+          </div>
+          <div>
+            <label className="text-xs text-gray-400 block mb-1">Ecart de coupe (mm)</label>
+            <input type="number" value={glass.cuttingGap} min={0} max={20}
+              onChange={e => setGlass(g => ({ ...g, cuttingGap: Number(e.target.value) }))}
+              className="w-full px-3 py-2 bg-[#14161d] border border-[#2a2d35] rounded text-white text-sm" />
+          </div>
+          <div>
+            <label className="text-xs text-gray-400 block mb-1">Largeur min bande (mm)</label>
+            <input type="number" value={glass.minStripWidth} min={0} max={100}
+              onChange={e => setGlass(g => ({ ...g, minStripWidth: Number(e.target.value) }))}
+              className="w-full px-3 py-2 bg-[#14161d] border border-[#2a2d35] rounded text-white text-sm" />
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-[#181a20] rounded-lg p-5 border border-[#2a2d35] space-y-4">
+        <h3 className="text-sm font-bold text-amber-400">Formats de plaque</h3>
+        <div className="space-y-2">
+          {glass.plateFormats.map((fmt, i) => (
+            <div key={i} className="flex items-center gap-3">
+              <input type="number" value={fmt.width} min={100}
+                onChange={e => {
+                  const pf = [...glass.plateFormats];
+                  pf[i] = { ...pf[i], width: Number(e.target.value) };
+                  setGlass(g => ({ ...g, plateFormats: pf }));
+                }}
+                className="w-24 px-2 py-1.5 bg-[#14161d] border border-[#2a2d35] rounded text-white text-sm" />
+              <span className="text-gray-500 text-sm">x</span>
+              <input type="number" value={fmt.height} min={100}
+                onChange={e => {
+                  const pf = [...glass.plateFormats];
+                  pf[i] = { ...pf[i], height: Number(e.target.value) };
+                  setGlass(g => ({ ...g, plateFormats: pf }));
+                }}
+                className="w-24 px-2 py-1.5 bg-[#14161d] border border-[#2a2d35] rounded text-white text-sm" />
+              <input type="text" value={fmt.label}
+                onChange={e => {
+                  const pf = [...glass.plateFormats];
+                  pf[i] = { ...pf[i], label: e.target.value };
+                  setGlass(g => ({ ...g, plateFormats: pf }));
+                }}
+                className="flex-1 px-2 py-1.5 bg-[#14161d] border border-[#2a2d35] rounded text-white text-sm" />
+              {glass.plateFormats.length > 1 && (
+                <button onClick={() => setGlass(g => ({ ...g, plateFormats: g.plateFormats.filter((_, j) => j !== i) }))}
+                  className="text-red-400 hover:text-red-300 text-xs">Suppr.</button>
+              )}
+            </div>
+          ))}
+          <button onClick={() => setGlass(g => ({
+            ...g, plateFormats: [...g.plateFormats, { width: 3210, height: 2550, label: `Format ${g.plateFormats.length + 1}` }],
+          }))} className="text-xs text-blue-400 hover:text-blue-300">+ Ajouter un format</button>
+        </div>
+      </div>
+
+      <button onClick={save}
+        className="w-full py-3 bg-green-600 hover:bg-green-500 text-white font-bold rounded-xl transition-colors active:scale-[0.98]">
+        Enregistrer
+      </button>
+    </div>
+  );
+}
+
 // ── Main App ─────────────────────────────────────────────────────────
 
-type ViewMode = { type: 'home' } | { type: 'dashboard' } | { type: 'order'; id: string } | { type: 'batch'; ids: string[] } | { type: 'production' } | { type: 'production-atelier' } | { type: 'stock' };
+type ViewMode = { type: 'home' } | { type: 'dashboard' } | { type: 'order'; id: string } | { type: 'batch'; ids: string[] } | { type: 'production' } | { type: 'production-atelier' } | { type: 'stock' } | { type: 'settings' };
 
 export function VitrageApp({ onBack, startAtelier }: { onBack: () => void; startAtelier?: boolean }) {
   const [commandes, setCommandes] = useState<Commande[]>([]);
@@ -1492,6 +1619,18 @@ export function VitrageApp({ onBack, startAtelier }: { onBack: () => void; start
     if (view.type === 'stock') {
       return <StockView onBack={goHome} />;
     }
+    if (view.type === 'settings') {
+      return (
+        <SettingsView
+          settings={settings}
+          onSave={async (s) => {
+            setSettingsState(s);
+            try { await saveSettings(s); } catch { /* ignore */ }
+          }}
+          onBack={goHome}
+        />
+      );
+    }
     if (view.type === 'home') {
       return (
         <div className="max-w-2xl mx-auto py-16 px-6">
@@ -1520,6 +1659,11 @@ export function VitrageApp({ onBack, startAtelier }: { onBack: () => void; start
               <div className="text-sm text-orange-200 mt-1">Interface operateur plein ecran</div>
             </button>
           </div>
+          <button onClick={() => setView({ type: 'settings' })}
+            className="mt-6 w-full p-4 bg-[#181a20] hover:bg-[#1e2028] border border-[#2a2d35] text-gray-400 hover:text-white rounded-2xl text-left transition-colors active:scale-[0.98]">
+            <div className="text-sm font-bold">Parametres</div>
+            <div className="text-xs text-gray-600 mt-1">Machine par defaut, formats de plaque, marges</div>
+          </button>
         </div>
       );
     }

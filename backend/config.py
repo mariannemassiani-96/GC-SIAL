@@ -14,3 +14,9 @@ MIN_STRIP_WIDTH = 20
 MIN_REMNANT_SIZE = 300
 FORBIDDEN_REMNANT_MIN = 50
 FORBIDDEN_REMNANT_MAX = 250
+
+# Odoo 18 JSON-RPC
+ODOO_URL = os.getenv("ODOO_URL", "https://odoo.sial-apertura.fr")
+ODOO_DB = os.getenv("ODOO_DB", "sial")
+ODOO_USER = os.getenv("ODOO_USER", "")
+ODOO_PASSWORD = os.getenv("ODOO_PASSWORD", "")

@@ -411,6 +411,470 @@ app.get('/api/health', (req, res) => {
 });
 
 // ══════════════════════════════════════════════════════════════
+// ODOO 18 CONNECTOR
+// ══════════════════════════════════════════════════════════════
+
+const odoo = require('./odoo');
+
+app.get('/api/odoo/test', async (req, res) => {
+  try { res.json(await odoo.testConnection()); }
+  catch (e) { res.json({ status: 'error', error: e.message }); }
+});
+
+app.get('/api/odoo/products', async (req, res) => {
+  try {
+    const { q, limit = 100, offset = 0 } = req.query;
+    let domain = [];
+    if (q) domain = ['|', '|', ['name', 'ilike', q], ['default_code', 'ilike', q], ['barcode', 'ilike', q]];
+    res.json(await odoo.searchProducts(domain, null, +limit, +offset));
+  } catch (e) { res.status(502).json({ error: e.message }); }
+});
+
+app.get('/api/odoo/products/:id', async (req, res) => {
+  try { res.json(await odoo.getProduct(+req.params.id)); }
+  catch (e) { res.status(502).json({ error: e.message }); }
+});
+
+app.post('/api/odoo/products', async (req, res) => {
+  try { res.json({ id: await odoo.createProduct(req.body) }); }
+  catch (e) { res.status(502).json({ error: e.message }); }
+});
+
+app.get('/api/odoo/stock', async (req, res) => {
+  try {
+    const domain = [['location_id.usage', '=', 'internal']];
+    if (req.query.product_id) domain.push(['product_id', '=', +req.query.product_id]);
+    if (req.query.location_id) domain.push(['location_id', '=', +req.query.location_id]);
+    res.json(await odoo.getStockQuants(domain));
+  } catch (e) { res.status(502).json({ error: e.message }); }
+});
+
+app.get('/api/odoo/locations', async (req, res) => {
+  try { res.json(await odoo.getStockLocations()); }
+  catch (e) { res.status(502).json({ error: e.message }); }
+});
+
+app.patch('/api/odoo/stock/:productId', async (req, res) => {
+  try {
+    await odoo.adjustStock(+req.params.productId, req.body.location_id, req.body.quantity);
+    res.json({ ok: true });
+  } catch (e) { res.status(502).json({ error: e.message }); }
+});
+
+app.get('/api/odoo/suppliers', async (req, res) => {
+  try {
+    const domain = [['supplier_rank', '>', 0]];
+    if (req.query.q) domain.push(['name', 'ilike', req.query.q]);
+    res.json(await odoo.searchPartners(domain));
+  } catch (e) { res.status(502).json({ error: e.message }); }
+});
+
+app.get('/api/odoo/purchases', async (req, res) => {
+  try {
+    const domain = [];
+    if (req.query.state) domain.push(['state', '=', req.query.state]);
+    res.json(await odoo.searchPurchaseOrders(domain, +(req.query.limit || 50)));
+  } catch (e) { res.status(502).json({ error: e.message }); }
+});
+
+app.get('/api/odoo/purchases/:id', async (req, res) => {
+  try { res.json(await odoo.getPurchaseOrder(+req.params.id)); }
+  catch (e) { res.status(502).json({ error: e.message }); }
+});
+
+app.post('/api/odoo/purchases', async (req, res) => {
+  try { res.json({ id: await odoo.createPurchaseOrder(req.body.partner_id, req.body.lines) }); }
+  catch (e) { res.status(502).json({ error: e.message }); }
+});
+
+app.get('/api/odoo/invoices', async (req, res) => {
+  try {
+    const domain = [];
+    if (req.query.move_type) domain.push(['move_type', '=', req.query.move_type]);
+    else domain.push(['move_type', 'in', ['in_invoice', 'out_invoice']]);
+    res.json(await odoo.searchInvoices(domain, +(req.query.limit || 50)));
+  } catch (e) { res.status(502).json({ error: e.message }); }
+});
+
+// ══════════════════════════════════════════════════════════════
+// STOCK & MRP (LOT 4)
+// ══════════════════════════════════════════════════════════════
+
+// GET all stock levels (with low-stock alert flag)
+app.get('/api/stock/levels', authMiddleware, (req, res) => {
+  const rows = db.prepare('SELECT * FROM stock_levels ORDER BY product_name').all();
+  res.json(rows.map(r => ({
+    ...r,
+    alert: r.current_qty <= r.min_qty && r.min_qty > 0,
+  })));
+});
+
+// GET stock alerts (products below min_qty)
+app.get('/api/stock/alerts', authMiddleware, (req, res) => {
+  const rows = db.prepare('SELECT * FROM stock_levels WHERE current_qty <= min_qty AND min_qty > 0 ORDER BY (current_qty - min_qty)').all();
+  res.json(rows.map(r => ({
+    ...r,
+    deficit: r.min_qty - r.current_qty,
+  })));
+});
+
+// GET MRP for a commande — calculate material requirements
+app.get('/api/stock/mrp/:commande_ref', authMiddleware, (req, res) => {
+  const commande = db.prepare('SELECT * FROM commandes_globales WHERE ref = ?').get(req.params.commande_ref);
+  if (!commande) return res.status(404).json({ error: 'Commande non trouvee' });
+
+  const vitrage = JSON.parse(commande.vitrage || '{}');
+  const vitrages = vitrage.vitrages || vitrage.items || [];
+
+  // Calculate material requirements from vitrage data
+  const requirements = {};
+
+  for (const v of vitrages) {
+    const qty = v.quantite || v.qty || 1;
+    const largeur = v.largeur || v.width || 0;
+    const hauteur = v.hauteur || v.height || 0;
+
+    // Glass plates: area in m2
+    if (v.verre_ext || v.glass_ext) {
+      const ref = v.verre_ext || v.glass_ext;
+      if (!requirements[ref]) requirements[ref] = { product_ref: ref, product_name: ref, needed: 0, unit: 'm2' };
+      requirements[ref].needed += (largeur * hauteur / 1000000) * qty;
+    }
+    if (v.verre_int || v.glass_int) {
+      const ref = v.verre_int || v.glass_int;
+      if (!requirements[ref]) requirements[ref] = { product_ref: ref, product_name: ref, needed: 0, unit: 'm2' };
+      requirements[ref].needed += (largeur * hauteur / 1000000) * qty;
+    }
+
+    // Warm edge / intercalaire: perimeter in ml
+    if (v.intercalaire || v.spacer) {
+      const ref = v.intercalaire || v.spacer;
+      if (!requirements[ref]) requirements[ref] = { product_ref: ref, product_name: ref, needed: 0, unit: 'ml' };
+      requirements[ref].needed += ((largeur + hauteur) * 2 / 1000) * qty;
+    }
+
+    // Dessiccant: perimeter-based estimate
+    const dessicantRef = 'DESSICCANT';
+    if (!requirements[dessicantRef]) requirements[dessicantRef] = { product_ref: dessicantRef, product_name: 'Dessiccant', needed: 0, unit: 'ml' };
+    requirements[dessicantRef].needed += ((largeur + hauteur) * 2 / 1000) * qty;
+
+    // Mastic: perimeter-based estimate
+    const masticRef = 'MASTIC';
+    if (!requirements[masticRef]) requirements[masticRef] = { product_ref: masticRef, product_name: 'Mastic', needed: 0, unit: 'ml' };
+    requirements[masticRef].needed += ((largeur + hauteur) * 2 / 1000) * qty;
+  }
+
+  // Compare with current stock levels
+  const shortages = [];
+  for (const ref of Object.keys(requirements)) {
+    const req_item = requirements[ref];
+    req_item.needed = Math.round(req_item.needed * 100) / 100;
+    const stock = db.prepare('SELECT current_qty FROM stock_levels WHERE product_ref = ?').get(ref);
+    req_item.in_stock = stock ? stock.current_qty : 0;
+    req_item.shortage = Math.max(0, req_item.needed - req_item.in_stock);
+    req_item.shortage = Math.round(req_item.shortage * 100) / 100;
+    if (req_item.shortage > 0) shortages.push(req_item);
+  }
+
+  res.json({
+    commande_ref: req.params.commande_ref,
+    vitrages_count: vitrages.length,
+    requirements: Object.values(requirements),
+    shortages,
+  });
+});
+
+// GET movements for a product (or all if no filter)
+app.get('/api/stock/movements', authMiddleware, (req, res) => {
+  const { product_ref, commande_ref, limit: lim } = req.query;
+  const maxRows = parseInt(lim) || 200;
+  let sql = 'SELECT * FROM stock_movements';
+  const params = [];
+  const clauses = [];
+
+  if (product_ref) { clauses.push('product_ref = ?'); params.push(product_ref); }
+  if (commande_ref) { clauses.push('commande_ref = ?'); params.push(commande_ref); }
+  if (clauses.length > 0) sql += ' WHERE ' + clauses.join(' AND ');
+  sql += ' ORDER BY created_at DESC LIMIT ?';
+  params.push(maxRows);
+
+  const rows = db.prepare(sql).all(...params);
+  res.json(rows);
+});
+
+// POST a stock movement (auto-updates stock_levels)
+app.post('/api/stock/movements', authMiddleware, (req, res) => {
+  const { product_ref, product_name, movement_type, quantity, lot_number, location, commande_ref, notes } = req.body;
+  if (!product_ref || !movement_type || quantity === undefined) {
+    return res.status(400).json({ error: 'product_ref, movement_type et quantity requis' });
+  }
+  const validTypes = ['entree', 'sortie', 'ajustement', 'production'];
+  if (!validTypes.includes(movement_type)) {
+    return res.status(400).json({ error: `movement_type invalide. Valeurs acceptees: ${validTypes.join(', ')}` });
+  }
+
+  const tx = db.transaction(() => {
+    // Insert movement
+    db.prepare(`INSERT INTO stock_movements (product_ref, product_name, movement_type, quantity, lot_number, location, commande_ref, user_nom, notes)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .run(product_ref, product_name || '', movement_type, quantity, lot_number || '', location || '', commande_ref || '', req.user.nom || '', notes || '');
+
+    // Update stock_levels
+    const existing = db.prepare('SELECT product_ref FROM stock_levels WHERE product_ref = ?').get(product_ref);
+    let delta = 0;
+    if (movement_type === 'entree' || movement_type === 'production') delta = Math.abs(quantity);
+    else if (movement_type === 'sortie') delta = -Math.abs(quantity);
+    else if (movement_type === 'ajustement') delta = quantity; // can be positive or negative
+
+    if (existing) {
+      db.prepare(`UPDATE stock_levels SET current_qty = current_qty + ?, product_name = COALESCE(NULLIF(?, ''), product_name),
+        last_movement = datetime('now'), updated_at = datetime('now') WHERE product_ref = ?`)
+        .run(delta, product_name || '', product_ref);
+    } else {
+      db.prepare(`INSERT INTO stock_levels (product_ref, product_name, current_qty, last_movement, updated_at)
+        VALUES (?, ?, ?, datetime('now'), datetime('now'))`)
+        .run(product_ref, product_name || '', Math.max(0, delta));
+    }
+  });
+  tx();
+
+  db.prepare('INSERT INTO activity_log (user_id, action, app, detail) VALUES (?, ?, ?, ?)').run(
+    req.user.id, 'stock_movement', 'stock', `${movement_type} ${quantity} ${product_ref}`
+  );
+  res.json({ ok: true });
+});
+
+// PATCH stock_levels (update min/reorder quantities, supplier, location, category)
+app.patch('/api/stock/levels/:ref', authMiddleware, (req, res) => {
+  const { min_qty, reorder_qty, supplier, location, category, product_name } = req.body;
+  const existing = db.prepare('SELECT product_ref FROM stock_levels WHERE product_ref = ?').get(req.params.ref);
+  if (!existing) {
+    // Auto-create with zero stock
+    db.prepare(`INSERT INTO stock_levels (product_ref, product_name, category, current_qty, min_qty, reorder_qty, location, supplier, updated_at)
+      VALUES (?, ?, ?, 0, ?, ?, ?, ?, datetime('now'))`)
+      .run(req.params.ref, product_name || '', category || '', min_qty || 0, reorder_qty || 0, location || '', supplier || '');
+    return res.json({ ok: true, created: true });
+  }
+  const updates = [];
+  const params = [];
+  if (min_qty !== undefined) { updates.push('min_qty = ?'); params.push(min_qty); }
+  if (reorder_qty !== undefined) { updates.push('reorder_qty = ?'); params.push(reorder_qty); }
+  if (supplier !== undefined) { updates.push('supplier = ?'); params.push(supplier); }
+  if (location !== undefined) { updates.push('location = ?'); params.push(location); }
+  if (category !== undefined) { updates.push('category = ?'); params.push(category); }
+  if (product_name !== undefined) { updates.push('product_name = ?'); params.push(product_name); }
+  if (updates.length === 0) return res.status(400).json({ error: 'Rien a mettre a jour' });
+  updates.push("updated_at = datetime('now')");
+  params.push(req.params.ref);
+  db.prepare(`UPDATE stock_levels SET ${updates.join(', ')} WHERE product_ref = ?`).run(...params);
+  res.json({ ok: true });
+});
+
+// ══════════════════════════════════════════════════════════════
+// PLANNING (LOT 5)
+// ══════════════════════════════════════════════════════════════
+
+// Helper: parse "S28-2026" into start/end date strings (Monday-Sunday)
+function parseSemaine(semaine) {
+  const match = semaine.match(/^S(\d{1,2})-(\d{4})$/);
+  if (!match) return null;
+  const week = parseInt(match[1]);
+  const year = parseInt(match[2]);
+  // ISO 8601: week 1 contains Jan 4
+  const jan4 = new Date(year, 0, 4);
+  const dayOfWeek = jan4.getDay() || 7; // Monday=1 ... Sunday=7
+  const monday = new Date(jan4);
+  monday.setDate(jan4.getDate() - dayOfWeek + 1 + (week - 1) * 7);
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  const fmt = (d) => d.toISOString().slice(0, 10);
+  return { start: fmt(monday), end: fmt(sunday), week, year };
+}
+
+// GET planning tasks (filter by semaine and/or poste)
+app.get('/api/planning', authMiddleware, (req, res) => {
+  const { semaine, poste, commande_ref, statut } = req.query;
+  let sql = 'SELECT * FROM planning_tasks';
+  const params = [];
+  const clauses = [];
+
+  if (semaine) {
+    const range = parseSemaine(semaine);
+    if (range) {
+      clauses.push('date_planifiee >= ? AND date_planifiee <= ?');
+      params.push(range.start, range.end);
+    }
+  }
+  if (poste) { clauses.push('poste = ?'); params.push(poste); }
+  if (commande_ref) { clauses.push('commande_ref = ?'); params.push(commande_ref); }
+  if (statut) { clauses.push('statut = ?'); params.push(statut); }
+  if (clauses.length > 0) sql += ' WHERE ' + clauses.join(' AND ');
+  sql += ' ORDER BY date_planifiee, priorite DESC, id';
+
+  const rows = db.prepare(sql).all(...params);
+  res.json(rows);
+});
+
+// GET capacity per poste per day for a given week
+app.get('/api/planning/capacity', authMiddleware, (req, res) => {
+  const { semaine } = req.query;
+  if (!semaine) return res.status(400).json({ error: 'Parametre semaine requis (ex: S28-2026)' });
+  const range = parseSemaine(semaine);
+  if (!range) return res.status(400).json({ error: 'Format semaine invalide. Utilisez S28-2026' });
+
+  const rows = db.prepare(`
+    SELECT date_planifiee, poste, COUNT(*) as tasks_count, SUM(duree_heures) as total_heures,
+      SUM(CASE WHEN statut = 'termine' THEN 1 ELSE 0 END) as termine_count
+    FROM planning_tasks
+    WHERE date_planifiee >= ? AND date_planifiee <= ?
+    GROUP BY date_planifiee, poste
+    ORDER BY date_planifiee, poste
+  `).all(range.start, range.end);
+
+  // Build day-by-day structure
+  const days = {};
+  const postes = ['reception', 'coupe_profiles', 'vitrage', 'assemblage', 'livraison'];
+  const d = new Date(range.start + 'T00:00:00');
+  for (let i = 0; i < 7; i++) {
+    const dateStr = d.toISOString().slice(0, 10);
+    days[dateStr] = {};
+    for (const p of postes) {
+      days[dateStr][p] = { tasks_count: 0, total_heures: 0, termine_count: 0 };
+    }
+    d.setDate(d.getDate() + 1);
+  }
+
+  for (const r of rows) {
+    if (days[r.date_planifiee] && days[r.date_planifiee][r.poste]) {
+      days[r.date_planifiee][r.poste] = {
+        tasks_count: r.tasks_count,
+        total_heures: r.total_heures || 0,
+        termine_count: r.termine_count,
+      };
+    }
+  }
+
+  res.json({ semaine, range, days });
+});
+
+// POST /api/planning/auto-plan/:commande_ref — auto-create tasks for a commande
+app.post('/api/planning/auto-plan/:commande_ref', authMiddleware, supervisorOnly, (req, res) => {
+  const commande = db.prepare('SELECT * FROM commandes_globales WHERE ref = ?').get(req.params.commande_ref);
+  if (!commande) return res.status(404).json({ error: 'Commande non trouvee' });
+
+  // Determine base date from semaine_fab or fallback to today
+  let baseDate;
+  if (commande.semaine_fab) {
+    const range = parseSemaine(commande.semaine_fab);
+    if (range) baseDate = new Date(range.start + 'T00:00:00');
+  }
+  if (!baseDate) baseDate = new Date();
+  // Skip weekends
+  if (baseDate.getDay() === 0) baseDate.setDate(baseDate.getDate() + 1);
+  if (baseDate.getDay() === 6) baseDate.setDate(baseDate.getDate() + 2);
+
+  // Default durations (hours) per poste
+  const defaultDurations = req.body.durations || {};
+  const postes = [
+    { poste: 'reception', duree: defaultDurations.reception || 1, offset: 0 },
+    { poste: 'coupe_profiles', duree: defaultDurations.coupe_profiles || 4, offset: 0 },
+    { poste: 'vitrage', duree: defaultDurations.vitrage || 4, offset: 1 },
+    { poste: 'assemblage', duree: defaultDurations.assemblage || 4, offset: 2 },
+    { poste: 'livraison', duree: defaultDurations.livraison || 1, offset: 3 },
+  ];
+
+  // Determine livraison date from semaine_liv
+  let livraisonDate = null;
+  if (commande.semaine_liv) {
+    const range = parseSemaine(commande.semaine_liv);
+    if (range) livraisonDate = range.start;
+  }
+
+  const priorite = req.body.priorite || 0;
+  const created = [];
+
+  const tx = db.transaction(() => {
+    for (const p of postes) {
+      const d = new Date(baseDate);
+      d.setDate(d.getDate() + p.offset);
+      // Skip weekends
+      if (d.getDay() === 0) d.setDate(d.getDate() + 1);
+      if (d.getDay() === 6) d.setDate(d.getDate() + 2);
+
+      let dateStr = d.toISOString().slice(0, 10);
+      // Override livraison date if semaine_liv is set
+      if (p.poste === 'livraison' && livraisonDate) dateStr = livraisonDate;
+
+      const result = db.prepare(`INSERT INTO planning_tasks (commande_ref, poste, date_planifiee, duree_heures, priorite, statut, notes)
+        VALUES (?, ?, ?, ?, ?, 'planifie', ?)`)
+        .run(req.params.commande_ref, p.poste, dateStr, p.duree, priorite, `Auto-planifie pour ${commande.client || req.params.commande_ref}`);
+      created.push({ id: result.lastInsertRowid, poste: p.poste, date_planifiee: dateStr, duree_heures: p.duree });
+    }
+  });
+  tx();
+
+  db.prepare('INSERT INTO activity_log (user_id, action, app, detail) VALUES (?, ?, ?, ?)').run(
+    req.user.id, 'auto_plan', 'planning', req.params.commande_ref
+  );
+  res.json({ ok: true, commande_ref: req.params.commande_ref, tasks: created });
+});
+
+// POST create a planning task
+app.post('/api/planning', authMiddleware, (req, res) => {
+  const { commande_ref, poste, date_planifiee, duree_heures, priorite, operateur, notes } = req.body;
+  if (!commande_ref || !poste || !date_planifiee) {
+    return res.status(400).json({ error: 'commande_ref, poste et date_planifiee requis' });
+  }
+  const validPostes = ['reception', 'coupe_profiles', 'vitrage', 'assemblage', 'livraison'];
+  if (!validPostes.includes(poste)) {
+    return res.status(400).json({ error: `Poste invalide. Valeurs acceptees: ${validPostes.join(', ')}` });
+  }
+  const result = db.prepare(`INSERT INTO planning_tasks (commande_ref, poste, date_planifiee, duree_heures, priorite, operateur, notes)
+    VALUES (?, ?, ?, ?, ?, ?, ?)`)
+    .run(commande_ref, poste, date_planifiee, duree_heures || 0, priorite || 0, operateur || '', notes || '');
+  db.prepare('INSERT INTO activity_log (user_id, action, app, detail) VALUES (?, ?, ?, ?)').run(
+    req.user.id, 'create_task', 'planning', `${commande_ref}/${poste}`
+  );
+  res.json({ ok: true, id: result.lastInsertRowid });
+});
+
+// PATCH update a planning task
+app.patch('/api/planning/:id', authMiddleware, (req, res) => {
+  const { poste, date_planifiee, duree_heures, priorite, statut, operateur, notes } = req.body;
+  const existing = db.prepare('SELECT id FROM planning_tasks WHERE id = ?').get(req.params.id);
+  if (!existing) return res.status(404).json({ error: 'Tache non trouvee' });
+
+  const updates = [];
+  const params = [];
+  if (poste !== undefined) { updates.push('poste = ?'); params.push(poste); }
+  if (date_planifiee !== undefined) { updates.push('date_planifiee = ?'); params.push(date_planifiee); }
+  if (duree_heures !== undefined) { updates.push('duree_heures = ?'); params.push(duree_heures); }
+  if (priorite !== undefined) { updates.push('priorite = ?'); params.push(priorite); }
+  if (statut !== undefined) {
+    const validStatuts = ['planifie', 'en_cours', 'termine', 'reporte'];
+    if (!validStatuts.includes(statut)) {
+      return res.status(400).json({ error: `Statut invalide. Valeurs acceptees: ${validStatuts.join(', ')}` });
+    }
+    updates.push('statut = ?'); params.push(statut);
+  }
+  if (operateur !== undefined) { updates.push('operateur = ?'); params.push(operateur); }
+  if (notes !== undefined) { updates.push('notes = ?'); params.push(notes); }
+  if (updates.length === 0) return res.status(400).json({ error: 'Rien a mettre a jour' });
+  updates.push("updated_at = datetime('now')");
+  params.push(req.params.id);
+  db.prepare(`UPDATE planning_tasks SET ${updates.join(', ')} WHERE id = ?`).run(...params);
+  res.json({ ok: true });
+});
+
+// DELETE a planning task
+app.delete('/api/planning/:id', authMiddleware, (req, res) => {
+  const existing = db.prepare('SELECT id FROM planning_tasks WHERE id = ?').get(req.params.id);
+  if (!existing) return res.status(404).json({ error: 'Tache non trouvee' });
+  db.prepare('DELETE FROM planning_tasks WHERE id = ?').run(req.params.id);
+  res.json({ ok: true });
+});
+
+// ══════════════════════════════════════════════════════════════
 // START
 // ══════════════════════════════════════════════════════════════
 

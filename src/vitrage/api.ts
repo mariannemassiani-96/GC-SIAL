@@ -37,6 +37,8 @@ export interface ApiOptimizeRequest {
   plate_height: number;
   edge_margin: number;
   cutting_gap: number;
+  algorithm?: 'staged_dp' | 'greedy';
+  machine?: 'lisec' | 'bottero';
 }
 
 export async function apiOptimize(req: ApiOptimizeRequest) {

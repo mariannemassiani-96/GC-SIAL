@@ -56,6 +56,8 @@ class OptimizeRequest(BaseModel):
     plate_height: float = 2550
     edge_margin: float = 15
     cutting_gap: float = 0
+    algorithm: str = "staged_dp"
+    machine: str = "lisec"
 
 class OptimizeResponse(BaseModel):
     results: list[MaterialResult]

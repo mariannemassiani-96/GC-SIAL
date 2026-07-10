@@ -140,6 +140,7 @@ export interface GlassSettings {
   edgeTrimMargin: number;
   plateFormats: PlateFormat[];
   minStripWidth: number;
+  machine: 'lisec' | 'bottero';
 }
 
 export interface IsulaStore {
@@ -172,6 +173,7 @@ export const DEFAULT_GLASS: GlassSettings = {
     { width: 4500, height: 3210, label: 'Jumbo' },
   ],
   minStripWidth: 20,
+  machine: 'lisec',
 };
 
 export interface GlassProduct {

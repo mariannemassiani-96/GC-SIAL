@@ -102,4 +102,56 @@ db.exec(`
   );
 `);
 
+// ── Stock & MRP (LOT 4) ─────────────────────────────────────────────
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS stock_movements (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    product_ref TEXT NOT NULL,
+    product_name TEXT DEFAULT '',
+    movement_type TEXT NOT NULL,
+    quantity FLOAT NOT NULL,
+    lot_number TEXT DEFAULT '',
+    location TEXT DEFAULT '',
+    commande_ref TEXT DEFAULT '',
+    user_nom TEXT DEFAULT '',
+    notes TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_stock_product ON stock_movements(product_ref);
+
+  CREATE TABLE IF NOT EXISTS stock_levels (
+    product_ref TEXT PRIMARY KEY,
+    product_name TEXT DEFAULT '',
+    category TEXT DEFAULT '',
+    current_qty FLOAT DEFAULT 0,
+    min_qty FLOAT DEFAULT 0,
+    reorder_qty FLOAT DEFAULT 0,
+    location TEXT DEFAULT '',
+    supplier TEXT DEFAULT '',
+    last_movement TEXT DEFAULT '',
+    updated_at TEXT DEFAULT (datetime('now'))
+  );
+`);
+
+// ── Planning (LOT 5) ───────────────────────────────────────────────
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS planning_tasks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    commande_ref TEXT NOT NULL,
+    poste TEXT NOT NULL,
+    date_planifiee TEXT NOT NULL,
+    duree_heures FLOAT DEFAULT 0,
+    priorite INTEGER DEFAULT 0,
+    statut TEXT DEFAULT 'planifie',
+    operateur TEXT DEFAULT '',
+    notes TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_planning_date ON planning_tasks(date_planifiee);
+  CREATE INDEX IF NOT EXISTS idx_planning_commande ON planning_tasks(commande_ref);
+`);
+
 module.exports = db;
