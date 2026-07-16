@@ -411,6 +411,194 @@ app.get('/api/health', (req, res) => {
 });
 
 // ══════════════════════════════════════════════════════════════
+// TRACABILITE ENDPOINTS (public, for Odoo crons)
+// ══════════════════════════════════════════════════════════════
+
+const TRACA_API_KEY = process.env.TRACA_API_KEY || '';
+
+function tracaAuth(req, res, next) {
+  if (!TRACA_API_KEY) return next();
+  const key = req.headers['x-api-key'] || req.headers['authorization']?.replace('Bearer ', '');
+  if (key !== TRACA_API_KEY) return res.status(401).json({ error: 'API key invalide' });
+  next();
+}
+
+function flattenCEData(raw) {
+  const d = typeof raw === 'string' ? JSON.parse(raw) : raw;
+  const flat = {};
+  const simple = ['vitrage_ref', 'vitrage_id', 'commande_ref', 'client', 'lot_fabrication',
+    'composition', 'verre_ext', 'verre_int', 'largeur', 'hauteur',
+    'ug', 'sw', 'rw', 'classe_securite',
+    'date_fabrication', 'operateur_coupe', 'operateur_assemblage',
+    'fabricant', 'usine', 'ce_numero', 'cekal_numero', 'norme', 'fiche_lot_cekal_validee'];
+  for (const k of simple) if (d[k] !== undefined) flat[k] = d[k];
+
+  if (d.lot_verre_ext) {
+    flat.lot_verre_ext_fournisseur = d.lot_verre_ext.fournisseur || '';
+    flat.lot_verre_ext_nom_commercial = d.lot_verre_ext.nom_commercial || '';
+    flat.lot_verre_ext_numero = d.lot_verre_ext.lot_fournisseur || '';
+  }
+  if (d.lot_verre_int) {
+    flat.lot_verre_int_fournisseur = d.lot_verre_int.fournisseur || '';
+    flat.lot_verre_int_nom_commercial = d.lot_verre_int.nom_commercial || '';
+    flat.lot_verre_int_numero = d.lot_verre_int.lot_fournisseur || '';
+  }
+  if (d.lots_assemblage) {
+    const a = d.lots_assemblage;
+    flat.intercalaire_lot = a.intercalaire_lot || '';
+    flat.intercalaire_fournisseur = a.intercalaire_fournisseur || '';
+    flat.intercalaire_dlu = a.intercalaire_dlu || '';
+    flat.dessiccant_lot = a.dessiccant_lot || '';
+    flat.dessiccant_fournisseur = a.dessiccant_fournisseur || '';
+    flat.dessiccant_dlu = a.dessiccant_dlu || '';
+    flat.mastic_butyl_lot = a.mastic_butyl_lot || '';
+    flat.mastic_butyl_fournisseur = a.mastic_butyl_fournisseur || '';
+    flat.mastic_butyl_dlu = a.mastic_butyl_dlu || '';
+    flat.mastic_pu_lot = a.mastic_pu_lot || '';
+    flat.mastic_pu_fournisseur = a.mastic_pu_fournisseur || '';
+    flat.mastic_pu_dlu = a.mastic_pu_dlu || '';
+    flat.gaz_argon_lot = a.gaz_argon_lot || '';
+    flat.gaz_pourcentage = a.gaz_pourcentage ?? 90;
+    flat.gaz_test_echantillon = a.gaz_test_echantillon ?? false;
+  }
+  if (d.lavage) {
+    flat.lavage_conductivite = d.lavage.conductivite ?? 0;
+    flat.lavage_ph = d.lavage.ph ?? 0;
+    flat.lavage_temperature = d.lavage.temperature ?? 0;
+    flat.lavage_conforme = d.lavage.conforme ?? false;
+    flat.lavage_date_controle = d.lavage.date_controle || '';
+  }
+  if (d.controles) {
+    const c = d.controles;
+    flat.dimension_mesuree_l = c.dimension_mesuree_l ?? 0;
+    flat.dimension_mesuree_h = c.dimension_mesuree_h ?? 0;
+    flat.epaisseur_mesuree = c.epaisseur_mesuree ?? 0;
+    flat.tolerance_ok = c.tolerance_ok ?? false;
+    flat.continuite_butyle = c.continuite_butyle ?? false;
+    flat.aspect_visuel = c.aspect_visuel ?? false;
+    flat.point_rosee_ok = c.point_rosee_ok ?? false;
+    flat.point_rosee_valeur = c.point_rosee_valeur ?? 0;
+    flat.etiquette_cekal_posee = c.etiquette_cekal_posee ?? false;
+  }
+  return flat;
+}
+
+function flattenMenuiserieData(raw) {
+  const d = typeof raw === 'string' ? JSON.parse(raw) : raw;
+  const flat = {};
+  const top = ['of_ref', 'commande_ref', 'client', 'window_it_code', 'matiere',
+    'gamme', 'type_ouverture', 'dimensions_l', 'dimensions_h', 'coloris', 'sens',
+    'lot_fabrication', 'state'];
+  for (const k of top) if (d[k] !== undefined) flat[k] = d[k];
+
+  if (d.ct01) {
+    flat.lot_profils = d.ct01.lot_profils || '';
+    flat.profil_fournisseur = d.ct01.profil_fournisseur || '';
+    flat.lot_quincaillerie = d.ct01.lot_quincaillerie || '';
+    flat.quincaillerie_fournisseur = d.ct01.quincaillerie_fournisseur || '';
+    flat.reception_conforme = d.ct01.reception_conforme ?? false;
+    flat.coupe_longueur_mesuree = d.ct01.coupe_longueur_mesuree ?? 0;
+    flat.coupe_tolerance_ok = d.ct01.coupe_tolerance_ok ?? false;
+    flat.coupe_angle_ok = d.ct01.coupe_angle_ok ?? false;
+    flat.coupe_aspect_ok = d.ct01.coupe_aspect_ok ?? false;
+    flat.joints_poses = d.ct01.joints_poses ?? false;
+    flat.identification_piece_ok = d.ct01.identification_piece_ok ?? false;
+    flat.operateur_coupe = d.ct01.operateur || '';
+    flat.date_coupe = d.ct01.date || '';
+  }
+  if (d.ct02) {
+    flat.equerrage_ok = d.ct02.equerrage_ok ?? false;
+    flat.equerrage_valeur = d.ct02.equerrage_valeur ?? 0;
+    flat.options_ok = d.ct02.options_ok ?? false;
+    flat.etiquette_ce_posee = d.ct02.etiquette_ce_posee ?? false;
+    flat.etiquette_window_it_posee = d.ct02.etiquette_window_it_posee ?? false;
+    flat.operateur_assemblage = d.ct02.operateur || '';
+    flat.chef_equipe_validation = d.ct02.chef_equipe_validation || '';
+    flat.date_assemblage = d.ct02.date || '';
+  }
+  if (d.ct03 && d.ct03.applicable) {
+    flat.soudure_temperature = d.ct03.temperature ?? 0;
+    flat.soudure_temps_pression = d.ct03.temps_pression ?? 0;
+    flat.soudure_aspect_ok = d.ct03.aspect_ok ?? false;
+    flat.soudure_test_destructif_ok = d.ct03.test_destructif_ok ?? false;
+    flat.soudure_nok_rebut = d.ct03.rebut ?? false;
+    flat.operateur_soudure = d.ct03.operateur || '';
+    flat.date_soudure = d.ct03.date || '';
+  }
+  if (d.ct04) {
+    flat.ferrage_conforme = d.ct04.ferrage_conforme ?? false;
+    flat.fonctionnement_fluide = d.ct04.fonctionnement_fluide ?? false;
+    flat.reglage_ok = d.ct04.reglage_ok ?? false;
+    flat.operateur_ferrage = d.ct04.operateur || '';
+    flat.date_ferrage = d.ct04.date || '';
+  }
+  if (d.ct05) {
+    flat.lot_vitrage = d.ct05.lot_vitrage || '';
+    flat.vitrage_fournisseur = d.ct05.vitrage_fournisseur || '';
+    if (d.ct05.vitrage_isula && d.ct05.vitrage_cekal_id) {
+      flat.vitrage_tracabilite_id = d.ct05.vitrage_cekal_id;
+    }
+    flat.sens_profiles_ok = d.ct05.sens_profiles_ok ?? false;
+    flat.calage_dtu_ok = d.ct05.calage_dtu_ok ?? false;
+    flat.correspondance_lot_vitrage = d.ct05.correspondance_lot ?? false;
+    flat.proprete_ok = d.ct05.proprete_ok ?? false;
+    flat.operateur_vitrage = d.ct05.operateur || '';
+    flat.date_vitrage = d.ct05.date || '';
+  }
+  if (d.ct06) {
+    flat.fonctionnement_global_ok = d.ct06.fonctionnement_global_ok ?? false;
+    flat.dimensions_finales_l = d.ct06.dimensions_finales_l ?? 0;
+    flat.dimensions_finales_h = d.ct06.dimensions_finales_h ?? 0;
+    flat.etiquette_ce_conforme = d.ct06.etiquette_ce_conforme ?? false;
+    flat.window_it_scanne = d.ct06.window_it_scanne ?? false;
+    flat.emballage_ok = d.ct06.emballage_ok ?? false;
+    flat.chef_equipe_controle_final = d.ct06.chef_equipe || '';
+    flat.date_controle_final = d.ct06.date || '';
+    flat.libere_expedition = d.ct06.libere ?? false;
+  }
+  if (d.nf && d.nf.applicable) {
+    flat.nf_numero_certification = d.nf.numero_certification || '';
+    flat.nf_dop_reference = d.nf.dop_reference || '';
+    flat.nf_controle_renforce = d.nf.controle_renforce ?? false;
+    flat.nf_essai_permeabilite = d.nf.permeabilite || '';
+    flat.nf_essai_etancheite = d.nf.etancheite || '';
+    flat.nf_essai_resistance_vent = d.nf.resistance_vent || '';
+    flat.nf_marquage_pose = d.nf.marquage_pose ?? false;
+  }
+  return flat;
+}
+
+// GET /api/data/tracabilite/ce — public endpoint for Odoo cron
+app.get('/api/data/tracabilite/ce', tracaAuth, (req, res) => {
+  const rows = db.prepare("SELECT doc_id, data, updated_at FROM app_data WHERE app = 'tracabilite' AND collection = 'ce'").all();
+  const items = rows.map(r => {
+    try {
+      const parsed = JSON.parse(r.data);
+      const flat = flattenCEData(parsed);
+      flat._updated_at = r.updated_at;
+      if (!flat.vitrage_ref) flat.vitrage_ref = parsed.vitrage_ref || r.doc_id;
+      return flat;
+    } catch { return null; }
+  }).filter(Boolean);
+  res.json(items);
+});
+
+// GET /api/data/tracabilite/menuiserie — public endpoint for Odoo cron
+app.get('/api/data/tracabilite/menuiserie', tracaAuth, (req, res) => {
+  const rows = db.prepare("SELECT doc_id, data, updated_at FROM app_data WHERE app = 'tracabilite' AND collection = 'menuiserie'").all();
+  const items = rows.map(r => {
+    try {
+      const parsed = JSON.parse(r.data);
+      const flat = flattenMenuiserieData(parsed);
+      flat._updated_at = r.updated_at;
+      if (!flat.of_ref) flat.of_ref = parsed.of_ref || r.doc_id;
+      return flat;
+    } catch { return null; }
+  }).filter(Boolean);
+  res.json(items);
+});
+
+// ══════════════════════════════════════════════════════════════
 // ODOO 18 CONNECTOR
 // ══════════════════════════════════════════════════════════════
 
