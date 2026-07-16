@@ -214,15 +214,22 @@ export interface StockPlate {
   date_reception: string;
 }
 
+export type RemnantStatus = 'disponible' | 'reserve' | 'utilise' | 'rebut';
+
 export interface StockRemnant {
   id: string;
+  code: string;
   glass_code: string;
   width: number;
   height: number;
   quantity: number;
+  statut: RemnantStatus;
   source_commande: string;
+  source_plaque: number;
+  used_in_commande: string;
   date_creation: string;
   emplacement: string;
+  notes: string;
 }
 
 export const STATUT_LABELS: Record<CommandeStatut, string> = {

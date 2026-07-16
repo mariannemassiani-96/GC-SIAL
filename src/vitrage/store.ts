@@ -152,7 +152,7 @@ export async function fetchStockRemnants(): Promise<StockRemnant[]> {
   return get<StockRemnant[]>('/api/stock-remnants');
 }
 
-export async function insertStockRemnant(r: Omit<StockRemnant, 'id'>): Promise<void> {
+export async function upsertStockRemnant(r: Partial<StockRemnant> & { code: string }): Promise<void> {
   if (!API) return;
   await post('/api/stock-remnants', r);
 }
@@ -160,4 +160,9 @@ export async function insertStockRemnant(r: Omit<StockRemnant, 'id'>): Promise<v
 export async function deleteStockRemnant(id: string): Promise<void> {
   if (!API) return;
   await del(`/api/stock-remnants/${id}`);
+}
+
+export async function patchStockRemnant(id: string, data: Partial<StockRemnant>): Promise<void> {
+  if (!API) return;
+  await patch(`/api/stock-remnants/${id}`, data);
 }

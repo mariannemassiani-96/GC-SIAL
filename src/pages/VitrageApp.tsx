@@ -22,9 +22,10 @@ import {
   fetchSettings, saveSettings, type Settings,
   fetchGlassProducts, upsertGlassProduct, deleteGlassProduct,
   fetchStockPlates, upsertStockPlate, deleteStockPlate,
+  fetchStockRemnants, upsertStockRemnant, deleteStockRemnant,
 } from '../vitrage/store';
 import { patchCommandeModule, upsertCommandeGlobale, listCommandesGlobales, type CommandeGlobale, type ModuleStatus } from '../api';
-import type { GlassProduct, StockPlate, Vitrage as VitrageType } from '../vitrage/types';
+import type { GlassProduct, StockPlate, StockRemnant, Vitrage as VitrageType } from '../vitrage/types';
 import { v4 as uuid } from 'uuid';
 
 /** Shape of the vitrage JSONB column when populated with import data */
@@ -1158,14 +1159,15 @@ function StockView({ onBack }: { onBack: () => void }) {
   const [tab, setTab] = useState(0);
   const [products, setProducts] = useState<GlassProduct[]>([]);
   const [plates, setPlates] = useState<StockPlate[]>([]);
+  const [remnants, setRemnants] = useState<StockRemnant[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    (async () => {
-      const [p, s] = await Promise.all([fetchGlassProducts(), fetchStockPlates()]);
-      setProducts(p); setPlates(s); setLoading(false);
-    })();
-  }, []);
+  const loadAll = async () => {
+    const [p, s, r] = await Promise.all([fetchGlassProducts(), fetchStockPlates(), fetchStockRemnants()]);
+    setProducts(p); setPlates(s); setRemnants(r); setLoading(false);
+  };
+
+  useEffect(() => { loadAll(); }, []);
 
   const [editProduct, setEditProduct] = useState<Partial<GlassProduct> | null>(null);
   const [editPlate, setEditPlate] = useState<Partial<StockPlate> | null>(null);
@@ -1196,7 +1198,7 @@ function StockView({ onBack }: { onBack: () => void }) {
     setPlates(await fetchStockPlates());
   };
 
-  const tabs = ['Catalogue verres', 'Stock plaques'];
+  const tabs = ['Catalogue verres', 'Stock plaques', `Chutes (${remnants.filter(r => (r as unknown as Record<string, string>).statut !== 'utilise').length})`];
 
   if (loading) return <p className="text-gray-500 text-center py-12">Chargement...</p>;
 
@@ -1489,6 +1491,68 @@ function StockView({ onBack }: { onBack: () => void }) {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {tab === 2 && (
+        <div>
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-sm font-semibold text-gray-300">
+              {remnants.filter(r => (r as unknown as Record<string, string>).statut !== 'utilise').length} chutes disponibles
+            </h3>
+            <button onClick={async () => {
+              const code = `CH-${new Date().toISOString().slice(2, 10).replace(/-/g, '')}-${Math.random().toString(36).slice(2, 5).toUpperCase()}`;
+              await upsertStockRemnant({ code, glass_code: products[0]?.code ?? '', width: 0, height: 0, quantity: 1, statut: 'disponible', source_commande: '', source_plaque: 0, used_in_commande: '', emplacement: '', notes: '' } as StockRemnant);
+              setRemnants(await fetchStockRemnants());
+            }} className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white text-sm rounded">+ Ajouter manuellement</button>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead><tr className="text-gray-400 border-b border-[#2a2d35]">
+                <th className="text-left py-2 px-2">Code</th>
+                <th className="text-left py-2 px-2">Verre</th>
+                <th className="text-right py-2 px-2">Dimensions</th>
+                <th className="text-center py-2 px-2">Statut</th>
+                <th className="text-left py-2 px-2">Origine</th>
+                <th className="text-left py-2 px-2">Emplacement</th>
+                <th className="text-left py-2 px-2">Date</th>
+                <th className="py-2 px-2 w-20"></th>
+              </tr></thead>
+              <tbody>
+                {remnants.map(r => {
+                  const d = r as unknown as Record<string, unknown>;
+                  const statut = (d.statut as string) || 'disponible';
+                  const statusColor: Record<string, string> = {
+                    disponible: 'bg-green-600/20 text-green-400',
+                    reserve: 'bg-blue-600/20 text-blue-400',
+                    utilise: 'bg-gray-600/20 text-gray-500',
+                    rebut: 'bg-red-600/20 text-red-400',
+                  };
+                  return (
+                    <tr key={r.id} className={`border-b border-[#1e2028] ${statut === 'utilise' ? 'opacity-40' : ''}`}>
+                      <td className="py-1.5 px-2 text-amber-400 font-mono font-bold">{(d.code as string) || r.id.slice(0, 8)}</td>
+                      <td className="py-1.5 px-2 text-white">{r.glass_code}</td>
+                      <td className="py-1.5 px-2 text-white text-right font-medium">{r.width} x {r.height}</td>
+                      <td className="py-1.5 px-2 text-center">
+                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${statusColor[statut] || ''}`}>
+                          {statut.toUpperCase()}
+                        </span>
+                      </td>
+                      <td className="py-1.5 px-2 text-gray-400">{r.source_commande || '—'}</td>
+                      <td className="py-1.5 px-2 text-gray-400">{r.emplacement || '—'}</td>
+                      <td className="py-1.5 px-2 text-gray-500">{r.date_creation?.slice(0, 10) || '—'}</td>
+                      <td className="py-1.5 px-2 text-right">
+                        <button onClick={async () => { if (confirm('Supprimer cette chute ?')) { await deleteStockRemnant(r.id); setRemnants(await fetchStockRemnants()); } }}
+                          className="text-red-400 hover:text-red-300 text-xs">Suppr.</button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            {remnants.length === 0 && <p className="text-gray-500 text-sm text-center py-6">Aucune chute enregistree. Les chutes seront creees automatiquement apres chaque optimisation de coupe.</p>}
           </div>
         </div>
       )}
