@@ -1480,6 +1480,39 @@ function AssemblageView({ selectedLot, pieces, onReload, setSelectedLot }: {
           )}
         </div>
 
+        {/* Controle eau de lavage (CEKAL) */}
+        <div className="mb-4">
+          <button onClick={() => setShowMatieres(s => !s)}
+            className="w-full p-3 rounded-xl border bg-[#181a20] border-cyan-500/30 text-left">
+            <div className="flex items-center justify-between">
+              <span className="text-base font-bold text-cyan-400">CONTROLE EAU LAVAGE (CEKAL)</span>
+              <span className="text-gray-500 text-xs">{new Date().toLocaleDateString('fr-FR')}</span>
+            </div>
+          </button>
+          <div className="mt-2 bg-[#181a20] rounded-xl border border-[#2a2d35] p-4">
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="text-[10px] text-gray-500 block mb-1">Conductivite (microS/cm)</label>
+                <input type="number" step="0.1" value={matieresJour.lavage_conductivite || ''}
+                  onChange={e => updateMatiere('lavage_conductivite', e.target.value)}
+                  placeholder="< 20" className="w-full bg-[#14161d] border border-[#2a2d35] rounded-lg px-3 py-2 text-sm text-white" />
+              </div>
+              <div>
+                <label className="text-[10px] text-gray-500 block mb-1">pH</label>
+                <input type="number" step="0.1" value={matieresJour.lavage_ph || ''}
+                  onChange={e => updateMatiere('lavage_ph', e.target.value)}
+                  placeholder="6.5 - 8.5" className="w-full bg-[#14161d] border border-[#2a2d35] rounded-lg px-3 py-2 text-sm text-white" />
+              </div>
+              <div>
+                <label className="text-[10px] text-gray-500 block mb-1">Temperature (°C)</label>
+                <input type="number" step="0.1" value={matieresJour.lavage_temperature || ''}
+                  onChange={e => updateMatiere('lavage_temperature', e.target.value)}
+                  placeholder="30 - 45" className="w-full bg-[#14161d] border border-[#2a2d35] rounded-lg px-3 py-2 text-sm text-white" />
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div className="flex items-center gap-3 mb-4">
           <h2 className="text-2xl font-black text-white flex-1">VITRAGES A ASSEMBLER</h2>
           {doneVitrages > 0 && (
@@ -1676,14 +1709,21 @@ function OptimVerreTab({ glassOptim, pieces, lotId, onReload }: {
   const lotVerre = pieces.find(p => p.plaque_no === plaqueNo)?.lot_verre || '';
 
   const [lotInput, setLotInput] = useState('');
+  const [lotFournisseur, setLotFournisseur] = useState('');
+  const [lotNomCommercial, setLotNomCommercial] = useState('');
 
   const piecesOnPlate = pieces.filter(p => p.plaque_no === plaqueNo);
   const allCut = piecesOnPlate.length > 0 && piecesOnPlate.every(p => p.statut === 'coupe' || p.statut === 'assemble');
 
   const saveLotVerre = async () => {
     if (!lotInput) return;
-    await patchJSON(`/api/production/lots/${lotId}/lot-verre`, { plaque_nos: [plaqueNo], lot_verre: lotInput });
-    setLotInput('');
+    await patchJSON(`/api/production/lots/${lotId}/lot-verre`, {
+      plaque_nos: [plaqueNo],
+      lot_verre: lotInput,
+      fournisseur: lotFournisseur,
+      nom_commercial: lotNomCommercial,
+    });
+    setLotInput(''); setLotFournisseur(''); setLotNomCommercial('');
     onReload();
   };
 
@@ -1763,25 +1803,47 @@ function OptimVerreTab({ glassOptim, pieces, lotId, onReload }: {
         </svg>
       </div>
 
-      {/* Lot verre + checkbox coupe */}
-      <div className="flex items-center gap-4 bg-[#181a20] rounded-lg p-4 border border-[#2a2d35]">
-        <div className="flex-1">
-          <label className="text-xs text-gray-400 block mb-1">N° lot verre pour cette plaque</label>
-          <div className="flex gap-2">
+      {/* Lot verre + tracabilite + coupe */}
+      <div className="bg-[#181a20] rounded-lg p-4 border border-[#2a2d35] space-y-3">
+        <div className="text-xs text-amber-400 font-bold uppercase">Tracabilite plaque {plaqueNo} — {material}</div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+          <div>
+            <label className="text-[10px] text-gray-500 block mb-1">Fournisseur</label>
+            <select value={lotFournisseur} onChange={e => setLotFournisseur(e.target.value)}
+              className="w-full bg-[#14161d] border border-[#2a2d35] rounded px-2 py-1.5 text-sm text-white">
+              <option value="">Selectionner</option>
+              <option value="Guardian">Guardian</option>
+              <option value="AGC">AGC</option>
+              <option value="Saint-Gobain">Saint-Gobain</option>
+              <option value="Pilkington">Pilkington</option>
+              <option value="Autre">Autre</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-[10px] text-gray-500 block mb-1">Nom commercial</label>
+            <input value={lotNomCommercial} onChange={e => setLotNomCommercial(e.target.value)}
+              placeholder="Ex: Planitherm One, iplus Top 1.1"
+              className="w-full bg-[#14161d] border border-[#2a2d35] rounded px-2 py-1.5 text-sm text-white" />
+          </div>
+          <div>
+            <label className="text-[10px] text-gray-500 block mb-1">N° lot fournisseur</label>
             <input value={lotInput || lotVerre} onChange={e => setLotInput(e.target.value)}
-              placeholder="Ex: LOT-2026-0042" className="bg-[#14161d] border border-[#2a2d35] rounded px-3 py-2 text-sm text-white flex-1 focus:border-blue-500 outline-none" />
-            <button onClick={saveLotVerre} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs rounded transition-colors">
-              Sauver
+              placeholder="Ex: G-2026-04523"
+              className="w-full bg-[#14161d] border border-[#2a2d35] rounded px-2 py-1.5 text-sm text-white" />
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <button onClick={saveLotVerre} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs rounded transition-colors">
+            Sauver tracabilite
+          </button>
+          {lotVerre && <span className="text-xs text-green-400">Lot actuel : {lotVerre}</span>}
+          <div className="ml-auto">
+            <button onClick={markPlateAsCut} disabled={allCut}
+              className={`px-6 py-3 rounded-lg text-sm font-bold transition-colors ${
+                allCut ? 'bg-green-700 text-green-200 cursor-default' : 'bg-amber-600 hover:bg-amber-500 text-white'}`}>
+              {allCut ? 'Coupee' : 'Marquer coupee'}
             </button>
           </div>
-          {lotVerre && <div className="text-xs text-green-400 mt-1">Lot actuel : {lotVerre}</div>}
-        </div>
-        <div className="text-center">
-          <button onClick={markPlateAsCut} disabled={allCut}
-            className={`px-6 py-3 rounded-lg text-sm font-bold transition-colors ${
-              allCut ? 'bg-green-700 text-green-200 cursor-default' : 'bg-amber-600 hover:bg-amber-500 text-white'}`}>
-            {allCut ? '✓ Coupee' : 'Marquer coupee'}
-          </button>
         </div>
       </div>
 
