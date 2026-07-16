@@ -176,15 +176,19 @@ export const DEFAULT_GLASS: GlassSettings = {
   machine: 'lisec',
 };
 
-export type GlassType = 'float' | 'feuillete' | 'trempe' | 'stadip' | 'couche' | 'clair';
+export type GlassFamily = 'float' | 'feuillete';
+export type GlassTreatment = 'clair' | 'fe' | 'controle_solaire' | 'depoli' | 'reflechissant' | 'extra_clair' | 'teinte' | 'autre';
 export type CuttingMachine = 'lisec' | 'bottero' | 'manuel' | 'commande_aux_dimensions';
 
 export interface GlassProduct {
   id: string;
   code: string;
   label: string;
-  type: GlassType;
+  famille: GlassFamily;
+  traitement: GlassTreatment;
   epaisseur: number;
+  nb_pvb: number;
+  notation_feuillete: string;
   has_coating: boolean;
   coating_type: string;
   coating_face: string;
