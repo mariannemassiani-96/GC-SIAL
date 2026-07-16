@@ -219,9 +219,9 @@ function HubFabrication({ onSelect }: { onSelect: (mode: AppMode) => void }) {
     },
   ];
 
-  const atelierApps = apps.filter(a =>
-    ['reception_matiere', 'poste_coupe', 'traca_menuiserie', 'smart_assembly', 'stock_accessoires', 'preparation_livraison', 'maintenance_qualite', 'vitrage'].includes(a.id),
-  );
+  const isulaApps = apps.filter(a => ['vitrage'].includes(a.id));
+  const sialApps = apps.filter(a => ['poste_coupe', 'traca_menuiserie', 'smart_assembly'].includes(a.id));
+  const transversalApps = apps.filter(a => ['reception_matiere', 'stock_accessoires', 'preparation_livraison', 'maintenance_qualite'].includes(a.id));
   const beApps = apps.filter(a => ['gc', 'workshop_layout', 'formation_odoo'].includes(a.id));
   const supervisionApps = apps.filter(a => ['dashboard_global', 'odoo', 'qualite', 'bi_dashboard'].includes(a.id));
 
@@ -270,21 +270,59 @@ function HubFabrication({ onSelect }: { onSelect: (mode: AppMode) => void }) {
         </div>
       </header>
       <main className="max-w-5xl mx-auto px-6 py-8 space-y-10">
-        {/* ATELIER */}
-        <section>
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-8 h-8 rounded-lg bg-amber-600/20 border border-amber-500/30 flex items-center justify-center">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-amber-400">
-                <path d="M2 20h20M4 20V10l8-6 8 6v10" /><rect x="9" y="14" width="6" height="6" />
-              </svg>
+        {/* ISULA VITRAGE */}
+        {filterApps(isulaApps).length > 0 && (
+          <section>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-8 h-8 rounded-lg bg-blue-600/20 border border-blue-500/30 flex items-center justify-center">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-blue-400">
+                  <rect x="3" y="3" width="18" height="18" rx="2" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="12" y1="3" x2="12" y2="21" />
+                </svg>
+              </div>
+              <h2 className="text-lg font-bold text-white">ISULA VITRAGE</h2>
+              <span className="text-xs text-gray-500">Vitrages isolants, coupe verre, CEKAL</span>
             </div>
-            <h2 className="text-lg font-bold text-white">ATELIER</h2>
-            <span className="text-xs text-gray-500">Production, logistique, qualite</span>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {filterApps(atelierApps).map(renderCard)}
-          </div>
-        </section>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {filterApps(isulaApps).map(renderCard)}
+            </div>
+          </section>
+        )}
+
+        {/* SIAL MENUISERIES */}
+        {filterApps(sialApps).length > 0 && (
+          <section>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-8 h-8 rounded-lg bg-red-600/20 border border-red-500/30 flex items-center justify-center">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-red-400">
+                  <rect x="3" y="3" width="7" height="10" rx="1" /><rect x="14" y="3" width="7" height="18" rx="1" /><line x1="3" y1="8" x2="10" y2="8" />
+                </svg>
+              </div>
+              <h2 className="text-lg font-bold text-white">SIAL MENUISERIES</h2>
+              <span className="text-xs text-gray-500">Aluminium & PVC, coupe profiles, montage, CE + NF</span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {filterApps(sialApps).map(renderCard)}
+            </div>
+          </section>
+        )}
+
+        {/* TRANSVERSAL */}
+        {filterApps(transversalApps).length > 0 && (
+          <section>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-8 h-8 rounded-lg bg-amber-600/20 border border-amber-500/30 flex items-center justify-center">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-amber-400">
+                  <path d="M2 20h20M4 20V10l8-6 8 6v10" /><rect x="9" y="14" width="6" height="6" />
+                </svg>
+              </div>
+              <h2 className="text-lg font-bold text-white">TRANSVERSAL</h2>
+              <span className="text-xs text-gray-500">Reception, stock, livraison, maintenance</span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {filterApps(transversalApps).map(renderCard)}
+            </div>
+          </section>
+        )}
 
         {/* BE */}
         <section>
