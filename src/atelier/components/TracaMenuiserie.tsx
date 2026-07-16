@@ -279,9 +279,34 @@ function FicheDetail({ fiche, activeTab, setActiveTab, onSave, onBack, operateur
         {activeTab === 'ct05' && (
           <CTSection title="CT-05 — Vitrage menuiserie" sub="Sens profiles = double confirmation (erreur critique)." color="purple">
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              <I label="Lot vitrage" v={f.ct05.lot_vitrage} set={v => set({ ct05: { ...f.ct05, lot_vitrage: v } })} ph="Ref lot CEKAL si ISULA" />
-              <I label="Fournisseur vitrage" v={f.ct05.vitrage_fournisseur} set={v => set({ ct05: { ...f.ct05, vitrage_fournisseur: v } })} ph="ISULA, Saint-Gobain..." />
+              <div>
+                <label className="text-[10px] text-gray-500 block mb-1">Source vitrage</label>
+                <select value={f.ct05.vitrage_isula ? 'isula' : 'externe'} onChange={e => set({ ct05: { ...f.ct05, vitrage_isula: e.target.value === 'isula', vitrage_fournisseur: e.target.value === 'isula' ? 'ISULA VITRAGE' : '' } })}
+                  className="w-full bg-[#14161d] border border-[#2a2d35] rounded px-2 py-1.5 text-sm text-white">
+                  <option value="isula">ISULA VITRAGE (interne)</option>
+                  <option value="externe">Fournisseur externe</option>
+                </select>
+              </div>
+              {f.ct05.vitrage_isula ? (
+                <>
+                  <I label="ID lot CEKAL ISULA" v={f.ct05.vitrage_cekal_id} set={v => set({ ct05: { ...f.ct05, vitrage_cekal_id: v } })} ph="LOT-S29-XXXX" />
+                  <I label="N° CEKAL" v={f.ct05.vitrage_cekal_numero} set={v => set({ ct05: { ...f.ct05, vitrage_cekal_numero: v } })} />
+                  <I label="Composition IGU" v={f.ct05.vitrage_composition} set={v => set({ ct05: { ...f.ct05, vitrage_composition: v } })} ph="4 FE / 16 Ar / 44.2" />
+                  <I label="Lot verre EXT" v={f.ct05.vitrage_lot_ext} set={v => set({ ct05: { ...f.ct05, vitrage_lot_ext: v } })} />
+                  <I label="Lot verre INT" v={f.ct05.vitrage_lot_int} set={v => set({ ct05: { ...f.ct05, vitrage_lot_int: v } })} />
+                </>
+              ) : (
+                <>
+                  <I label="Fournisseur vitrage" v={f.ct05.vitrage_fournisseur} set={v => set({ ct05: { ...f.ct05, vitrage_fournisseur: v } })} ph="Saint-Gobain, AGC..." />
+                  <I label="Lot vitrage" v={f.ct05.lot_vitrage} set={v => set({ ct05: { ...f.ct05, lot_vitrage: v } })} />
+                </>
+              )}
             </div>
+            {f.ct05.vitrage_isula && f.ct05.vitrage_cekal_id && (
+              <div className="mt-2 p-2 bg-green-900/20 border border-green-500/30 rounded-lg text-xs text-green-400">
+                Vitrage ISULA lie — tracabilite CEKAL complete (lots verre, WE, gaz, scellement) accessible via le lot {f.ct05.vitrage_cekal_id}
+              </div>
+            )}
             <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mt-3">
               <C label="Sens profiles OK" v={f.ct05.sens_profiles_ok} set={v => set({ ct05: { ...f.ct05, sens_profiles_ok: v } })} warn />
               <C label="Calage DTU OK" v={f.ct05.calage_dtu_ok} set={v => set({ ct05: { ...f.ct05, calage_dtu_ok: v } })} />

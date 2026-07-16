@@ -79,6 +79,12 @@ export interface MenuiserieTraca {
   ct05: {
     lot_vitrage: string;
     vitrage_fournisseur: string;
+    vitrage_isula: boolean;
+    vitrage_cekal_id: string;
+    vitrage_composition: string;
+    vitrage_lot_ext: string;
+    vitrage_lot_int: string;
+    vitrage_cekal_numero: string;
     sens_profiles_ok: boolean;
     calage_dtu_ok: boolean;
     correspondance_lot: boolean;
@@ -128,7 +134,7 @@ export function createEmptyMenuiserieTraca(of_ref: string, matiere: 'alu' | 'pvc
     ct02: { equerrage_ok: false, equerrage_valeur: 0, options_ok: false, etiquette_ce_posee: false, etiquette_window_it_posee: false, operateur: '', chef_equipe_validation: '', date: '', valide: false },
     ct03: { applicable: matiere === 'pvc', temperature: 0, temps_pression: 0, aspect_ok: false, test_destructif_ok: false, rebut: false, operateur: '', date: '', valide: false },
     ct04: { ferrage_conforme: false, fonctionnement_fluide: false, reglage_ok: false, operateur: '', date: '', valide: false },
-    ct05: { lot_vitrage: '', vitrage_fournisseur: '', sens_profiles_ok: false, calage_dtu_ok: false, correspondance_lot: false, proprete_ok: false, operateur: '', date: '', valide: false },
+    ct05: { lot_vitrage: '', vitrage_fournisseur: '', vitrage_isula: false, vitrage_cekal_id: '', vitrage_composition: '', vitrage_lot_ext: '', vitrage_lot_int: '', vitrage_cekal_numero: '', sens_profiles_ok: false, calage_dtu_ok: false, correspondance_lot: false, proprete_ok: false, operateur: '', date: '', valide: false },
     ct06: { fonctionnement_global_ok: false, dimensions_finales_l: 0, dimensions_finales_h: 0, etiquette_ce_conforme: false, window_it_scanne: false, emballage_ok: false, chef_equipe: '', date: '', libere: false },
     nf: { applicable: matiere === 'pvc', numero_certification: '', dop_reference: '', permeabilite: '', etancheite: '', resistance_vent: '', marquage_pose: false },
     state: 'brouillon', lot_fabrication: '', date_creation: new Date().toISOString(),
