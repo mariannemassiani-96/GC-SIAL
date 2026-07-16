@@ -55,10 +55,10 @@ function download(blob: Blob, name: string) {
 function syncVitrageToGlobal(commande: Commande) {
   const ref = commande.reference.trim();
   if (!ref) return;
-  patchCommandeModule(ref, 'vitrage', {
-    statut: commande.statut === 'terminee' ? 'termine' : commande.statut === 'en_cours' ? 'en_cours' : 'attente',
-    total: commande.vitrages.length, fait: 0, nc: 0,
-  }).catch(() => {});
+  const total = commande.vitrages.length;
+  const statut = commande.statut === 'terminee' ? 'termine' : commande.statut === 'en_cours' ? 'en_cours' : 'attente';
+  const fait = commande.statut === 'terminee' ? total : 0;
+  patchCommandeModule(ref, 'vitrage', { statut, total, fait, nc: 0 }).catch(() => {});
   upsertCommandeGlobale(ref, {
     client: (commande.client || '').trim(), chantier: (commande.client || '').trim(),
     semaine_fab: commande.semaineFabrication || '', semaine_liv: commande.semaineLivraison || '',

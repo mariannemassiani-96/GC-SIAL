@@ -171,9 +171,11 @@ export function buildCEData(
     operateur_assemblage: '',
     lot_fabrication: lotRef,
     lavage: {
-      conductivite: 0, ph: 0, temperature: 0,
+      conductivite: parseFloat(matieresJour.lavage_conductivite || '0') || 0,
+      ph: parseFloat(matieresJour.lavage_ph || '0') || 0,
+      temperature: parseFloat(matieresJour.lavage_temperature || '0') || 0,
       date_controle: new Date().toISOString().slice(0, 10),
-      conforme: false,
+      conforme: !!(matieresJour.lavage_conductivite && matieresJour.lavage_ph && matieresJour.lavage_temperature),
     },
     controles: {
       dimension_mesuree_l: 0, dimension_mesuree_h: 0,
