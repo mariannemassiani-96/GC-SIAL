@@ -23,7 +23,7 @@ import {
   fetchSettings, saveSettings, type Settings,
   fetchGlassProducts, upsertGlassProduct, deleteGlassProduct,
   fetchStockPlates, upsertStockPlate, deleteStockPlate,
-  fetchStockRemnants, upsertStockRemnant, deleteStockRemnant,
+  fetchStockRemnants, upsertStockRemnant, deleteStockRemnant, patchStockRemnant,
 } from '../vitrage/store';
 import { patchCommandeModule, upsertCommandeGlobale, listCommandesGlobales, type CommandeGlobale, type ModuleStatus } from '../api';
 import type { GlassProduct, StockPlate, StockRemnant, Vitrage as VitrageType } from '../vitrage/types';
@@ -1080,7 +1080,42 @@ function BatchView({ commandes, onBack, avery, we, glass }: {
           nc: 0,
         }).catch(() => {});
       }
-      alert(`Lot ${ref} cree avec ${prodPieces.length} pieces verre + ${weProd.length} WE`);
+      // Enregistrer les nouvelles chutes stockables + marquer les chutes utilisees
+      let chutesCreees = 0;
+      let chutesUtilisees = 0;
+      for (const matResult of glassResult) {
+        for (const plate of matResult.plates) {
+          const pd = plate as unknown as Record<string, unknown>;
+          // Marquer les chutes utilisees
+          if (pd.isRemnant && pd.remnantId) {
+            patchStockRemnant(pd.remnantId as string, { statut: 'utilise', used_in_commande: ref } as StockRemnant).catch(() => {});
+            chutesUtilisees++;
+          }
+          // Enregistrer les nouvelles chutes stockables (>300mm dans les 2 dimensions)
+          const stockableRemnants = (plate.remnants || []).filter(
+            r => r.w >= 300 && r.h >= 300 && r.classe === 'stockable'
+          );
+          for (const remnant of stockableRemnants) {
+            const chCode = `CH-${sem.replace('S', '').replace('-', '')}-${String(chutesCreees + 1).padStart(3, '0')}`;
+            upsertStockRemnant({
+              code: chCode,
+              glass_code: matResult.material,
+              width: Math.round(remnant.w),
+              height: Math.round(remnant.h),
+              quantity: 1,
+              statut: 'disponible',
+              source_commande: ref,
+              source_plaque: plate.numero,
+              emplacement: '',
+              notes: `Auto-cree depuis ${ref} plaque ${plate.numero}`,
+            } as StockRemnant).catch(() => {});
+            chutesCreees++;
+          }
+        }
+      }
+      const chutesMsg = chutesCreees > 0 ? ` — ${chutesCreees} chute(s) enregistree(s)` : '';
+      const usedMsg = chutesUtilisees > 0 ? ` — ${chutesUtilisees} chute(s) reutilisee(s)` : '';
+      alert(`Lot ${ref} cree avec ${prodPieces.length} pieces verre + ${weProd.length} WE${chutesMsg}${usedMsg}`);
     } catch (err) { alert(`Erreur : ${err}`); }
     setSending(false);
   };
