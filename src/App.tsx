@@ -8,6 +8,7 @@ import { PreparationLivraison } from './atelier/components/PreparationLivraison'
 import { ReceptionMatiere } from './atelier/components/ReceptionMatiere';
 import { PosteCoupe } from './atelier/components/PosteCoupe';
 import { TracaMenuiserie } from './atelier/components/TracaMenuiserie';
+import { SialMenuiseries } from './pages/SialMenuiseries';
 import { MaintenanceQualite } from './atelier/components/MaintenanceQualite';
 import { WorkshopApp } from './workshop/WorkshopApp';
 import { VitrageApp } from './pages/VitrageApp';
@@ -38,7 +39,8 @@ type AppMode =
   | 'qualite'
   | 'bi_dashboard'
   | 'formation_odoo'
-  | 'traca_menuiserie';
+  | 'traca_menuiserie'
+  | 'sial_menuiseries';
 
 // ── Hub Fabrication (page d'accueil) ─────────────────────────────────
 
@@ -59,9 +61,20 @@ function HubFabrication({ onSelect }: { onSelect: (mode: AppMode) => void }) {
       color: 'sky',
     },
     {
+      id: 'sial_menuiseries' as AppMode,
+      label: 'SIAL MENUISERIES',
+      description: 'Fabrication menuiseries alu & PVC — 5 postes avec tracabilite CE + NF integree.',
+      icon: (
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-red-400">
+          <rect x="3" y="3" width="7" height="10" rx="1" /><rect x="14" y="3" width="7" height="18" rx="1" /><line x1="3" y1="8" x2="10" y2="8" />
+        </svg>
+      ),
+      color: 'red',
+    },
+    {
       id: 'traca_menuiserie' as AppMode,
       label: 'Tracabilite Menuiseries',
-      description: 'Suivi CE + NF par menuiserie — 6 postes de controle, lots, Window IT, liberation.',
+      description: 'Fiches tracabilite CE + NF — vue d\'ensemble et gestion des fiches.',
       icon: (
         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-rose-400">
           <rect x="3" y="3" width="18" height="18" rx="2" /><path d="M9 3v18M3 9h18" /><path d="M13 13l2 2 4-4" strokeWidth="2" />
@@ -220,7 +233,7 @@ function HubFabrication({ onSelect }: { onSelect: (mode: AppMode) => void }) {
   ];
 
   const isulaApps = apps.filter(a => ['vitrage'].includes(a.id));
-  const sialApps = apps.filter(a => ['poste_coupe', 'traca_menuiserie', 'smart_assembly'].includes(a.id));
+  const sialApps = apps.filter(a => ['sial_menuiseries'].includes(a.id));
   const transversalApps = apps.filter(a => ['reception_matiere', 'stock_accessoires', 'preparation_livraison', 'maintenance_qualite'].includes(a.id));
   const beApps = apps.filter(a => ['gc', 'workshop_layout', 'formation_odoo'].includes(a.id));
   const supervisionApps = apps.filter(a => ['dashboard_global', 'odoo', 'qualite', 'bi_dashboard'].includes(a.id));
@@ -453,6 +466,7 @@ function AppContent() {
     return <HubFabrication onSelect={setMode} />;
   }
 
+  if (mode === 'sial_menuiseries') return <SialMenuiseries onBack={goHome} />;
   if (mode === 'traca_menuiserie') return <TracaMenuiserie onBack={goHome} />;
   if (mode === 'poste_coupe') return <PosteCoupe onBack={goHome} />;
   if (mode === 'maintenance_qualite') return <MaintenanceQualite onBack={goHome} />;
