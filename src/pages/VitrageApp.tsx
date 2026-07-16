@@ -13,6 +13,7 @@ import { optimizeWE } from '../vitrage/optimizeWE';
 import { optimizeGlass, extractGlassPieces } from '../vitrage/optimize2D';
 import { hasBackend, apiOptimize, apiExportDXF, apiExportOPT, apiLabelsZPL } from '../vitrage/api';
 import { optimizeCarts, sequenceCuttingRuns, type CutPieceForCart, type CartOptimResult } from '../vitrage/cartOptimizer';
+import { generateCartSheetPDF, generateRemnantLabelsPDF } from '../vitrage/generateCartPDF';
 import { generateLabelsA, generateLabelsB, generateLabelsC } from '../vitrage/generateLabels';
 import { ProductionView } from '../vitrage/ProductionView';
 import { generateFicheWE } from '../vitrage/generateFicheWE';
@@ -1256,13 +1257,21 @@ function TabCarts({ commandes, allPlates }: { commandes: Commande[]; allPlates: 
         </div>
       </div>
 
-      {/* Reglage capacite */}
-      <div className="flex items-center gap-3 text-sm">
+      {/* Reglage + actions */}
+      <div className="flex items-center gap-3 text-sm flex-wrap">
         <label className="text-gray-400">Capacite chariot :</label>
         <input type="number" value={maxPerCart} min={5} max={50}
           onChange={e => setMaxPerCart(+e.target.value)}
           className="w-16 px-2 py-1 bg-[#181a20] border border-[#2a2d35] rounded text-white text-center" />
         <span className="text-gray-500">pieces max</span>
+        <div className="ml-auto flex gap-2">
+          <button onClick={async () => {
+            const blob = await generateCartSheetPDF(result.carts, commandes.map(c => c.reference).join('+'));
+            download(blob, 'fiches_chariots.pdf');
+          }} className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs rounded-lg">
+            Imprimer fiches chariots
+          </button>
+        </div>
       </div>
 
       {/* Ordre de coupe */}
@@ -1691,6 +1700,22 @@ function StockView({ onBack }: { onBack: () => void }) {
               await upsertStockRemnant({ code, glass_code: products[0]?.code ?? '', width: 0, height: 0, quantity: 1, statut: 'disponible', source_commande: '', source_plaque: 0, used_in_commande: '', emplacement: '', notes: '' } as StockRemnant);
               setRemnants(await fetchStockRemnants());
             }} className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white text-sm rounded">+ Ajouter manuellement</button>
+            {remnants.filter(r => (r as unknown as Record<string, string>).statut !== 'utilise').length > 0 && (
+              <button onClick={async () => {
+                const labels = remnants
+                  .filter(r => (r as unknown as Record<string, string>).statut !== 'utilise')
+                  .map(r => ({
+                    code: (r as unknown as Record<string, string>).code || r.id.slice(0, 8),
+                    glass_code: r.glass_code,
+                    width: r.width,
+                    height: r.height,
+                    source: r.source_commande || '',
+                    date: r.date_creation?.slice(0, 10) || new Date().toISOString().slice(0, 10),
+                  }));
+                const blob = await generateRemnantLabelsPDF(labels);
+                download(blob, 'etiquettes_chutes.pdf');
+              }} className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded">Imprimer etiquettes</button>
+            )}
           </div>
 
           <div className="overflow-x-auto">
