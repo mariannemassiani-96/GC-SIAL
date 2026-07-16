@@ -12,6 +12,7 @@ import { parseODTFile } from '../vitrage/parseODT';
 import { optimizeWE } from '../vitrage/optimizeWE';
 import { optimizeGlass, extractGlassPieces } from '../vitrage/optimize2D';
 import { hasBackend, apiOptimize, apiExportDXF, apiExportOPT, apiLabelsZPL } from '../vitrage/api';
+import { optimizeCarts, sequenceCuttingRuns, type CutPieceForCart, type CartOptimResult } from '../vitrage/cartOptimizer';
 import { generateLabelsA, generateLabelsB, generateLabelsC } from '../vitrage/generateLabels';
 import { ProductionView } from '../vitrage/ProductionView';
 import { generateFicheWE } from '../vitrage/generateFicheWE';
@@ -1002,7 +1003,7 @@ function TabExport({ vitrages, allPlates, weResult, commandeLabel, commande, ave
 
 // ── Batch View (multi-order) ─────────────────────────────────────────
 
-const BATCH_TABS = ['Vitrages', 'Optim Verre', 'Warm Edge', 'Etiquettes'] as const;
+const BATCH_TABS = ['Vitrages', 'Optim Verre', 'Warm Edge', 'Chariots', 'Etiquettes'] as const;
 
 function BatchView({ commandes, onBack, avery, we, glass }: {
   commandes: Commande[];
@@ -1147,8 +1148,149 @@ function BatchView({ commandes, onBack, avery, we, glass }: {
       )}
       {tab === 1 && <TabGlass results={glassResult} loading={optimLoading} backend={usingBackend} commandeLabel={batchLabel} />}
       {tab === 2 && <TabWE results={weResult} commandeLabel={batchLabel} we={we} />}
-      {tab === 3 && <TabExport vitrages={allVitrages} allPlates={allPlates} weResult={weResult}
+      {tab === 3 && <TabCarts commandes={commandes} allPlates={allPlates} />}
+      {tab === 4 && <TabExport vitrages={allVitrages} allPlates={allPlates} weResult={weResult}
         commandeLabel={batchLabel} avery={avery} we={we} />}
+    </div>
+  );
+}
+
+// ── Tab Chariots ────────────────────────────────────────────────────
+
+function TabCarts({ commandes, allPlates }: { commandes: Commande[]; allPlates: OptimizedPlate[] }) {
+  const [maxPerCart, setMaxPerCart] = useState(25);
+
+  const cartPieces: CutPieceForCart[] = allPlates.flatMap(plate =>
+    plate.pieces.map(p => ({
+      id: `${p.vitrageId}-${p.face}`,
+      vitrageId: p.vitrageId,
+      vitrageRef: p.vitrageRef,
+      clientRef: commandes.find(c => c.vitrages.some(v => v.id === p.vitrageId))?.reference || '',
+      position: p.face as 'EXT' | 'INT',
+      material: p.material,
+      width: p.width,
+      height: p.height,
+      area: p.width * p.height,
+      plateNo: plate.numero,
+    }))
+  );
+
+  const result: CartOptimResult = useMemo(
+    () => optimizeCarts(cartPieces, { maxPiecesPerCart: maxPerCart, maxAreaPerCart: 20_000_000, preferClientGrouping: true }),
+    [cartPieces, maxPerCart],
+  );
+
+  const runs = useMemo(
+    () => sequenceCuttingRuns(cartPieces, () => 'lisec'),
+    [cartPieces],
+  );
+
+  if (cartPieces.length === 0) return <p className="text-gray-500 text-sm">Lancez l'optimisation verre pour voir l'affectation chariots.</p>;
+
+  return (
+    <div className="space-y-6">
+      {/* KPI */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div className="bg-[#181a20] rounded-lg p-3 border border-[#2a2d35] text-center">
+          <div className="text-2xl font-black text-amber-400">{result.totalCarts}</div>
+          <div className="text-[10px] text-gray-500">Chariots</div>
+        </div>
+        <div className="bg-[#181a20] rounded-lg p-3 border border-[#2a2d35] text-center">
+          <div className="text-2xl font-black text-white">{cartPieces.length}</div>
+          <div className="text-[10px] text-gray-500">Pieces totales</div>
+        </div>
+        <div className="bg-[#181a20] rounded-lg p-3 border border-[#2a2d35] text-center">
+          <div className="text-2xl font-black text-green-400">{(result.avgFillRate * 100).toFixed(0)}%</div>
+          <div className="text-[10px] text-gray-500">Remplissage moy.</div>
+        </div>
+        <div className="bg-[#181a20] rounded-lg p-3 border border-[#2a2d35] text-center">
+          <div className="text-2xl font-black text-blue-400">{(result.iguPairingRate * 100).toFixed(0)}%</div>
+          <div className="text-[10px] text-gray-500">Pairing EXT+INT</div>
+        </div>
+        <div className="bg-[#181a20] rounded-lg p-3 border border-[#2a2d35] text-center">
+          <div className="text-2xl font-black text-cyan-400">{runs.length}</div>
+          <div className="text-[10px] text-gray-500">Runs de coupe</div>
+        </div>
+      </div>
+
+      {/* Reglage capacite */}
+      <div className="flex items-center gap-3 text-sm">
+        <label className="text-gray-400">Capacite chariot :</label>
+        <input type="number" value={maxPerCart} min={5} max={50}
+          onChange={e => setMaxPerCart(+e.target.value)}
+          className="w-16 px-2 py-1 bg-[#181a20] border border-[#2a2d35] rounded text-white text-center" />
+        <span className="text-gray-500">pieces max</span>
+      </div>
+
+      {/* Ordre de coupe */}
+      <div className="bg-[#181a20] rounded-lg p-4 border border-[#2a2d35]">
+        <h4 className="text-sm font-bold text-amber-400 mb-3">Ordre de coupe (minimise les changements de plaque)</h4>
+        <div className="flex gap-2 flex-wrap">
+          {runs.map((r, i) => (
+            <div key={i} className={`px-3 py-2 rounded-lg border text-xs ${
+              r.machine === 'bottero' ? 'bg-green-900/20 border-green-500/30' : 'bg-blue-900/20 border-blue-500/30'}`}>
+              <div className="font-bold text-white">{r.sequenceOrder}. {r.material}</div>
+              <div className="text-gray-400">{r.pieces.length} pcs — {r.machine.toUpperCase()}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Chariots */}
+      <div className="space-y-3">
+        <h4 className="text-sm font-bold text-amber-400">Affectation chariots</h4>
+        {result.carts.map(cart => {
+          const clients = [...new Set(cart.pieces.map(p => p.clientRef))];
+          const materials = [...new Set(cart.pieces.map(p => p.material))];
+          return (
+            <div key={cart.cartId} className="bg-[#181a20] rounded-lg border border-[#2a2d35] overflow-hidden">
+              <div className="flex items-center gap-3 px-4 py-3 border-b border-[#2a2d35]">
+                <span className="text-amber-400 font-bold font-mono">{cart.cartId}</span>
+                <span className="text-white font-semibold">{cart.clientRef}</span>
+                <div className="flex gap-1 flex-1">
+                  {materials.map(m => (
+                    <span key={m} className="text-[9px] px-1.5 py-0.5 rounded bg-blue-600/20 text-blue-400 border border-blue-500/20">{m}</span>
+                  ))}
+                </div>
+                <span className="text-xs text-gray-400">{cart.totalPieces}/{maxPerCart} pcs</span>
+                <span className={`text-xs font-bold ${cart.fillRate > 0.8 ? 'text-green-400' : cart.fillRate > 0.5 ? 'text-amber-400' : 'text-red-400'}`}>
+                  {(cart.fillRate * 100).toFixed(0)}%
+                </span>
+                <span className="text-xs text-blue-400">{cart.iguPaired}/{cart.iguTotal} paires</span>
+              </div>
+              {/* Fill bar */}
+              <div className="h-2 bg-gray-800">
+                <div className={`h-full transition-all ${cart.fillRate > 0.8 ? 'bg-green-500' : cart.fillRate > 0.5 ? 'bg-amber-500' : 'bg-red-500'}`}
+                  style={{ width: `${cart.fillRate * 100}%` }} />
+              </div>
+              {/* Pieces in 2 columns: EXT | INT */}
+              <div className="grid grid-cols-2 gap-px bg-[#2a2d35]">
+                <div className="bg-[#14161d] p-2">
+                  <div className="text-[9px] text-red-400 font-bold uppercase mb-1">EXT ({cart.pieces.filter(p => p.position === 'EXT').length})</div>
+                  {cart.pieces.filter(p => p.position === 'EXT').map(p => (
+                    <div key={p.id} className="text-[10px] text-gray-300 py-0.5">
+                      {p.vitrageRef} <span className="text-gray-600">{p.width}x{p.height}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="bg-[#14161d] p-2">
+                  <div className="text-[9px] text-blue-400 font-bold uppercase mb-1">INT ({cart.pieces.filter(p => p.position === 'INT').length})</div>
+                  {cart.pieces.filter(p => p.position === 'INT').map(p => (
+                    <div key={p.id} className="text-[10px] text-gray-300 py-0.5">
+                      {p.vitrageRef} <span className="text-gray-600">{p.width}x{p.height}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              {clients.length > 1 && (
+                <div className="px-4 py-1 bg-red-900/20 text-red-400 text-[10px]">
+                  Attention : {clients.length} clients melanges ({clients.join(', ')})
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
