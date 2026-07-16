@@ -7,6 +7,7 @@ import { StageInventaire } from './atelier/components/StageInventaire';
 import { PreparationLivraison } from './atelier/components/PreparationLivraison';
 import { ReceptionMatiere } from './atelier/components/ReceptionMatiere';
 import { PosteCoupe } from './atelier/components/PosteCoupe';
+import { TracaMenuiserie } from './atelier/components/TracaMenuiserie';
 import { MaintenanceQualite } from './atelier/components/MaintenanceQualite';
 import { WorkshopApp } from './workshop/WorkshopApp';
 import { VitrageApp } from './pages/VitrageApp';
@@ -36,7 +37,8 @@ type AppMode =
   | 'odoo'
   | 'qualite'
   | 'bi_dashboard'
-  | 'formation_odoo';
+  | 'formation_odoo'
+  | 'traca_menuiserie';
 
 // ── Hub Fabrication (page d'accueil) ─────────────────────────────────
 
@@ -55,6 +57,17 @@ function HubFabrication({ onSelect }: { onSelect: (mode: AppMode) => void }) {
         </svg>
       ),
       color: 'sky',
+    },
+    {
+      id: 'traca_menuiserie' as AppMode,
+      label: 'Tracabilite Menuiseries',
+      description: 'Suivi CE + NF par menuiserie — 6 postes de controle, lots, Window IT, liberation.',
+      icon: (
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-rose-400">
+          <rect x="3" y="3" width="18" height="18" rx="2" /><path d="M9 3v18M3 9h18" /><path d="M13 13l2 2 4-4" strokeWidth="2" />
+        </svg>
+      ),
+      color: 'rose',
     },
     {
       id: 'poste_coupe' as AppMode,
@@ -207,7 +220,7 @@ function HubFabrication({ onSelect }: { onSelect: (mode: AppMode) => void }) {
   ];
 
   const atelierApps = apps.filter(a =>
-    ['reception_matiere', 'poste_coupe', 'smart_assembly', 'stock_accessoires', 'preparation_livraison', 'maintenance_qualite', 'vitrage'].includes(a.id),
+    ['reception_matiere', 'poste_coupe', 'traca_menuiserie', 'smart_assembly', 'stock_accessoires', 'preparation_livraison', 'maintenance_qualite', 'vitrage'].includes(a.id),
   );
   const beApps = apps.filter(a => ['gc', 'workshop_layout', 'formation_odoo'].includes(a.id));
   const supervisionApps = apps.filter(a => ['dashboard_global', 'odoo', 'qualite', 'bi_dashboard'].includes(a.id));
@@ -402,6 +415,7 @@ function AppContent() {
     return <HubFabrication onSelect={setMode} />;
   }
 
+  if (mode === 'traca_menuiserie') return <TracaMenuiserie onBack={goHome} />;
   if (mode === 'poste_coupe') return <PosteCoupe onBack={goHome} />;
   if (mode === 'maintenance_qualite') return <MaintenanceQualite onBack={goHome} />;
   if (mode === 'reception_matiere') return <ReceptionMatiere onBack={goHome} />;
