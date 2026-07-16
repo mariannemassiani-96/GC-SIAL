@@ -110,6 +110,39 @@ app.put('/api/users/:id', authMiddleware, adminOnly, (req, res) => {
 // APP DATA (generic CRUD for all apps)
 // ══════════════════════════════════════════════════════════════
 
+// Public tracabilite endpoints (must be BEFORE the generic :app/:collection route)
+app.get('/api/data/tracabilite/ce', (req, res, next) => {
+  const key = process.env.TRACA_API_KEY;
+  if (key && req.headers['x-api-key'] !== key && req.headers['authorization'] !== `Bearer ${key}`) {
+    return res.status(401).json({ error: 'API key invalide' });
+  }
+  const rows = db.prepare("SELECT doc_id, data, updated_at FROM app_data WHERE app = 'tracabilite' AND collection = 'ce'").all();
+  const items = rows.map(r => {
+    try {
+      const d = JSON.parse(r.data);
+      if (typeof flattenCEData === 'function') return { ...flattenCEData(d), _updated_at: r.updated_at };
+      return { ...d, _updated_at: r.updated_at };
+    } catch { return null; }
+  }).filter(Boolean);
+  res.json(items);
+});
+
+app.get('/api/data/tracabilite/menuiserie', (req, res, next) => {
+  const key = process.env.TRACA_API_KEY;
+  if (key && req.headers['x-api-key'] !== key && req.headers['authorization'] !== `Bearer ${key}`) {
+    return res.status(401).json({ error: 'API key invalide' });
+  }
+  const rows = db.prepare("SELECT doc_id, data, updated_at FROM app_data WHERE app = 'tracabilite' AND collection = 'menuiserie'").all();
+  const items = rows.map(r => {
+    try {
+      const d = JSON.parse(r.data);
+      if (typeof flattenMenuiserieData === 'function') return { ...flattenMenuiserieData(d), _updated_at: r.updated_at };
+      return { ...d, _updated_at: r.updated_at };
+    } catch { return null; }
+  }).filter(Boolean);
+  res.json(items);
+});
+
 // GET all docs for an app/collection
 app.get('/api/data/:app/:collection', authMiddleware, (req, res) => {
   const rows = db.prepare('SELECT doc_id, data, updated_at FROM app_data WHERE app = ? AND collection = ?').all(req.params.app, req.params.collection);
