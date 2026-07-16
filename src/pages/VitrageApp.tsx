@@ -354,7 +354,14 @@ function useOptimization(vitrages: Vitrage[], glass: GlassSettings) {
         }
       }
       if (!cancelled) {
-        setGlassResult(optimizeGlass(vitrages, glass));
+        let remnants: import('../vitrage/optimize2D').RemnantInput[] = [];
+        try {
+          const stockRemnants = await fetchStockRemnants();
+          remnants = stockRemnants
+            .filter(r => (r as unknown as Record<string, string>).statut === 'disponible' || !(r as unknown as Record<string, string>).statut)
+            .map(r => ({ id: r.id, glass_code: r.glass_code, width: r.width, height: r.height }));
+        } catch { /* no remnants available */ }
+        setGlassResult(optimizeGlass(vitrages, glass, remnants));
         setBackend(false);
       }
       setLoading(false);
@@ -805,6 +812,7 @@ function PlatePreview({ plate }: { plate: OptimizedPlate }) {
   return (
     <div className={`bg-white rounded p-2 ${plate.hasInterdit ? 'border border-red-500' : 'border border-gray-300'}`}>
       <div className="text-xs text-gray-700 mb-1 font-medium">
+        {(plate as unknown as Record<string, boolean>).isRemnant && <span className="text-green-600 font-bold mr-1">CHUTE</span>}
         Plaque {plate.numero} — {plate.plateWidth}x{plate.plateHeight} — <span className="text-blue-700 font-bold">{plate.utilisation.toFixed(0)}%</span> — {plate.pieces.length} pcs
       </div>
       <svg viewBox={`0 0 ${vw} ${vh}`} className="w-full" style={{ maxHeight: 180 }}>

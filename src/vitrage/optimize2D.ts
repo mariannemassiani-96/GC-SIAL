@@ -194,9 +194,22 @@ function validateMinStrip(remnants: Remnant[], minWidth: number): Remnant[] {
   });
 }
 
+export interface RemnantInput {
+  id: string;
+  glass_code: string;
+  width: number;
+  height: number;
+}
+
+export interface RemnantUsage {
+  remnantId: string;
+  piecesPlaced: number;
+}
+
 export function optimizeGlass(
   vitrages: Vitrage[],
   settings: GlassSettings = DEFAULT_GLASS,
+  availableRemnants: RemnantInput[] = [],
 ): GlassOptimResult[] {
   const { plateWidth, plateHeight, cuttingGap, edgeTrimMargin, minStripWidth = 20 } = settings;
   const formats = settings.plateFormats?.length
@@ -212,6 +225,7 @@ export function optimizeGlass(
   }
 
   const results: GlassOptimResult[] = [];
+  const usedRemnants: RemnantUsage[] = [];
 
   for (const [material, pieces] of groups) {
     const sorted = [...pieces].sort((a, b) => {
@@ -224,6 +238,39 @@ export function optimizeGlass(
     const plates: OptimizedPlate[] = [];
     let remaining = sorted;
 
+    // ── Phase 0 : utiliser les chutes disponibles d'abord ──
+    const matchingRemnants = availableRemnants.filter(r =>
+      r.glass_code === material && r.width >= 100 && r.height >= 100
+    );
+    for (const remnant of matchingRemnants) {
+      if (remaining.length === 0) break;
+      const result = packPlate(remaining, remnant.width, remnant.height, cuttingGap, edgeTrimMargin);
+      if (result.placed.length > 0) {
+        const usedArea = result.placed.reduce((sum, p) => {
+          const w = p.rotated ? p.height : p.width;
+          const h = p.rotated ? p.width : p.height;
+          return sum + w * h;
+        }, 0);
+        const plateArea = remnant.width * remnant.height;
+        const validatedRemnants = validateMinStrip(result.remnants, minStripWidth);
+        plates.push({
+          numero: plates.length + 1,
+          material,
+          plateWidth: remnant.width,
+          plateHeight: remnant.height,
+          pieces: result.placed,
+          utilisation: (usedArea / plateArea) * 100,
+          remnants: validatedRemnants,
+          hasInterdit: validatedRemnants.some(r => r.classe === 'interdit'),
+          isRemnant: true,
+          remnantId: remnant.id,
+        } as OptimizedPlate & { isRemnant: boolean; remnantId: string });
+        remaining = result.remaining;
+        usedRemnants.push({ remnantId: remnant.id, piecesPlaced: result.placed.length });
+      }
+    }
+
+    // ── Phase 1 : plaques neuves pour le reste ──
     while (remaining.length > 0) {
       let bestResult: { placed: PlacedPiece[]; leftover: GlassPiece[]; remnants: Remnant[]; pw: number; ph: number } | null = null;
 
