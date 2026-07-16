@@ -1475,7 +1475,47 @@ function AssemblageView({ selectedLot, pieces, onReload, setSelectedLot }: {
           )}
         </div>
 
-        <h2 className="text-2xl font-black text-white mb-4">VITRAGES A ASSEMBLER</h2>
+        <div className="flex items-center gap-3 mb-4">
+          <h2 className="text-2xl font-black text-white flex-1">VITRAGES A ASSEMBLER</h2>
+          {doneVitrages > 0 && (
+            <>
+              <button onClick={async () => {
+                const { buildCEData } = await import('./traceability');
+                const { generateCELabelsPDF } = await import('./generateCELabel');
+                const ceItems = vitrages.filter(v => v.allAssembled).map(v => {
+                  return buildCEData(
+                    { vitrage_id: v.pieces[0]?.vitrage_id || '', vitrage_ref: v.ref, commande_ref: v.commande, largeur: v.pieces[0]?.largeur || 0, hauteur: v.pieces[0]?.hauteur || 0, composition: v.pieces[0]?.composition || '', face: 'EXT', material: v.pieces[0]?.material || '' },
+                    v.pieces.map(p => ({ face: p.face, material: p.material, lot_verre: p.lot_verre, operateur: p.operateur })),
+                    matieresJour,
+                    selectedLot.reference,
+                    v.commande,
+                  );
+                });
+                const blob = await generateCELabelsPDF(ceItems);
+                download(blob, `${selectedLot.reference}_CE_CEKAL.pdf`);
+              }} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold rounded-xl active:scale-95">
+                Etiquettes CE ({doneVitrages})
+              </button>
+              <button onClick={async () => {
+                const { buildCEData, syncTraceabilityToOdoo } = await import('./traceability');
+                const ceItems = vitrages.filter(v => v.allAssembled).map(v => {
+                  return buildCEData(
+                    { vitrage_id: v.pieces[0]?.vitrage_id || '', vitrage_ref: v.ref, commande_ref: v.commande, largeur: v.pieces[0]?.largeur || 0, hauteur: v.pieces[0]?.hauteur || 0, composition: v.pieces[0]?.composition || '', face: 'EXT', material: v.pieces[0]?.material || '' },
+                    v.pieces.map(p => ({ face: p.face, material: p.material, lot_verre: p.lot_verre, operateur: p.operateur })),
+                    matieresJour,
+                    selectedLot.reference,
+                    v.commande,
+                  );
+                });
+                const API = import.meta.env.VITE_API_URL as string || 'https://pro.groupe-vista.fr/api-sial';
+                const result = await syncTraceabilityToOdoo(ceItems, API);
+                alert(`Sync Odoo : ${result.synced} envoye(s), ${result.errors} erreur(s)`);
+              }} className="px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white text-sm font-bold rounded-xl active:scale-95">
+                Sync Odoo
+              </button>
+            </>
+          )}
+        </div>
         <div className="space-y-2">
           {vitrages.map(v => (
             <div key={v.ref} className={`p-4 rounded-xl border transition-colors ${
