@@ -1267,26 +1267,54 @@ function StockView({ onBack }: { onBack: () => void }) {
               </div>
 
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-                <div>
-                  <label className="text-[10px] text-gray-500 block mb-1">Epaisseur (mm)</label>
-                  <input type="number" value={editProduct.epaisseur ?? 4} onChange={e => set({ epaisseur: +e.target.value })}
-                    className="w-full bg-[#14161d] rounded px-2 py-1.5 text-white border border-[#2a2d35]" />
-                </div>
-                {famille === 'feuillete' && (
+                {famille === 'float' ? (
+                  <div>
+                    <label className="text-[10px] text-gray-500 block mb-1">Epaisseur (mm)</label>
+                    <select value={String(editProduct.epaisseur ?? 4)} onChange={e => set({ epaisseur: +e.target.value })}
+                      className="w-full bg-[#14161d] rounded px-2 py-1.5 text-white border border-[#2a2d35]">
+                      {[4, 6, 8, 10, 12].map(v => <option key={v} value={v}>{v} mm</option>)}
+                    </select>
+                  </div>
+                ) : (
                   <>
                     <div>
-                      <label className="text-[10px] text-gray-500 block mb-1">Nombre de PVB</label>
-                      <select value={String(ep.nb_pvb ?? 1)} onChange={e => set({ nb_pvb: +e.target.value })}
-                        className="w-full bg-[#14161d] rounded px-2 py-1.5 text-white border border-[#2a2d35]">
-                        <option value="1">1 PVB (33.1, 44.1...)</option>
-                        <option value="2">2 PVB (33.2, 44.2...)</option>
-                        <option value="4">4 PVB (44.4...)</option>
+                      <label className="text-[10px] text-gray-500 block mb-1">Composition</label>
+                      <select value={(ep.notation_feuillete as string) || '44.2'} onChange={e => {
+                        const n = e.target.value;
+                        const [glasses, pvb] = n.split('.');
+                        const g1 = parseInt(glasses.slice(0, glasses.length / 2));
+                        const nbPvb = parseInt(pvb);
+                        const epTotal = g1 * 2 + nbPvb * 0.38;
+                        set({ notation_feuillete: n, nb_pvb: nbPvb, epaisseur: Math.round(epTotal * 10) / 10 });
+                      }} className="w-full bg-[#14161d] rounded px-2 py-1.5 text-white border border-[#2a2d35]">
+                        <optgroup label="Base 4+4">
+                          <option value="44.2">44.2 (2 PVB) — 8.8mm</option>
+                          <option value="44.6">44.6 (6 PVB) — 10.3mm</option>
+                        </optgroup>
+                        <optgroup label="Base 5+5">
+                          <option value="55.2">55.2 (2 PVB) — 10.8mm</option>
+                          <option value="55.6">55.6 (6 PVB) — 12.3mm</option>
+                        </optgroup>
+                        <optgroup label="Base 6+6">
+                          <option value="66.2">66.2 (2 PVB) — 12.8mm</option>
+                          <option value="66.6">66.6 (6 PVB) — 14.3mm</option>
+                          <option value="66.8">66.8 (8 PVB) — 15.0mm</option>
+                        </optgroup>
+                        <optgroup label="Base 8+8">
+                          <option value="88.2">88.2 (2 PVB) — 16.8mm</option>
+                          <option value="88.6">88.6 (6 PVB) — 18.3mm</option>
+                          <option value="88.8">88.8 (8 PVB) — 19.0mm</option>
+                        </optgroup>
+                        <optgroup label="Base 10+10">
+                          <option value="1010.2">1010.2 (2 PVB) — 20.8mm</option>
+                          <option value="1010.6">1010.6 (6 PVB) — 22.3mm</option>
+                        </optgroup>
                       </select>
                     </div>
                     <div>
-                      <label className="text-[10px] text-gray-500 block mb-1">Notation (ex: 44.2)</label>
-                      <input value={(ep.notation_feuillete as string) ?? ''} onChange={e => set({ notation_feuillete: e.target.value })}
-                        placeholder="44.2" className="w-full bg-[#14161d] rounded px-2 py-1.5 text-white border border-[#2a2d35]" />
+                      <label className="text-[10px] text-gray-500 block mb-1">Ep. totale</label>
+                      <input type="number" step="0.1" value={editProduct.epaisseur ?? 8.8} readOnly
+                        className="w-full bg-[#14161d] rounded px-2 py-1.5 text-gray-400 border border-[#2a2d35] cursor-not-allowed" />
                     </div>
                   </>
                 )}
