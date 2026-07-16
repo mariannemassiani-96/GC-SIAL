@@ -1352,11 +1352,16 @@ function DashboardTab({ stats, semaine }: { stats: Stats; semaine: string }) {
 // ── Assemblage View (Atelier) ──────────────────────────────────────
 
 const MATIERES_JOUR_KEYS = [
-  { key: 'intercalaire', label: 'Intercalaire / WE' },
-  { key: 'dessiccant', label: 'Dessiccant' },
-  { key: 'masticButyl', label: 'Mastic butyl' },
-  { key: 'masticPU', label: 'Mastic PU' },
-  { key: 'gazArgon', label: 'Gaz argon' },
+  { key: 'intercalaire', label: 'Intercalaire / WE — N° lot' },
+  { key: 'intercalaire_fournisseur', label: 'Intercalaire — Fournisseur' },
+  { key: 'intercalaire_dlu', label: 'Intercalaire — DLU' },
+  { key: 'dessiccant', label: 'Dessiccant — N° lot' },
+  { key: 'dessiccant_dlu', label: 'Dessiccant — DLU' },
+  { key: 'masticButyl', label: 'Mastic butyl — N° lot' },
+  { key: 'masticButyl_dlu', label: 'Mastic butyl — DLU' },
+  { key: 'masticPU', label: 'Mastic PU — N° lot' },
+  { key: 'masticPU_dlu', label: 'Mastic PU — DLU' },
+  { key: 'gazArgon', label: 'Gaz argon — N° lot' },
 ] as const;
 
 function getLocalStorageMatieresKey(): string {

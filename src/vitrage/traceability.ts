@@ -20,11 +20,39 @@ export interface GlassLotInfo {
 export interface AssemblyLotInfo {
   intercalaire_lot: string;
   intercalaire_fournisseur: string;
+  intercalaire_dlu: string;
   dessiccant_lot: string;
+  dessiccant_fournisseur: string;
+  dessiccant_dlu: string;
   mastic_butyl_lot: string;
+  mastic_butyl_fournisseur: string;
+  mastic_butyl_dlu: string;
   mastic_pu_lot: string;
+  mastic_pu_fournisseur: string;
+  mastic_pu_dlu: string;
   gaz_argon_lot: string;
   gaz_pourcentage: number;
+  gaz_test_echantillon: boolean;
+}
+
+export interface LavageData {
+  conductivite: number;
+  ph: number;
+  temperature: number;
+  date_controle: string;
+  conforme: boolean;
+}
+
+export interface ControlesFabrication {
+  dimension_mesuree_l: number;
+  dimension_mesuree_h: number;
+  epaisseur_mesuree: number;
+  tolerance_ok: boolean;
+  continuite_butyle: boolean;
+  aspect_visuel: boolean;
+  point_rosee_ok: boolean;
+  point_rosee_valeur: number;
+  etiquette_cekal_posee: boolean;
 }
 
 export interface CEData {
@@ -60,6 +88,10 @@ export interface CEData {
   operateur_assemblage: string;
   lot_fabrication: string;
 
+  // Controles fabrication
+  lavage: LavageData;
+  controles: ControlesFabrication;
+
   // Certification
   fabricant: string;
   usine: string;
@@ -67,6 +99,7 @@ export interface CEData {
   cekal_numero: string;
   norme: string;
   classe_securite: string;
+  fiche_lot_cekal_validee: boolean;
 }
 
 export function buildCEData(
@@ -118,23 +151,44 @@ export function buildCEData(
     },
     lots_assemblage: {
       intercalaire_lot: matieresJour.intercalaire || '',
-      intercalaire_fournisseur: '',
+      intercalaire_fournisseur: matieresJour.intercalaire_fournisseur || '',
+      intercalaire_dlu: matieresJour.intercalaire_dlu || '',
       dessiccant_lot: matieresJour.dessiccant || '',
+      dessiccant_fournisseur: matieresJour.dessiccant_fournisseur || '',
+      dessiccant_dlu: matieresJour.dessiccant_dlu || '',
       mastic_butyl_lot: matieresJour.masticButyl || '',
+      mastic_butyl_fournisseur: matieresJour.masticButyl_fournisseur || '',
+      mastic_butyl_dlu: matieresJour.masticButyl_dlu || '',
       mastic_pu_lot: matieresJour.masticPU || '',
+      mastic_pu_fournisseur: matieresJour.masticPU_fournisseur || '',
+      mastic_pu_dlu: matieresJour.masticPU_dlu || '',
       gaz_argon_lot: matieresJour.gazArgon || '',
       gaz_pourcentage: 90,
+      gaz_test_echantillon: false,
     },
     date_fabrication: new Date().toISOString().slice(0, 10),
     operateur_coupe: ext?.operateur || '',
     operateur_assemblage: '',
     lot_fabrication: lotRef,
+    lavage: {
+      conductivite: 0, ph: 0, temperature: 0,
+      date_controle: new Date().toISOString().slice(0, 10),
+      conforme: false,
+    },
+    controles: {
+      dimension_mesuree_l: 0, dimension_mesuree_h: 0,
+      epaisseur_mesuree: 0, tolerance_ok: false,
+      continuite_butyle: false, aspect_visuel: false,
+      point_rosee_ok: false, point_rosee_valeur: 0,
+      etiquette_cekal_posee: false,
+    },
     fabricant: 'SIAL Apertura',
     usine: 'Biguglia, Corse',
     ce_numero: '',
     cekal_numero: '',
     norme: 'EN 1279',
     classe_securite: '',
+    fiche_lot_cekal_validee: false,
   };
 }
 
