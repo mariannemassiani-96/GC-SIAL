@@ -1288,26 +1288,26 @@ function StockView({ onBack }: { onBack: () => void }) {
                         set({ notation_feuillete: n, nb_pvb: nbPvb, epaisseur: Math.round(epTotal * 10) / 10 });
                       }} className="w-full bg-[#14161d] rounded px-2 py-1.5 text-white border border-[#2a2d35]">
                         <optgroup label="Base 4+4">
-                          <option value="44.2">44.2 (2 PVB) — 8.8mm</option>
-                          <option value="44.6">44.6 (6 PVB) — 10.3mm</option>
+                          <option value="44.2">44.2 (2 PVB) — 8.76mm</option>
+                          <option value="44.6">44.6 (6 PVB) — 10.28mm</option>
                         </optgroup>
                         <optgroup label="Base 5+5">
-                          <option value="55.2">55.2 (2 PVB) — 10.8mm</option>
-                          <option value="55.6">55.6 (6 PVB) — 12.3mm</option>
+                          <option value="55.2">55.2 (2 PVB) — 10.76mm</option>
+                          <option value="55.6">55.6 (6 PVB) — 12.28mm</option>
                         </optgroup>
                         <optgroup label="Base 6+6">
-                          <option value="66.2">66.2 (2 PVB) — 12.8mm</option>
-                          <option value="66.6">66.6 (6 PVB) — 14.3mm</option>
-                          <option value="66.8">66.8 (8 PVB) — 15.0mm</option>
+                          <option value="66.2">66.2 (2 PVB) — 12.76mm</option>
+                          <option value="66.6">66.6 (6 PVB) — 14.28mm</option>
+                          <option value="66.8">66.8 (8 PVB) — 15.04mm</option>
                         </optgroup>
                         <optgroup label="Base 8+8">
-                          <option value="88.2">88.2 (2 PVB) — 16.8mm</option>
-                          <option value="88.6">88.6 (6 PVB) — 18.3mm</option>
-                          <option value="88.8">88.8 (8 PVB) — 19.0mm</option>
+                          <option value="88.2">88.2 (2 PVB) — 16.76mm</option>
+                          <option value="88.6">88.6 (6 PVB) — 18.28mm</option>
+                          <option value="88.8">88.8 (8 PVB) — 19.04mm</option>
                         </optgroup>
                         <optgroup label="Base 10+10">
-                          <option value="1010.2">1010.2 (2 PVB) — 20.8mm</option>
-                          <option value="1010.6">1010.6 (6 PVB) — 22.3mm</option>
+                          <option value="1010.2">1010.2 (2 PVB) — 20.76mm</option>
+                          <option value="1010.6">1010.6 (6 PVB) — 22.28mm</option>
                         </optgroup>
                       </select>
                     </div>
