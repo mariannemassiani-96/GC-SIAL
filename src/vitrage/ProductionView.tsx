@@ -54,7 +54,7 @@ interface Piece {
   id: string; commande_ref: string; vitrage_ref: string; vitrage_id: string; largeur: number; hauteur: number;
   composition: string; face: string; material: string; machine: string; plaque_no: number;
   lot_verre: string; statut: string; operateur: string; date_coupe: string | null; date_assemblage: string | null;
-  notes: string;
+  notes: string; cart_id?: string;
 }
 
 interface WEPiece {
@@ -1032,10 +1032,16 @@ function AtelierView({ lots, semaine, poste, onSelectPoste, onBack, loadLotDetai
                   <g key={i} onClick={() => setSelectedPieceIdx(isSel ? null : i)} style={{ cursor: 'pointer' }}>
                     <rect x={rx} y={ry} width={pw} height={ph} fill={fillColor}
                       stroke={isSel ? '#fff' : '#FFD700'} strokeWidth={isSel ? 3 : 2} />
-                    <text x={rx + pw / 2} y={ry + ph / 2} textAnchor="middle" dominantBaseline="middle"
+                    <text x={rx + pw / 2} y={ry + ph / 2 - (dbP?.cart_id && fs > 5 ? fs * 0.3 : 0)} textAnchor="middle" dominantBaseline="middle"
                       fill={isNC ? '#ff6666' : '#FFD700'} fontSize={Math.max(fs, 6)} fontWeight="bold">
                       {isNC ? '✕' : i + 1}
                     </text>
+                    {dbP?.cart_id && fs > 5 && (
+                      <text x={rx + pw / 2} y={ry + ph / 2 + fs * 0.6} textAnchor="middle" dominantBaseline="middle"
+                        fill="#FFA500" fontSize={Math.max(fs * 0.55, 4)} fontWeight="bold">
+                        {dbP.cart_id.replace('CART-', 'C')}
+                      </text>
+                    )}
                   </g>
                 );
               })}
@@ -1063,6 +1069,9 @@ function AtelierView({ lots, semaine, poste, onSelectPoste, onBack, loadLotDetai
                   <div className="flex-1">
                     <div className="text-lg font-bold text-white">{p.vitrageRef}</div>
                     <div className="text-base text-gray-400">{p.face} — {p.material} — {effW} x {effH}</div>
+                    {dbPiece?.cart_id && (
+                      <div className="text-sm font-bold text-amber-400 mt-1">→ {dbPiece.cart_id}</div>
+                    )}
                   </div>
                   <button onClick={() => setSelectedPieceIdx(null)} className="text-gray-500 hover:text-white text-xl px-2">✕</button>
                 </div>

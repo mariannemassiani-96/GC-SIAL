@@ -1038,6 +1038,28 @@ function BatchView({ commandes, onBack, avery, we, glass }: {
       const sem = getISOWeek(now);
       const ref = `LOT-${sem}-${now.getTime().toString(36).slice(-4).toUpperCase()}`;
 
+      // Calculer l'affectation chariots
+      const cartPiecesForOptim: CutPieceForCart[] = allPlates.flatMap(plate =>
+        plate.pieces.map(p => ({
+          id: `${p.vitrageId}-${p.face}`,
+          vitrageId: p.vitrageId,
+          vitrageRef: p.vitrageRef,
+          clientRef: commandes.find(c => c.vitrages.some(v => v.id === p.vitrageId))?.reference || '',
+          position: p.face as 'EXT' | 'INT',
+          material: p.material,
+          width: p.width, height: p.height,
+          area: p.width * p.height,
+          plateNo: plate.numero,
+        }))
+      );
+      const cartResult = optimizeCarts(cartPiecesForOptim);
+      const pieceCartMap = new Map<string, string>();
+      for (const cart of cartResult.carts) {
+        for (const cp of cart.pieces) {
+          pieceCartMap.set(cp.id, cart.cartId);
+        }
+      }
+
       const prodPieces = allPlates.flatMap(plate =>
         plate.pieces.map(p => ({
           lot_id: lotId, commande_ref: commandes.find(c => c.vitrages.some(v => v.id === p.vitrageId))?.reference || '',
@@ -1045,6 +1067,7 @@ function BatchView({ commandes, onBack, avery, we, glass }: {
           largeur: p.width, hauteur: p.height, composition: '',
           face: p.face, material: p.material,
           machine, plaque_no: plate.numero,
+          cart_id: pieceCartMap.get(`${p.vitrageId}-${p.face}`) || '',
         }))
       );
 
@@ -1063,7 +1086,7 @@ function BatchView({ commandes, onBack, avery, we, glass }: {
           commande_ids: commandes.map(c => c.id), commande_refs: commandes.map(c => c.reference),
           total_pieces: prodPieces.length, total_we: weProd.length, notes: '',
           pieces: prodPieces, we_pieces: weProd,
-          glass_optim: glassResult, we_optim: weResult,
+          glass_optim: glassResult, we_optim: weResult, cart_optim: cartResult,
         }),
       });
       // Sync each commande to global dashboard (fire-and-forget)
