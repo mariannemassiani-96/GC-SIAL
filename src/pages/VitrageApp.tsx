@@ -1220,69 +1220,120 @@ function StockView({ onBack }: { onBack: () => void }) {
         <div>
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-sm font-semibold text-gray-300">{products.length} verres</h3>
-            <button onClick={() => setEditProduct({ code: '', label: '', type: 'clair', epaisseur: 4, has_coating: false, coating_face: '', ug_default: 0, fournisseur: '', notes: '' })}
+            <button onClick={() => setEditProduct({ code: '', label: '', type: 'clair', epaisseur: 4, has_coating: false, coating_type: '', coating_face: '', emargement_mm: 0, machine: 'lisec', no_rotation: false, can_cut: true, plate_sizes: [], ug_default: 0, fournisseur: '', notes: '' })}
               className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white text-sm rounded">+ Ajouter</button>
           </div>
 
           {editProduct && (
-            <div className="bg-[#181a20] rounded-lg p-4 border border-purple-500/30 mb-4">
+            <div className="bg-[#181a20] rounded-lg p-4 border border-purple-500/30 mb-4 space-y-3">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
                 <input placeholder="Code *" value={editProduct.code ?? ''} onChange={e => setEditProduct({ ...editProduct, code: e.target.value })}
                   className="bg-[#14161d] rounded px-2 py-1.5 text-white border border-[#2a2d35]" />
-                <input placeholder="Label" value={editProduct.label ?? ''} onChange={e => setEditProduct({ ...editProduct, label: e.target.value })}
+                <input placeholder="Label (ex: 4mm Clair)" value={editProduct.label ?? ''} onChange={e => setEditProduct({ ...editProduct, label: e.target.value })}
                   className="bg-[#14161d] rounded px-2 py-1.5 text-white border border-[#2a2d35]" />
-                <select value={editProduct.type ?? 'clair'} onChange={e => setEditProduct({ ...editProduct, type: e.target.value as GlassProduct['type'] })}
+                <select value={editProduct.type ?? 'clair'} onChange={e => {
+                  const t = e.target.value as GlassProduct['type'];
+                  const auto: Partial<GlassProduct> = { type: t };
+                  if (t === 'feuillete' || t === 'stadip') { auto.machine = 'bottero'; auto.can_cut = true; }
+                  else if (t === 'trempe') { auto.machine = 'commande_aux_dimensions'; auto.can_cut = false; }
+                  else if (t === 'float' || t === 'clair') { auto.machine = 'lisec'; auto.can_cut = true; }
+                  else if (t === 'couche') { auto.machine = 'lisec'; auto.has_coating = true; auto.no_rotation = true; auto.can_cut = true; }
+                  setEditProduct({ ...editProduct, ...auto });
+                }}
                   className="bg-[#14161d] rounded px-2 py-1.5 text-white border border-[#2a2d35]">
                   <option value="clair">Clair</option><option value="float">Float</option>
-                  <option value="couche">Couche</option><option value="trempe">Trempe</option>
-                  <option value="feuillete">Feuillete</option>
+                  <option value="couche">Couche FE</option><option value="feuillete">Feuillete</option>
+                  <option value="stadip">Stadip (feuillete securite)</option><option value="trempe">Trempe</option>
                 </select>
-                <input type="number" placeholder="Epaisseur" value={editProduct.epaisseur ?? 4} onChange={e => setEditProduct({ ...editProduct, epaisseur: +e.target.value })}
-                  className="bg-[#14161d] rounded px-2 py-1.5 text-white border border-[#2a2d35]" />
-                <label className="flex items-center gap-2 text-gray-300 col-span-2">
-                  <input type="checkbox" checked={editProduct.has_coating ?? false} onChange={e => setEditProduct({ ...editProduct, has_coating: e.target.checked })} />
-                  Couche (pas de rotation)
-                </label>
-                <input placeholder="Fournisseur" value={editProduct.fournisseur ?? ''} onChange={e => setEditProduct({ ...editProduct, fournisseur: e.target.value })}
-                  className="bg-[#14161d] rounded px-2 py-1.5 text-white border border-[#2a2d35]" />
-                <input type="number" step="0.1" placeholder="Ug" value={editProduct.ug_default ?? 0} onChange={e => setEditProduct({ ...editProduct, ug_default: +e.target.value })}
+                <input type="number" placeholder="Epaisseur (mm)" value={editProduct.epaisseur ?? 4} onChange={e => setEditProduct({ ...editProduct, epaisseur: +e.target.value })}
                   className="bg-[#14161d] rounded px-2 py-1.5 text-white border border-[#2a2d35]" />
               </div>
-              <div className="flex gap-2 mt-3">
-                <button onClick={saveProduct} className="px-3 py-1 bg-green-600 hover:bg-green-500 text-white text-sm rounded">Enregistrer</button>
-                <button onClick={() => setEditProduct(null)} className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded">Annuler</button>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                <select value={editProduct.machine ?? 'lisec'} onChange={e => setEditProduct({ ...editProduct, machine: e.target.value as GlassProduct['machine'] })}
+                  className="bg-[#14161d] rounded px-2 py-1.5 text-white border border-[#2a2d35]">
+                  <option value="lisec">LISEC (float, 2 axes)</option>
+                  <option value="bottero">Bottero (feuillete, 1 axe)</option>
+                  <option value="manuel">Manuel</option>
+                  <option value="commande_aux_dimensions">Commande aux dimensions</option>
+                </select>
+                <label className="flex items-center gap-2 text-gray-300">
+                  <input type="checkbox" checked={editProduct.has_coating ?? false} onChange={e => setEditProduct({ ...editProduct, has_coating: e.target.checked, no_rotation: e.target.checked || editProduct.no_rotation })} />
+                  Couche FE
+                </label>
+                <label className="flex items-center gap-2 text-gray-300">
+                  <input type="checkbox" checked={editProduct.no_rotation ?? false} onChange={e => setEditProduct({ ...editProduct, no_rotation: e.target.checked })} />
+                  Pas de rotation
+                </label>
+                <label className="flex items-center gap-2 text-gray-300">
+                  <input type="checkbox" checked={editProduct.can_cut ?? true} onChange={e => setEditProduct({ ...editProduct, can_cut: e.target.checked })} />
+                  Peut etre coupe
+                </label>
+              </div>
+              {editProduct.has_coating && (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                  <input placeholder="Type couche (FE, SP, Solar...)" value={editProduct.coating_type ?? ''} onChange={e => setEditProduct({ ...editProduct, coating_type: e.target.value })}
+                    className="bg-[#14161d] rounded px-2 py-1.5 text-white border border-[#2a2d35]" />
+                  <select value={editProduct.coating_face ?? ''} onChange={e => setEditProduct({ ...editProduct, coating_face: e.target.value })}
+                    className="bg-[#14161d] rounded px-2 py-1.5 text-white border border-[#2a2d35]">
+                    <option value="">Face couche</option>
+                    <option value="2">Face 2 (interieur vitrage)</option>
+                    <option value="3">Face 3 (exterieur vitrage)</option>
+                  </select>
+                  <input type="number" placeholder="Emargement (mm)" value={editProduct.emargement_mm ?? 0} onChange={e => setEditProduct({ ...editProduct, emargement_mm: +e.target.value })}
+                    className="bg-[#14161d] rounded px-2 py-1.5 text-white border border-[#2a2d35]" />
+                </div>
+              )}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                <input placeholder="Fournisseur" value={editProduct.fournisseur ?? ''} onChange={e => setEditProduct({ ...editProduct, fournisseur: e.target.value })}
+                  className="bg-[#14161d] rounded px-2 py-1.5 text-white border border-[#2a2d35]" />
+                <input type="number" step="0.1" placeholder="Ug par defaut" value={editProduct.ug_default ?? 0} onChange={e => setEditProduct({ ...editProduct, ug_default: +e.target.value })}
+                  className="bg-[#14161d] rounded px-2 py-1.5 text-white border border-[#2a2d35]" />
+                <input placeholder="Notes" value={editProduct.notes ?? ''} onChange={e => setEditProduct({ ...editProduct, notes: e.target.value })}
+                  className="bg-[#14161d] rounded px-2 py-1.5 text-white border border-[#2a2d35] col-span-2" />
+              </div>
+              <div className="flex gap-2">
+                <button onClick={saveProduct} className="px-3 py-1.5 bg-green-600 hover:bg-green-500 text-white text-sm rounded">Enregistrer</button>
+                <button onClick={() => setEditProduct(null)} className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded">Annuler</button>
               </div>
             </div>
           )}
 
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-xs">
               <thead><tr className="text-gray-400 border-b border-[#2a2d35]">
                 <th className="text-left py-2 px-2">Code</th>
                 <th className="text-left py-2 px-2">Label</th>
                 <th className="text-left py-2 px-2">Type</th>
                 <th className="text-right py-2 px-2">Ep.</th>
+                <th className="text-left py-2 px-2">Machine</th>
                 <th className="text-center py-2 px-2">Couche</th>
+                <th className="text-center py-2 px-2">Emarg.</th>
                 <th className="text-left py-2 px-2">Fournisseur</th>
                 <th className="text-right py-2 px-2">Ug</th>
                 <th className="py-2 px-2 w-20"></th>
               </tr></thead>
               <tbody>
-                {products.map(p => (
-                  <tr key={p.id} className="border-b border-[#1e2028] hover:bg-[#1a1c24]">
-                    <td className="py-1.5 px-2 text-white font-medium">{p.code}</td>
-                    <td className="py-1.5 px-2 text-gray-300">{p.label}</td>
-                    <td className="py-1.5 px-2 text-gray-400">{p.type}</td>
-                    <td className="py-1.5 px-2 text-white text-right">{p.epaisseur}mm</td>
-                    <td className="py-1.5 px-2 text-center">{p.has_coating ? '●' : '—'}</td>
-                    <td className="py-1.5 px-2 text-gray-400">{p.fournisseur}</td>
-                    <td className="py-1.5 px-2 text-white text-right">{p.ug_default || '—'}</td>
-                    <td className="py-1.5 px-2 text-right">
-                      <button onClick={() => setEditProduct(p)} className="text-blue-400 hover:text-blue-300 text-xs mr-2">Modifier</button>
-                      <button onClick={() => delProduct(p.id)} className="text-red-400 hover:text-red-300 text-xs">Suppr.</button>
-                    </td>
-                  </tr>
-                ))}
+                {products.map(p => {
+                  const machineLabel: Record<string, string> = { lisec: 'LISEC', bottero: 'Bottero', manuel: 'Manuel', commande_aux_dimensions: 'Aux dim.' };
+                  const typeColor: Record<string, string> = { float: 'text-blue-400', feuillete: 'text-amber-400', stadip: 'text-orange-400', trempe: 'text-red-400', couche: 'text-green-400', clair: 'text-gray-300' };
+                  return (
+                    <tr key={p.id} className="border-b border-[#1e2028] hover:bg-[#1a1c24]">
+                      <td className="py-1.5 px-2 text-white font-medium">{p.code}</td>
+                      <td className="py-1.5 px-2 text-gray-300">{p.label}</td>
+                      <td className={`py-1.5 px-2 font-semibold ${typeColor[p.type] || 'text-gray-400'}`}>{p.type}</td>
+                      <td className="py-1.5 px-2 text-white text-right">{p.epaisseur}mm</td>
+                      <td className="py-1.5 px-2 text-gray-300">{machineLabel[(p as unknown as Record<string, string>).machine] || '—'}</td>
+                      <td className="py-1.5 px-2 text-center">{p.has_coating ? <span className="text-green-400">FE</span> : '—'}</td>
+                      <td className="py-1.5 px-2 text-center">{(p as unknown as Record<string, number>).emargement_mm ? `${(p as unknown as Record<string, number>).emargement_mm}mm` : '—'}</td>
+                      <td className="py-1.5 px-2 text-gray-400">{p.fournisseur}</td>
+                      <td className="py-1.5 px-2 text-white text-right">{p.ug_default || '—'}</td>
+                      <td className="py-1.5 px-2 text-right">
+                        <button onClick={() => setEditProduct(p)} className="text-blue-400 hover:text-blue-300 text-xs mr-2">Modifier</button>
+                        <button onClick={() => delProduct(p.id)} className="text-red-400 hover:text-red-300 text-xs">Suppr.</button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
