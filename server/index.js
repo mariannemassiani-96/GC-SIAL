@@ -271,6 +271,49 @@ app.put('/api/commandes-globales/:ref', authMiddleware, supervisorOnly, (req, re
   res.json({ ok: true });
 });
 
+// POST from Odoo — create/update commande with sale order data
+const ODOO_WEBHOOK_KEY = process.env.ODOO_WEBHOOK_KEY || process.env.TRACA_API_KEY || '';
+function odooWebhookAuth(req, res, next) {
+  if (!ODOO_WEBHOOK_KEY) return next();
+  const key = req.headers['x-api-key'] || req.headers['authorization']?.replace('Bearer ', '');
+  if (key !== ODOO_WEBHOOK_KEY) return res.status(401).json({ error: 'API key invalide' });
+  next();
+}
+
+app.post('/api/commandes-globales/from-odoo', odooWebhookAuth, (req, res) => {
+  try {
+    const { ref, client, chantier, semaine_fab, semaine_liv, lignes, notes } = req.body;
+    if (!ref) return res.status(400).json({ error: 'ref obligatoire' });
+
+    const existing = db.prepare('SELECT ref FROM commandes_globales WHERE ref = ?').get(ref.trim());
+    const lignesJson = lignes ? JSON.stringify(lignes) : null;
+
+    if (existing) {
+      const sets = ['client = ?', 'chantier = ?', 'updated_at = datetime(\'now\')'];
+      const vals = [client || '', chantier || ''];
+      if (semaine_fab) { sets.push('semaine_fab = ?'); vals.push(semaine_fab); }
+      if (semaine_liv) { sets.push('semaine_liv = ?'); vals.push(semaine_liv); }
+      if (notes) { sets.push('notes = ?'); vals.push(notes); }
+      if (lignesJson) { sets.push('lignes_odoo = ?'); vals.push(lignesJson); }
+      vals.push(ref.trim());
+      db.prepare(`UPDATE commandes_globales SET ${sets.join(', ')} WHERE ref = ?`).run(...vals);
+    } else {
+      db.prepare(`INSERT INTO commandes_globales (ref, client, chantier, semaine_fab, semaine_liv, notes, lignes_odoo, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))`).run(
+        ref.trim(), client || '', chantier || '', semaine_fab || '', semaine_liv || '', notes || '', lignesJson
+      );
+    }
+
+    db.prepare('INSERT INTO activity_log (user_id, action, app, detail) VALUES (?, ?, ?, ?)').run(
+      0, 'odoo_import', 'commandes_globales', ref.trim()
+    );
+
+    res.json({ ok: true, ref: ref.trim(), action: existing ? 'updated' : 'created' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // DELETE a commande
 app.delete('/api/commandes-globales/:ref', authMiddleware, supervisorOnly, (req, res) => {
   const ref = req.params.ref.trim();

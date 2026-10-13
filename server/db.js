@@ -71,6 +71,7 @@ try { db.exec('ALTER TABLE users ADD COLUMN pin_enabled INTEGER DEFAULT 0'); } c
 
 // Migrations for commandes_globales
 try { db.exec("ALTER TABLE commandes_globales ADD COLUMN postes_actifs TEXT DEFAULT '[]'"); } catch {}
+try { db.exec("ALTER TABLE commandes_globales ADD COLUMN lignes_odoo TEXT DEFAULT NULL"); } catch {}
 
 // Production events (time tracking)
 db.exec(`

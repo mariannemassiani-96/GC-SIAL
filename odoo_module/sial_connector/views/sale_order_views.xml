@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+
+    <!-- Bouton sur le formulaire commande de vente -->
+    <record id="sale_order_form_sial" model="ir.ui.view">
+        <field name="name">sale.order.form.sial</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_order_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//header" position="inside">
+                <button name="action_send_to_sial"
+                        string="Envoyer a SIAL"
+                        type="object"
+                        class="btn-primary"
+                        icon="fa-industry"
+                        invisible="state != 'sale'"/>
+            </xpath>
+            <xpath expr="//field[@name='note']" position="after">
+                <group string="SIAL Atelier" invisible="not sial_sent">
+                    <field name="sial_sent" readonly="1"/>
+                    <field name="sial_sent_date" readonly="1"/>
+                </group>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Bouton dans la vue liste (action multi) -->
+    <record id="action_send_to_sial_multi" model="ir.actions.server">
+        <field name="name">Envoyer a SIAL</field>
+        <field name="model_id" ref="sale.model_sale_order"/>
+        <field name="binding_model_id" ref="sale.model_sale_order"/>
+        <field name="binding_view_types">list</field>
+        <field name="state">code</field>
+        <field name="code">
+if records:
+    records.action_send_to_sial()
+        </field>
+    </record>
+
+</odoo>
