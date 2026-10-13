@@ -170,7 +170,7 @@ function convertGlobalToLocal(g: CommandeGlobale): Commande {
 
 export function PosteCoupe({ onBack, startAtelier }: Props) {
   const { user } = useAuth();
-  const { items: commandes, upsert } = useApiCollection<Commande>('coupe', 'commandes');
+  const { items: commandes, upsert, remove: removeLocal } = useApiCollection<Commande>('coupe', 'commandes');
   const [search, setSearch] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [modeAtelier, setModeAtelier] = useState(startAtelier ?? false);
@@ -495,9 +495,15 @@ export function PosteCoupe({ onBack, startAtelier }: Props) {
                       e.stopPropagation();
                       if (!confirm(`Supprimer la commande ${c.ref} ?\nCette action est irreversible.`)) return;
                       try {
-                        await deleteCommandeGlobale(c.ref);
-                        setGlobalCommandes(prev => prev.filter(x => x.id !== c.id));
-                      } catch { alert('Erreur lors de la suppression'); }
+                        if (c.id.startsWith('global_')) {
+                          await deleteCommandeGlobale(c.ref);
+                          setGlobalCommandes(prev => prev.filter(x => x.id !== c.id));
+                        } else {
+                          removeLocal(c.id);
+                        }
+                      } catch {
+                        try { removeLocal(c.id); } catch { alert('Erreur lors de la suppression'); }
+                      }
                     }}
                     className="p-2 text-gray-600 hover:text-red-400 transition-colors"
                     title="Supprimer la commande"
