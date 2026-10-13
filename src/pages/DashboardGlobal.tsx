@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { ArrowLeft, Search, X, AlertTriangle, ChevronDown, ChevronUp, Plus, Save, Upload, CheckCircle, Send, FileText, Lock, Unlock, Clock, Circle, Zap, Bell, Info, Check } from 'lucide-react';
-import { listCommandesGlobales, upsertCommandeGlobale, patchCommandeModule, deleteCommandeGlobale, getProductionStatsByCommande, type CommandeGlobale, type ModuleStatus } from '../api';
+import { listCommandesGlobales, upsertCommandeGlobale, patchCommandeModule, deleteCommandeGlobale, extractAndCacheProfileImages, getProductionStatsByCommande, type CommandeGlobale, type ModuleStatus } from '../api';
 import { useAuth } from '../AuthContext';
 import { parseExcelFile, parseCSVText, parseDocxFile } from '../vitrage/parseExcel';
 import { parseFstlineFile, type FstJob } from '../atelier/fstlineParser';
@@ -433,50 +433,50 @@ function ImportSlotCoupe({
   coupeData: CoupeModuleData;
   onImported: (machineKey: CoupeMachineKey, job: FstJob, xmlName: string) => void;
 }) {
-  const inputRef = useRef<HTMLInputElement>(null);
+  const xmlInputRef = useRef<HTMLInputElement>(null);
+  const pdfInputRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState(false);
+  const [importingPdf, setImportingPdf] = useState(false);
   const [importError, setImportError] = useState('');
+  const [pdfDone, setPdfDone] = useState(false);
+  const [pdfName, setPdfName] = useState('');
 
   const machines = coupeData.machines || {};
   const fileNames = coupeData.fileNames || {};
   const job = machines[machineKey];
   const hasData = !!job;
 
-  const handleFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-
+  const handleXml = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
     setImporting(true);
     setImportError('');
     try {
-      // Find the XML file in the selection
-      let xmlFile: File | null = null;
-      let xmlName = '';
-      for (let i = 0; i < files.length; i++) {
-        const f = files[i];
-        if (f.name.toLowerCase().endsWith('.xml') || f.name.toLowerCase().endsWith('.xmlt')) {
-          xmlFile = f;
-          xmlName = f.name;
-        }
-      }
-
-      if (!xmlFile) {
-        setImportError('Aucun fichier XML trouve');
-        return;
-      }
-
-      const parsed = await parseFstlineFile(xmlFile);
-      if (parsed.totalBars === 0) {
-        setImportError('Aucune barre detectee dans le XML');
-        return;
-      }
-
-      onImported(machineKey, parsed, xmlName);
+      const parsed = await parseFstlineFile(file);
+      if (parsed.totalBars === 0) { setImportError('Aucune barre detectee'); return; }
+      onImported(machineKey, parsed, file.name);
     } catch (err) {
       setImportError(err instanceof Error ? err.message : 'Erreur import');
     } finally {
       setImporting(false);
-      if (inputRef.current) inputRef.current.value = '';
+      if (xmlInputRef.current) xmlInputRef.current.value = '';
+    }
+  };
+
+  const handlePdf = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !job) return;
+    setImportingPdf(true);
+    try {
+      const codes = job.profiles.map(p => p.code);
+      await extractAndCacheProfileImages(file, codes);
+      setPdfDone(true);
+      setPdfName(file.name);
+    } catch {
+      setImportError('Erreur extraction images PDF');
+    } finally {
+      setImportingPdf(false);
+      if (pdfInputRef.current) pdfInputRef.current.value = '';
     }
   };
 
@@ -489,7 +489,7 @@ function ImportSlotCoupe({
 
   return (
     <div className="px-5 py-4 border border-[#2a2d35] rounded-lg bg-[#0f1117]">
-      <div className="flex items-center justify-between mb-2">
+      <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <span className={`w-2 h-2 rounded-full ${colors.dot}`} />
           <span className={`text-sm font-semibold ${colors.text}`}>{label}</span>
@@ -497,29 +497,39 @@ function ImportSlotCoupe({
         {hasData && <CheckCircle size={16} className="text-green-400" />}
       </div>
 
-      <div className="flex items-center gap-3">
-        <button
-          onClick={() => inputRef.current?.click()}
-          disabled={importing}
-          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium ${colors.bg} ${colors.text} border ${colors.border} rounded-lg hover:opacity-80 transition-colors disabled:opacity-50`}
-        >
-          <Upload size={12} />
-          {importing ? 'Import...' : 'Importer XML + PDF'}
-        </button>
-        <input
-          ref={inputRef}
-          type="file"
-          accept=".xml,.xmlt,.pdf"
-          multiple
-          onChange={handleFiles}
-          className="hidden"
-        />
-        {hasData && fileNames[machineKey] && (
-          <div className="flex items-center gap-1.5 text-xs text-gray-400">
-            <FileText size={12} />
-            <span>{fileNames[machineKey]}</span>
-          </div>
-        )}
+      <div className="space-y-2">
+        {/* Zone 1 : Fichier machine XML/XMLT */}
+        <div className="flex items-center gap-3">
+          <button onClick={() => xmlInputRef.current?.click()} disabled={importing}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium ${colors.bg} ${colors.text} border ${colors.border} rounded-lg hover:opacity-80 transition-colors disabled:opacity-50`}>
+            <Upload size={12} />
+            {importing ? 'Import...' : 'Fichier machine (.xml / .xmlt)'}
+          </button>
+          <input ref={xmlInputRef} type="file" accept=".xml,.xmlt" onChange={handleXml} className="hidden" />
+          {hasData && fileNames[machineKey] && (
+            <div className="flex items-center gap-1.5 text-xs text-green-400">
+              <CheckCircle size={12} />
+              <span>{fileNames[machineKey]}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Zone 2 : PDF schemas profiles */}
+        <div className="flex items-center gap-3">
+          <button onClick={() => pdfInputRef.current?.click()} disabled={importingPdf || !hasData}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-violet-600/20 text-violet-400 border border-violet-500/30 rounded-lg hover:opacity-80 transition-colors disabled:opacity-30`}>
+            <Upload size={12} />
+            {importingPdf ? 'Extraction...' : 'PDF schemas profiles'}
+          </button>
+          <input ref={pdfInputRef} type="file" accept=".pdf" onChange={handlePdf} className="hidden" />
+          {pdfDone && (
+            <div className="flex items-center gap-1.5 text-xs text-green-400">
+              <CheckCircle size={12} />
+              <span>{pdfName}</span>
+            </div>
+          )}
+          {!hasData && <span className="text-[10px] text-gray-600">Importer le XML d'abord</span>}
+        </div>
       </div>
 
       {hasData && job && (
