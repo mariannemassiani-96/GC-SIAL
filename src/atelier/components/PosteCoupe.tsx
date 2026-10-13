@@ -910,7 +910,7 @@ function AtelierView({
                 onClick={() => {
                   const cuts = currentBar.cuts.map(cut => ({ cut, bar: currentBar }));
                   const name = commande?.chantier || commande?.ref || '';
-                  printLabels(cuts, name, '62x100', true);
+                  printLabels(cuts, name, '62x29', true);
                 }}
                 className="mt-2 px-4 py-2 bg-pink-600 hover:bg-pink-500 text-white text-base font-bold rounded-xl active:scale-95 transition-all flex items-center gap-2"
               >
