@@ -16,9 +16,7 @@ function AngleSvg({ left, right, size = 28 }: { left: number; right: number; siz
   const norm = (a: number) => (a === 135 ? 45 : a === 90 ? 90 : a === 45 ? 45 : a);
   const lAngle = norm(left);
   const rAngle = norm(right);
-  const mid = size / 2;
   const margin = 3;
-  const topW = size - margin * 2;
   const yTop = margin;
   const yBot = size - margin;
   const lOff = lAngle === 45 ? (yBot - yTop) : 0;
@@ -58,7 +56,7 @@ function barcodeDataUrl(text: string, w = 1.2, h = 30): string {
 
 // ── Print labels HTML ───────────────────────────────────────────────
 function generatePrintHTML(cuts: { cut: FstCut; bar: FstBar }[], jobName: string): string {
-  const labels = cuts.map(({ cut, bar }, i) => {
+  const labels = cuts.map(({ cut, bar }) => {
     const bcSrc = barcodeDataUrl(cut.bcod, 1.0, 24);
     const angleTxt = cut.angleLeft === 90 && cut.angleRight === 90 ? '90/90'
       : cut.angleLeft === 135 && cut.angleRight === 135 ? '45/45'
