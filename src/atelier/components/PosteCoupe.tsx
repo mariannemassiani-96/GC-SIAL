@@ -613,6 +613,7 @@ function AtelierView({
           </button>
           <h1 className="text-2xl font-black text-white flex-1">PREPARATION BARRES</h1>
           <span className="text-base text-cyan-400 font-bold">{allBars.length} barres au total</span>
+          <button onClick={onBack} className="text-xs text-gray-600 hover:text-red-400 px-3 py-2 border border-[#2a2d35] hover:border-red-500/30 rounded-lg transition-colors ml-3">QUITTER ATELIER</button>
         </div>
         <div className="flex-1 overflow-auto p-4 max-w-3xl mx-auto w-full">
           {activeCmds.length === 0 ? (
@@ -749,6 +750,7 @@ function AtelierView({
             <ArrowLeft size={24} className="inline mr-2" />Machines
           </button>
           <h1 className="text-2xl font-black text-white flex-1">{MACHINE_LABELS[machine]}</h1>
+          <button onClick={onBack} className="text-xs text-gray-600 hover:text-red-400 px-3 py-2 border border-[#2a2d35] hover:border-red-500/30 rounded-lg transition-colors">QUITTER ATELIER</button>
         </div>
         <div className="flex-1 overflow-auto p-6">
           {availableCommandes.length === 0 ? (
@@ -807,6 +809,7 @@ function AtelierView({
             <span className="text-base text-gray-500 ml-3">{commande?.chantier}</span>
           </div>
           <span className="text-base text-amber-400 font-bold">{MACHINE_LABELS[machine]}</span>
+          <button onClick={onBack} className="text-xs text-gray-600 hover:text-red-400 px-3 py-2 border border-[#2a2d35] hover:border-red-500/30 rounded-lg transition-colors ml-3">QUITTER ATELIER</button>
         </div>
         <div className="flex-1 overflow-auto p-6">
           <h2 className="text-2xl font-black text-white text-center mb-8">CHOISIR LE PROFIL</h2>
@@ -876,6 +879,7 @@ function AtelierView({
             <span className="text-base text-gray-500 ml-3">{currentBar.code} — {currentBar.description}</span>
           </div>
           <span className="text-base text-amber-400 font-mono">{MACHINE_LABELS[machine]}</span>
+          <button onClick={onBack} className="text-xs text-gray-600 hover:text-red-400 px-3 py-2 border border-[#2a2d35] hover:border-red-500/30 rounded-lg transition-colors ml-2">QUITTER</button>
         </div>
 
         {/* Navigation + bar visualization */}
