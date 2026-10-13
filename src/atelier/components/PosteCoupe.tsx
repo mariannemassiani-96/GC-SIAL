@@ -416,7 +416,7 @@ export function PosteCoupe({ onBack, startAtelier }: Props) {
   }
 
   // ── Admin/Manager: List of Commandes ──
-  const filtered = commandes.filter(c => {
+  const filtered = allCommandes.filter(c => {
     if (!search) return true;
     const q = search.toLowerCase();
     return c.ref.toLowerCase().includes(q) || c.chantier.toLowerCase().includes(q);

@@ -454,7 +454,7 @@ function ImportSlotCoupe({
       let xmlName = '';
       for (let i = 0; i < files.length; i++) {
         const f = files[i];
-        if (f.name.toLowerCase().endsWith('.xml')) {
+        if (f.name.toLowerCase().endsWith('.xml') || f.name.toLowerCase().endsWith('.xmlt')) {
           xmlFile = f;
           xmlName = f.name;
         }
@@ -509,7 +509,7 @@ function ImportSlotCoupe({
         <input
           ref={inputRef}
           type="file"
-          accept=".xml,.pdf"
+          accept=".xml,.xmlt,.pdf"
           multiple
           onChange={handleFiles}
           className="hidden"
