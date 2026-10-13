@@ -205,6 +205,10 @@ export async function patchCommandeModule(ref: string, module: string, data: Mod
   await request('PATCH', `/api/commandes-globales/${encodeURIComponent(ref)}/${module}`, data);
 }
 
+export async function deleteCommandeGlobale(ref: string): Promise<void> {
+  await request('DELETE', `/api/commandes-globales/${encodeURIComponent(ref)}`);
+}
+
 // ── Health ───────────────────────────────────────────────────────────
 
 export async function healthCheck(): Promise<{ status: string; users: number; documents: number }> {

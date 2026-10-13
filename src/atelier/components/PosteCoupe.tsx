@@ -4,7 +4,7 @@ import { useApiCollection } from '../../useApiCollection';
 import { useAuth } from '../../AuthContext';
 import type { FstJob, FstBar, FstCut } from '../fstlineParser';
 import { printLabels } from '../labelPrinter';
-import { patchCommandeModule, listCommandesGlobales, getProfileImages, logProductionEvent, type CommandeGlobale, type ModuleStatus } from '../../api';
+import { patchCommandeModule, listCommandesGlobales, deleteCommandeGlobale, getProfileImages, logProductionEvent, type CommandeGlobale, type ModuleStatus } from '../../api';
 
 interface Props { onBack: () => void; startAtelier?: boolean; }
 
@@ -489,6 +489,22 @@ export function PosteCoupe({ onBack, startAtelier }: Props) {
                     {totalBars > 0 && <span>{totalBars} barres — {totalCuts} pieces</span>}
                   </div>
                 </button>
+                {user?.role === 'admin' && (
+                  <button
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      if (!confirm(`Supprimer la commande ${c.ref} ?\nCette action est irreversible.`)) return;
+                      try {
+                        await deleteCommandeGlobale(c.ref);
+                        setGlobalCommandes(prev => prev.filter(x => x.id !== c.id));
+                      } catch { alert('Erreur lors de la suppression'); }
+                    }}
+                    className="p-2 text-gray-600 hover:text-red-400 transition-colors"
+                    title="Supprimer la commande"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14" /><line x1="10" y1="11" x2="10" y2="17" /><line x1="14" y1="11" x2="14" y2="17" /></svg>
+                  </button>
+                )}
                 <ChevronRight size={16} className="text-gray-600" />
               </div>
             </div>

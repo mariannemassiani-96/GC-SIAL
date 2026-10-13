@@ -271,6 +271,18 @@ app.put('/api/commandes-globales/:ref', authMiddleware, supervisorOnly, (req, re
   res.json({ ok: true });
 });
 
+// DELETE a commande
+app.delete('/api/commandes-globales/:ref', authMiddleware, supervisorOnly, (req, res) => {
+  const ref = req.params.ref.trim();
+  const existing = db.prepare('SELECT ref FROM commandes_globales WHERE ref = ?').get(ref);
+  if (!existing) return res.status(404).json({ error: 'Commande introuvable' });
+  db.prepare('DELETE FROM commandes_globales WHERE ref = ?').run(ref);
+  db.prepare('INSERT INTO activity_log (user_id, action, app, detail) VALUES (?, ?, ?, ?)').run(
+    req.user.id, 'delete', 'commandes_globales', ref
+  );
+  res.json({ ok: true });
+});
+
 // PATCH a specific module
 app.patch('/api/commandes-globales/:ref/:module', authMiddleware, (req, res) => {
   const validModules = ['reception', 'coupe_profiles', 'vitrage', 'assemblage', 'livraison'];
