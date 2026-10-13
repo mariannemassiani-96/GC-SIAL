@@ -4,7 +4,7 @@ import { useApiCollection } from '../../useApiCollection';
 import { useAuth } from '../../AuthContext';
 import type { FstJob, FstBar, FstCut } from '../fstlineParser';
 import { printLabels } from '../labelPrinter';
-import { patchCommandeModule, listCommandesGlobales, deleteCommandeGlobale, getProfileImages, logProductionEvent, type CommandeGlobale, type ModuleStatus } from '../../api';
+import { patchCommandeModule, listCommandesGlobales, deleteCommandeGlobale, getProfileImages, logProductionEvent, logout as apiLogout, type CommandeGlobale, type ModuleStatus } from '../../api';
 
 interface Props { onBack: () => void; startAtelier?: boolean; }
 
@@ -433,10 +433,19 @@ export function PosteCoupe({ onBack, startAtelier }: Props) {
               <p className="text-[10px] text-gray-500">Gestion coupes profils</p>
             </div>
           </div>
-          <button onClick={() => setModeAtelier(true)}
-            className="px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold rounded-lg">
-            MODE ATELIER
-          </button>
+          <div className="flex items-center gap-2">
+            {user && (
+              <span className="text-xs text-gray-500">{user.nom}</span>
+            )}
+            <button onClick={() => setModeAtelier(true)}
+              className="px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold rounded-lg">
+              MODE ATELIER
+            </button>
+            <button onClick={() => { apiLogout(); window.location.reload(); }}
+              className="px-3 py-2 text-xs text-gray-500 hover:text-red-400 border border-[#2a2d35] hover:border-red-500/30 rounded-lg transition-colors">
+              Deconnexion
+            </button>
+          </div>
         </div>
       </header>
 
@@ -711,6 +720,10 @@ function AtelierView({
       <div className="fixed inset-0 bg-[#0a0c10] flex flex-col items-center justify-center gap-8 z-50">
         <button onClick={onBack} className="absolute top-4 left-4 text-gray-500 hover:text-white text-lg px-4 py-2">
           <ArrowLeft size={24} className="inline mr-2" />Bureau
+        </button>
+        <button onClick={() => { apiLogout(); window.location.reload(); }}
+          className="absolute top-4 right-4 text-gray-600 hover:text-red-400 text-sm px-4 py-2 border border-[#2a2d35] hover:border-red-500/30 rounded-lg transition-colors">
+          Deconnexion
         </button>
         <h1 className="text-4xl font-black text-white">PREPARATION & COUPE PROFILES</h1>
         <p className="text-xl text-gray-400">Choisir le poste</p>
