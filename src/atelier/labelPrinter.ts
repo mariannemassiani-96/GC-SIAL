@@ -11,7 +11,7 @@ import type { FstBar, FstCut } from './fstlineParser';
 export type LabelFormat = '62x29' | '62x100';
 export const LABEL_FORMATS: Record<LabelFormat, { w: number; h: number; name: string }> = {
   '62x29':  { w: 62, h: 29,  name: '62 x 29 mm (adresse)' },
-  '62x100': { w: 62, h: 100, name: '62 x 100 mm (expedition)' },
+  '62x100': { w: 100, h: 62, name: '62 x 100 mm paysage' },
 };
 
 // ── Barcode as data URL ─────────────────────────────────────────────
@@ -45,13 +45,18 @@ function chuteLabel(bar: FstBar, isLarge: boolean): string {
   if (isLarge) {
     return `
       <div class="label chute">
-        <div class="chute-tag">CHUTE</div>
-        <div class="chute-len">${Math.round(bar.waste)} mm</div>
-        <div class="divider"></div>
-        <div class="profile">${bar.code}</div>
-        <div class="chantier">${bar.brand} ${bar.system}</div>
-        <div class="color">Couleur : ${bar.innerColor}/${bar.outerColor}</div>
-        <div class="dims">Barre ${bar.length}mm — pos ${bar.position}</div>
+        <div class="body">
+          <div class="col-left">
+            <div class="profile">${bar.code} · ${bar.brand} ${bar.system}</div>
+            <div class="color">Couleur : ${bar.innerColor}/${bar.outerColor}</div>
+            <div class="dims">Barre ${bar.length}mm — pos ${bar.position}</div>
+          </div>
+          <div class="col-right">
+            <div class="chute-tag">CHUTE</div>
+            <div class="chute-len">${Math.round(bar.waste)}</div>
+            <div class="pos">mm</div>
+          </div>
+        </div>
       </div>
     `;
   }
@@ -98,20 +103,21 @@ export function generatePrintHTML(
     if (isLarge) {
       htmlParts.push(`
         <div class="label">
-          <div class="row-top">
-            <div class="rep-label">REP</div>
-            <div class="rep-box">${rep}</div>
-            <div class="pos-col">${posLines.map(l => `<span class="pos">${l}</span>`).join('')}</div>
+          <div class="body">
+            <div class="col-left">
+              <div class="cid">${cut.cid || cut.ref || '—'}</div>
+              <div class="chantier">${cut.chantier || jobName}</div>
+              <div class="dims">${cut.il} mm · ${cut.angleLeft}° / ${cut.angleRight}°</div>
+              <div class="profile">${bar.code} · ${bar.brand} ${bar.system}</div>
+              <div class="color">${bar.innerColor}/${bar.outerColor} · ${cut.orderCode}</div>
+              ${bcSrc ? `<div class="row-barcode"><img src="${bcSrc}" /><span class="bc-text">${cut.bcod}</span></div>` : ''}
+            </div>
+            <div class="col-right">
+              <div class="rep-label">REP</div>
+              <div class="rep-box">${rep}</div>
+              ${posLines.map(l => `<div class="pos">${l}</div>`).join('')}
+            </div>
           </div>
-          <div class="divider"></div>
-          <div class="cid">${cut.cid || cut.ref || '—'}</div>
-          <div class="chantier">${cut.chantier || jobName}</div>
-          <div class="dims">${cut.il} mm</div>
-          <div class="angles">${cut.angleLeft}° / ${cut.angleRight}°</div>
-          <div class="profile">${bar.code} · ${bar.brand} ${bar.system}</div>
-          <div class="color">Couleur : ${bar.innerColor}/${bar.outerColor}</div>
-          <div class="order">${cut.orderCode}</div>
-          ${bcSrc ? `<div class="row-barcode"><img src="${bcSrc}" /><div class="bc-text">${cut.bcod}</div></div>` : ''}
         </div>
       `);
     } else {
@@ -164,26 +170,25 @@ export function generatePrintHTML(
 `;
 
   const largeCSS = `
-.label { width: ${w - 3}mm; height: ${h - 2}mm; page-break-after: always; display: flex; flex-direction: column; overflow: hidden; padding: 1mm; }
-.row-top { display: flex; align-items: center; gap: 3mm; }
-.rep-label { font-size: 8pt; font-weight: 700; color: #666; }
-.rep-box { font-size: 36pt; font-weight: 900; line-height: 1; border: 2pt solid #000; padding: 1mm 4mm; text-align: center; min-width: 18mm; }
-.pos-col { display: flex; flex-direction: column; margin-left: auto; }
-.pos { font-size: 9pt; font-weight: 700; color: #333; }
-.divider { border-top: 0.5pt solid #ccc; margin: 1.5mm 0; }
-.cid { font-size: 12pt; font-weight: 900; line-height: 1.2; }
-.chantier { font-size: 11pt; font-weight: 900; color: #000; margin-top: 0.5mm; }
-.dims { font-size: 14pt; font-weight: 900; color: #000; margin-top: 1mm; }
-.angles { font-size: 10pt; font-weight: 700; color: #333; }
-.profile { font-size: 8pt; font-weight: 600; color: #444; margin-top: 1mm; }
+.label { width: ${w - 3}mm; height: ${h - 2}mm; page-break-after: always; display: flex; flex-direction: column; overflow: hidden; }
+.body { display: flex; flex: 1; min-height: 0; gap: 2mm; }
+.col-left { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 0.5mm; }
+.col-right { width: 28mm; display: flex; flex-direction: column; align-items: center; justify-content: center; border-left: 1pt solid #ccc; padding-left: 2mm; }
+.rep-label { font-size: 7pt; font-weight: 700; color: #666; letter-spacing: 1px; }
+.rep-box { font-size: 36pt; font-weight: 900; line-height: 1; border: 2pt solid #000; padding: 1mm 3mm; text-align: center; min-width: 20mm; margin-top: 1mm; }
+.pos { font-size: 8pt; font-weight: 700; color: #333; margin-top: 1mm; }
+.cid { font-size: 11pt; font-weight: 900; line-height: 1.2; }
+.chantier { font-size: 10pt; font-weight: 900; color: #000; }
+.dims { font-size: 12pt; font-weight: 900; color: #000; }
+.profile { font-size: 8pt; font-weight: 600; color: #444; }
 .color { font-size: 7pt; color: #555; }
-.order { font-size: 8pt; color: #555; margin-top: 0.5mm; }
-.row-barcode { margin-top: auto; text-align: center; }
-.row-barcode img { width: 100%; height: 12mm; object-fit: contain; }
-.bc-text { font-size: 7pt; color: #444; letter-spacing: 0.5px; font-family: monospace; }
+.row-barcode { display: flex; align-items: center; gap: 2mm; margin-top: auto; }
+.row-barcode img { flex: 1; height: 10mm; object-fit: contain; }
+.bc-text { font-size: 6pt; color: #444; font-family: monospace; white-space: nowrap; }
 .chute { border: 2pt dashed #000; }
-.chute-tag { font-size: 18pt; font-weight: 900; letter-spacing: 2px; margin-top: 2mm; }
-.chute-len { font-size: 28pt; font-weight: 900; line-height: 1.1; margin-top: 1mm; }
+.chute .body { justify-content: center; }
+.chute-tag { font-size: 14pt; font-weight: 900; letter-spacing: 2px; }
+.chute-len { font-size: 28pt; font-weight: 900; line-height: 1; margin-top: 1mm; }
 `;
 
   return `<!DOCTYPE html>
