@@ -9,7 +9,7 @@ interface Props {
 
 // ── Label dimensions Brother QL-1050 DK-22205 (62mm continuous) ─────
 const LABEL_W_MM = 62;
-const LABEL_H_MM = 35;
+const LABEL_H_MM = 34;
 
 // ── Angle SVG helper ────────────────────────────────────────────────
 function AngleSvg({ left, right, size = 28 }: { left: number; right: number; size?: number }) {
@@ -57,7 +57,7 @@ function barcodeDataUrl(text: string, w = 1.2, h = 30): string {
 // ── Print labels HTML ───────────────────────────────────────────────
 function generatePrintHTML(cuts: { cut: FstCut; bar: FstBar }[], jobName: string): string {
   const labels = cuts.map(({ cut, bar }) => {
-    const bcSrc = barcodeDataUrl(cut.bcod, 1.0, 24);
+    const bcSrc = barcodeDataUrl(cut.bcod, 1.0, 18);
     const angleTxt = cut.angleLeft === 90 && cut.angleRight === 90 ? '90/90'
       : cut.angleLeft === 135 && cut.angleRight === 135 ? '45/45'
       : `${180 - cut.angleLeft}/${180 - cut.angleRight}`;
@@ -66,15 +66,17 @@ function generatePrintHTML(cuts: { cut: FstCut; bar: FstBar }[], jobName: string
       <div class="label">
         <div class="row-top">
           <div class="cid">${cut.cid || cut.ref || '—'}</div>
-          <div class="pos">${cut.labels[5] || ''}</div>
+          <div class="right-col">
+            <div class="dim-main">${cut.il}</div>
+            <div class="pos">${cut.labels[5] || ''}</div>
+          </div>
         </div>
-        <div class="row-chantier">${cut.chantier || jobName}</div>
-        <div class="row-dims">
-          <span class="dim-main">${cut.il} mm</span>
-          <span class="dim-sep">|</span>
-          <span class="dim-angles">${angleTxt}</span>
-          <span class="dim-sep">|</span>
-          <span class="dim-profile">${bar.code}</span>
+        <div class="row-mid">
+          <span class="chantier">${cut.chantier || jobName}</span>
+          <span class="sep">·</span>
+          <span class="angles">${angleTxt}</span>
+          <span class="sep">·</span>
+          <span class="profile">${bar.code}</span>
         </div>
         <div class="row-order">${cut.orderCode} — ${bar.brand} ${bar.system}</div>
         ${bcSrc ? `<div class="row-barcode"><img src="${bcSrc}" /><div class="bc-text">${cut.bcod}</div></div>` : ''}
@@ -90,33 +92,32 @@ function generatePrintHTML(cuts: { cut: FstCut; bar: FstBar }[], jobName: string
 <style>
 @page {
   size: ${LABEL_W_MM}mm ${LABEL_H_MM}mm;
-  margin: 1.5mm;
+  margin: 1mm 1.5mm;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: Arial, Helvetica, sans-serif; }
 .label {
   width: ${LABEL_W_MM - 3}mm;
-  height: ${LABEL_H_MM - 3}mm;
+  height: ${LABEL_H_MM - 2}mm;
   page-break-after: always;
-  padding: 1mm;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
   overflow: hidden;
 }
-.row-top { display: flex; justify-content: space-between; align-items: baseline; }
-.cid { font-size: 11pt; font-weight: 900; letter-spacing: -0.3px; }
-.pos { font-size: 8pt; font-weight: 700; color: #333; }
-.row-chantier { font-size: 8pt; font-weight: 600; color: #222; margin-top: 0.5mm; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.row-dims { display: flex; align-items: baseline; gap: 2mm; font-size: 9pt; margin-top: 0.5mm; }
-.dim-main { font-weight: 900; font-size: 10pt; }
-.dim-sep { color: #aaa; }
-.dim-angles { font-weight: 600; }
-.dim-profile { font-size: 7pt; color: #555; }
-.row-order { font-size: 6.5pt; color: #666; margin-top: 0.3mm; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.row-barcode { text-align: center; margin-top: auto; }
-.row-barcode img { width: 100%; height: 8mm; object-fit: contain; }
-.bc-text { font-size: 5.5pt; color: #444; letter-spacing: 0.5px; font-family: monospace; }
+.row-top { display: flex; justify-content: space-between; align-items: flex-start; }
+.cid { font-size: 12pt; font-weight: 900; letter-spacing: -0.3px; line-height: 1.1; }
+.right-col { text-align: right; }
+.dim-main { font-size: 11pt; font-weight: 900; line-height: 1.1; }
+.pos { font-size: 7pt; font-weight: 700; color: #444; }
+.row-mid { font-size: 7.5pt; color: #222; margin-top: 0.3mm; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row-mid .chantier { font-weight: 700; }
+.row-mid .angles { font-weight: 600; }
+.row-mid .profile { color: #555; }
+.row-mid .sep { color: #bbb; margin: 0 0.5mm; }
+.row-order { font-size: 6pt; color: #777; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row-barcode { margin-top: auto; text-align: center; }
+.row-barcode img { width: 100%; height: 7mm; object-fit: contain; }
+.bc-text { font-size: 5pt; color: #555; letter-spacing: 0.4px; font-family: monospace; line-height: 1; }
 @media print {
   .label:last-child { page-break-after: avoid; }
 }
