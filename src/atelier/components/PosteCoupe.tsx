@@ -194,7 +194,7 @@ export function PosteCoupe({ onBack, startAtelier }: Props) {
 
   // ── Update cut statut in a commande ──
   const updateCutStatut = useCallback((commandeId: string, machine: MachineName, barId: string, cutIdx: number, statut: FstCut['statut']) => {
-    const c = commandes.find(x => x.id === commandeId);
+    const c = allCommandes.find(x => x.id === commandeId);
     if (!c) return;
     const md = c.machines[machine];
     if (!md?.fstlineJob) return;
@@ -228,11 +228,11 @@ export function PosteCoupe({ onBack, startAtelier }: Props) {
     syncCoupeToGlobal(updated);
     const cut = md.fstlineJob.bars.find(b => b.id === barId)?.cuts[cutIdx];
     logProductionEvent({ commande_ref: c.ref, poste: machine, action: statut, piece_ref: cut?.bcod || `bar${barId}_cut${cutIdx}` }).catch(() => {});
-  }, [commandes, upsert, user]);
+  }, [allCommandes, upsert, user]);
 
   // ── Mark entire bar as cut ──
   const markBarAllCut = useCallback((commandeId: string, machine: MachineName, barId: string) => {
-    const c = commandes.find(x => x.id === commandeId);
+    const c = allCommandes.find(x => x.id === commandeId);
     if (!c) return;
     const md = c.machines[machine];
     if (!md?.fstlineJob) return;
@@ -270,7 +270,7 @@ export function PosteCoupe({ onBack, startAtelier }: Props) {
         }
       }
     }
-  }, [commandes, upsert, user]);
+  }, [allCommandes, upsert, user]);
 
   const updateBarPreparation = useCallback((commandeId: string, machine: MachineName, barId: string, status: 'ok' | 'nc' | 'manquant' | null) => {
     const c = allCommandes.find(x => x.id === commandeId);
