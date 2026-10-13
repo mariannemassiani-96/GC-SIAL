@@ -208,7 +208,7 @@ ${isLarge ? largeCSS : smallCSS}
 </html>`;
 }
 
-// ── Open print window with guide ────────────────────────────────────
+// ── Open print dialog directly ──────────────────────────────────────
 export function printLabels(
   cuts: { cut: FstCut; bar: FstBar }[],
   jobName: string,
@@ -217,20 +217,10 @@ export function printLabels(
 ): void {
   if (cuts.length === 0) return;
   const html = generatePrintHTML(cuts, jobName, fmt, includeChutes);
-  const { w, h } = LABEL_FORMATS[fmt];
-  const instructions = `
-    <div id="print-help" style="background:#fffbe6;border:2px solid #d97706;padding:12px 16px;margin:8px;border-radius:8px;font-family:Arial;font-size:13px;color:#92400e">
-      <b>AVANT D'IMPRIMER :</b><br>
-      1. Imprimante = <b>Brother QL-1050</b><br>
-      2. Format papier = <b>${w} x ${h} mm</b><br>
-      3. Decocher "Adapter a la page" / "Fit to page"<br>
-      4. Marges = Aucune<br>
-      <button onclick="this.parentElement.remove()" style="margin-top:8px;padding:4px 12px;background:#d97706;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:bold">OK, compris</button>
-    </div>
-    <style>#print-help{display:block}@media print{#print-help{display:none!important}}</style>
-  `;
   const win = window.open('', '_blank');
   if (!win) return;
-  win.document.write(instructions + html);
+  win.document.write(html);
   win.document.close();
+  win.onload = () => win.print();
+  win.onafterprint = () => win.close();
 }
