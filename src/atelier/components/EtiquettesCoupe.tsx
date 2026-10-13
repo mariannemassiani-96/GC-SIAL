@@ -7,9 +7,12 @@ interface Props {
   onBack: () => void;
 }
 
-// ── Label dimensions Brother QL-1050 DK-22205 (62mm continuous) ─────
-const LABEL_W_MM = 62;
-const LABEL_H_MM = 34;
+// ── Label formats Brother QL-1050 ────────────────────────────────────
+type LabelFormat = '62x29' | '62x100';
+const LABEL_FORMATS: Record<LabelFormat, { w: number; h: number; name: string }> = {
+  '62x29':  { w: 62, h: 29,  name: '62 x 29 mm (adresse)' },
+  '62x100': { w: 62, h: 100, name: '62 x 100 mm (expedition)' },
+};
 
 // ── Angle SVG helper ────────────────────────────────────────────────
 function AngleSvg({ left, right, size = 28 }: { left: number; right: number; size?: number }) {
@@ -68,11 +71,35 @@ function getPosLines(cut: FstCut): string[] {
 }
 
 // ── Print labels HTML ───────────────────────────────────────────────
-function generatePrintHTML(cuts: { cut: FstCut; bar: FstBar }[], jobName: string): string {
+function generatePrintHTML(cuts: { cut: FstCut; bar: FstBar }[], jobName: string, fmt: LabelFormat): string {
+  const { w, h } = LABEL_FORMATS[fmt];
+  const isLarge = fmt === '62x100';
+
   const labels = cuts.map(({ cut, bar }) => {
-    const bcSrc = barcodeDataUrl(cut.bcod, 1.0, 16);
+    const bcSrc = barcodeDataUrl(cut.bcod, isLarge ? 1.2 : 1.0, isLarge ? 28 : 16);
     const rep = getRepNumber(cut);
     const posLines = getPosLines(cut);
+
+    if (isLarge) {
+      return `
+        <div class="label">
+          <div class="row-top">
+            <div class="rep-label">REP</div>
+            <div class="rep-box">${rep}</div>
+            <div class="pos-col">${posLines.map(l => `<span class="pos">${l}</span>`).join('')}</div>
+          </div>
+          <div class="divider"></div>
+          <div class="cid">${cut.cid || cut.ref || '—'}</div>
+          <div class="chantier">${cut.chantier || jobName}</div>
+          <div class="dims">${cut.il} mm</div>
+          <div class="angles">${cut.angleLeft}° / ${cut.angleRight}°</div>
+          <div class="profile">${bar.code} · ${bar.brand} ${bar.system}</div>
+          <div class="color">Couleur : ${bar.innerColor}/${bar.outerColor}</div>
+          <div class="order">${cut.orderCode}</div>
+          ${bcSrc ? `<div class="row-barcode"><img src="${bcSrc}" /><div class="bc-text">${cut.bcod}</div></div>` : ''}
+        </div>
+      `;
+    }
 
     return `
       <div class="label">
@@ -94,42 +121,54 @@ function generatePrintHTML(cuts: { cut: FstCut; bar: FstBar }[], jobName: string
     `;
   }).join('');
 
+  const smallCSS = `
+.label { width: ${w - 3}mm; height: ${h - 2}mm; page-break-after: always; display: flex; flex-direction: column; overflow: hidden; }
+.body { display: flex; flex: 1; min-height: 0; }
+.col-left { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 0.2mm; }
+.cid { font-size: 8pt; font-weight: 900; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chantier { font-size: 7pt; font-weight: 900; color: #000; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dims { font-size: 7pt; font-weight: 900; color: #000; }
+.order { font-size: 5pt; color: #666; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.col-right { width: 16mm; display: flex; flex-direction: column; align-items: center; justify-content: center; border-left: 0.5pt solid #ccc; padding-left: 1mm; margin-left: 1mm; }
+.rep-label { font-size: 5pt; font-weight: 700; color: #666; letter-spacing: 0.5px; }
+.rep-box { font-size: 18pt; font-weight: 900; line-height: 1; border: 1.5pt solid #000; padding: 0.3mm 1.5mm; text-align: center; min-width: 10mm; }
+.pos { font-size: 5.5pt; font-weight: 700; color: #444; margin-top: 0.3mm; }
+.row-barcode { display: flex; align-items: center; gap: 1mm; margin-top: auto; }
+.row-barcode img { flex: 1; height: 5mm; object-fit: contain; }
+.bc-text { font-size: 4pt; color: #555; font-family: monospace; white-space: nowrap; }
+`;
+
+  const largeCSS = `
+.label { width: ${w - 3}mm; height: ${h - 2}mm; page-break-after: always; display: flex; flex-direction: column; overflow: hidden; padding: 1mm; }
+.row-top { display: flex; align-items: center; gap: 3mm; }
+.rep-label { font-size: 8pt; font-weight: 700; color: #666; }
+.rep-box { font-size: 36pt; font-weight: 900; line-height: 1; border: 2pt solid #000; padding: 1mm 4mm; text-align: center; min-width: 18mm; }
+.pos-col { display: flex; flex-direction: column; margin-left: auto; }
+.pos { font-size: 9pt; font-weight: 700; color: #333; }
+.divider { border-top: 0.5pt solid #ccc; margin: 1.5mm 0; }
+.cid { font-size: 12pt; font-weight: 900; line-height: 1.2; }
+.chantier { font-size: 11pt; font-weight: 900; color: #000; margin-top: 0.5mm; }
+.dims { font-size: 14pt; font-weight: 900; color: #000; margin-top: 1mm; }
+.angles { font-size: 10pt; font-weight: 700; color: #333; }
+.profile { font-size: 8pt; font-weight: 600; color: #444; margin-top: 1mm; }
+.color { font-size: 7pt; color: #555; }
+.order { font-size: 8pt; color: #555; margin-top: 0.5mm; }
+.row-barcode { margin-top: auto; text-align: center; }
+.row-barcode img { width: 100%; height: 12mm; object-fit: contain; }
+.bc-text { font-size: 7pt; color: #444; letter-spacing: 0.5px; font-family: monospace; }
+`;
+
   return `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
 <title>Etiquettes Coupe — ${jobName}</title>
 <style>
-@page {
-  size: ${LABEL_W_MM}mm ${LABEL_H_MM}mm;
-  margin: 1mm 1.5mm;
-}
+@page { size: ${w}mm ${h}mm; margin: 1mm; }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: Arial, Helvetica, sans-serif; }
-.label {
-  width: ${LABEL_W_MM - 3}mm;
-  height: ${LABEL_H_MM - 2}mm;
-  page-break-after: always;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-.body { display: flex; flex: 1; min-height: 0; }
-.col-left { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 0.3mm; }
-.cid { font-size: 9pt; font-weight: 900; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.chantier { font-size: 8pt; font-weight: 900; color: #000; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.dims { font-size: 8pt; font-weight: 900; color: #000; }
-.order { font-size: 5.5pt; color: #666; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.col-right { width: 18mm; display: flex; flex-direction: column; align-items: center; justify-content: center; border-left: 0.5pt solid #ccc; padding-left: 1.5mm; margin-left: 1mm; }
-.rep-label { font-size: 5.5pt; font-weight: 700; color: #666; letter-spacing: 0.5px; }
-.rep-box { font-size: 22pt; font-weight: 900; line-height: 1; border: 1.5pt solid #000; padding: 0.5mm 2mm; text-align: center; min-width: 12mm; }
-.pos { font-size: 6pt; font-weight: 700; color: #444; margin-top: 0.5mm; }
-.row-barcode { display: flex; align-items: center; gap: 1mm; margin-top: auto; }
-.row-barcode img { flex: 1; height: 6mm; object-fit: contain; }
-.bc-text { font-size: 4.5pt; color: #555; font-family: monospace; white-space: nowrap; }
-@media print {
-  .label:last-child { page-break-after: avoid; }
-}
+${isLarge ? largeCSS : smallCSS}
+@media print { .label:last-child { page-break-after: avoid; } }
 </style>
 </head>
 <body>${labels}</body>
@@ -146,6 +185,7 @@ export function EtiquettesCoupe({ onBack }: Props) {
   const [expandedBars, setExpandedBars] = useState<Set<string>>(new Set());
   const [selectedCuts, setSelectedCuts] = useState<Set<string>>(new Set());
   const [previewMode, setPreviewMode] = useState(false);
+  const [labelFormat, setLabelFormat] = useState<LabelFormat>('62x29');
   const fileRef = useRef<HTMLInputElement>(null);
 
   const handleFile = useCallback(async (file: File) => {
@@ -237,12 +277,23 @@ export function EtiquettesCoupe({ onBack }: Props) {
   const handlePrint = () => {
     const cutsWithBars = getSelectedCutsWithBars();
     if (cutsWithBars.length === 0) return;
-    const html = generatePrintHTML(cutsWithBars, job?.chantier || fileName);
+    const html = generatePrintHTML(cutsWithBars, job?.chantier || fileName, labelFormat);
+    const fmt = LABEL_FORMATS[labelFormat];
+    const instructions = `
+      <div id="print-help" style="background:#fffbe6;border:2px solid #d97706;padding:12px 16px;margin:8px;border-radius:8px;font-family:Arial;font-size:13px;color:#92400e">
+        <b>AVANT D'IMPRIMER :</b><br>
+        1. Imprimante = <b>Brother QL-1050</b><br>
+        2. Format papier = <b>${fmt.w} x ${fmt.h} mm</b><br>
+        3. Decocher "Adapter a la page" / "Fit to page"<br>
+        4. Marges = Aucune<br>
+        <button onclick="this.parentElement.remove()" style="margin-top:8px;padding:4px 12px;background:#d97706;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:bold">OK, compris</button>
+      </div>
+      <style>#print-help{display:block}@media print{#print-help{display:none!important}}</style>
+    `;
     const win = window.open('', '_blank');
     if (!win) return;
-    win.document.write(html);
+    win.document.write(instructions + html);
     win.document.close();
-    setTimeout(() => win.print(), 400);
   };
 
   const totalSelected = selectedCuts.size;
@@ -265,7 +316,16 @@ export function EtiquettesCoupe({ onBack }: Props) {
         </div>
         {job && (
           <div className="flex items-center gap-3">
-            <span className="text-xs text-gray-500">{totalSelected} / {job.totalCuts} etiquettes</span>
+            <span className="text-xs text-gray-500">{totalSelected} / {job.totalCuts}</span>
+            <select
+              value={labelFormat}
+              onChange={e => setLabelFormat(e.target.value as LabelFormat)}
+              className="text-xs bg-[#0f1117] text-gray-300 border border-[#2a2d35] rounded-lg px-2 py-1.5 focus:border-pink-500/50 focus:outline-none"
+            >
+              {(Object.keys(LABEL_FORMATS) as LabelFormat[]).map(k => (
+                <option key={k} value={k}>{LABEL_FORMATS[k].name}</option>
+              ))}
+            </select>
             <button
               onClick={() => setPreviewMode(!previewMode)}
               className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${previewMode ? 'bg-pink-600/20 text-pink-400 border-pink-500/30' : 'bg-white/5 text-gray-400 border-[#2a2d35] hover:border-gray-500'}`}
@@ -320,8 +380,8 @@ export function EtiquettesCoupe({ onBack }: Props) {
                   <span className="text-white font-semibold">DK-22205 — 62mm continu</span>
                 </div>
                 <div className="bg-[#0f1117] rounded-lg p-3 border border-[#2a2d35]">
-                  <span className="text-gray-500 block mb-1">Taille etiquette</span>
-                  <span className="text-white font-semibold">{LABEL_W_MM} x {LABEL_H_MM} mm</span>
+                  <span className="text-gray-500 block mb-1">Formats disponibles</span>
+                  <span className="text-white font-semibold">62 x 29 mm — 62 x 100 mm</span>
                 </div>
                 <div className="bg-[#0f1117] rounded-lg p-3 border border-[#2a2d35]">
                   <span className="text-gray-500 block mb-1">Connexion</span>
@@ -470,7 +530,7 @@ function LabelPreview({ cut, bar, jobName }: { cut: FstCut; bar: FstBar; jobName
   const posLines = getPosLines(cut);
 
   return (
-    <div className="bg-white text-black rounded-lg border border-gray-300 shadow-sm flex flex-col overflow-hidden" style={{ aspectRatio: `${LABEL_W_MM}/${LABEL_H_MM}` }}>
+    <div className="bg-white text-black rounded-lg border border-gray-300 shadow-sm flex flex-col overflow-hidden" style={{ aspectRatio: '62/29' }}>
       <div className="flex flex-1 min-h-0 p-2 gap-2">
         {/* Left column: info */}
         <div className="flex-1 min-w-0 flex flex-col justify-center gap-0.5">
