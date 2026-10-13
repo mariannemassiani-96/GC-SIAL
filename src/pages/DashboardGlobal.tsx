@@ -28,19 +28,23 @@ interface VitrageModuleData extends ModuleStatus {
 
 /** Shape of the coupe_profiles JSONB column when populated with import data */
 interface CoupeModuleData extends ModuleStatus {
-  machines?: {
-    lmt65?: FstJob;
-    dt?: FstJob;
-    renfort?: FstJob;
-  };
-  fileNames?: {
-    lmt65?: string;
-    dt?: string;
-    renfort?: string;
-  };
+  machines?: Record<string, FstJob>;
+  fileNames?: Record<string, string>;
 }
 
-type CoupeMachineKey = 'lmt65' | 'dt' | 'renfort';
+type CoupeBaseType = 'lmt65' | 'dt' | 'renfort';
+const COUPE_BASE_LABELS: Record<CoupeBaseType, string> = { lmt65: 'LMT 65', dt: 'DOUBLE TETE', renfort: 'RENFORT ACIER' };
+const COUPE_BASE_COLORS: Record<CoupeBaseType, { dot: string; text: string; border: string; bg: string }> = {
+  lmt65: { dot: 'bg-red-500', text: 'text-red-400', border: 'border-red-500/30', bg: 'bg-red-600/20' },
+  dt: { dot: 'bg-orange-500', text: 'text-orange-400', border: 'border-orange-500/30', bg: 'bg-orange-600/20' },
+  renfort: { dot: 'bg-yellow-500', text: 'text-yellow-400', border: 'border-yellow-500/30', bg: 'bg-yellow-600/20' },
+};
+function getBaseType(key: string): CoupeBaseType { return key.replace(/_\d+$/, '') as CoupeBaseType; }
+function getSlotLabel(key: string): string {
+  const base = getBaseType(key);
+  const suffix = key.match(/_(\d+)$/);
+  return COUPE_BASE_LABELS[base] + (suffix ? ` #${suffix[1]}` : '');
+}
 
 const MODULES: ModuleDef[] = [
   { key: 'reception', label: 'Reception', color: 'text-sky-400', bgColor: 'bg-sky-600/20', borderColor: 'border-sky-500/30' },
@@ -422,6 +426,67 @@ function ImportSlotVitrage({
 
 // ── Import Slot: Coupe (single machine) ─────────────────────────────
 
+function CoupeSlots({ localCoupe, onImported }: { localCoupe: CoupeModuleData; onImported: (key: string, job: FstJob, name: string) => void }) {
+  const machines = localCoupe.machines || {};
+  const existingKeys = Object.keys(machines);
+
+  const getNextKey = (base: CoupeBaseType): string => {
+    if (!machines[base]) return base;
+    let n = 2;
+    while (machines[`${base}_${n}`]) n++;
+    return `${base}_${n}`;
+  };
+
+  const baseTypes: CoupeBaseType[] = ['lmt65', 'dt', 'renfort'];
+  const slotsByBase: Record<string, string[]> = { lmt65: [], dt: [], renfort: [] };
+  for (const k of existingKeys) {
+    const b = getBaseType(k);
+    if (slotsByBase[b]) slotsByBase[b].push(k);
+  }
+  for (const b of baseTypes) {
+    if (slotsByBase[b].length === 0) slotsByBase[b].push(b);
+  }
+
+  return (
+    <>
+      {baseTypes.map(base => (
+        <div key={base}>
+          {slotsByBase[base].map(key => (
+            <div key={key} className="mb-2">
+              <ImportSlotCoupe
+                label={`COUPE ${getSlotLabel(key)}`}
+                machineKey={key}
+                coupeData={localCoupe}
+                onImported={onImported}
+              />
+            </div>
+          ))}
+          <button
+            onClick={() => {
+              const nextKey = getNextKey(base);
+              const inputEl = document.createElement('input');
+              inputEl.type = 'file';
+              inputEl.accept = '.xml,.xmlt';
+              inputEl.onchange = async () => {
+                const file = inputEl.files?.[0];
+                if (!file) return;
+                try {
+                  const parsed = await parseFstlineFile(file);
+                  if (parsed.totalBars > 0) onImported(nextKey, parsed, file.name);
+                } catch { /* silent */ }
+              };
+              inputEl.click();
+            }}
+            className="text-[10px] text-gray-600 hover:text-gray-300 px-2 py-1 border border-dashed border-[#2a2d35] hover:border-gray-500 rounded transition-colors mb-3"
+          >
+            + Ajouter un programme {COUPE_BASE_LABELS[base]}
+          </button>
+        </div>
+      ))}
+    </>
+  );
+}
+
 function ImportSlotCoupe({
   label,
   machineKey,
@@ -429,9 +494,9 @@ function ImportSlotCoupe({
   onImported,
 }: {
   label: string;
-  machineKey: CoupeMachineKey;
+  machineKey: string;
   coupeData: CoupeModuleData;
-  onImported: (machineKey: CoupeMachineKey, job: FstJob, xmlName: string) => void;
+  onImported: (machineKey: string, job: FstJob, xmlName: string) => void;
 }) {
   const xmlInputRef = useRef<HTMLInputElement>(null);
   const pdfInputRef = useRef<HTMLInputElement>(null);
@@ -480,12 +545,7 @@ function ImportSlotCoupe({
     }
   };
 
-  const colorMap: Record<CoupeMachineKey, { dot: string; text: string; border: string; bg: string }> = {
-    lmt65: { dot: 'bg-red-500', text: 'text-red-400', border: 'border-red-500/30', bg: 'bg-red-600/20' },
-    dt: { dot: 'bg-orange-500', text: 'text-orange-400', border: 'border-orange-500/30', bg: 'bg-orange-600/20' },
-    renfort: { dot: 'bg-yellow-500', text: 'text-yellow-400', border: 'border-yellow-500/30', bg: 'bg-yellow-600/20' },
-  };
-  const colors = colorMap[machineKey];
+  const colors = COUPE_BASE_COLORS[getBaseType(machineKey)];
 
   return (
     <div className="px-5 py-4 border border-[#2a2d35] rounded-lg bg-[#0f1117]">
@@ -936,19 +996,14 @@ function DetailView({ cmd, onClose, onRefresh }: { cmd: CommandeGlobale; onClose
     setImportDirty(true);
   };
 
-  const handleCoupeImported = (machineKey: CoupeMachineKey, job: FstJob, xmlName: string) => {
+  const handleCoupeImported = (machineKey: string, job: FstJob, xmlName: string) => {
     setLocalCoupe(prev => {
       const machines = { ...(prev.machines || {}), [machineKey]: job };
       const fileNames = { ...(prev.fileNames || {}), [machineKey]: xmlName };
-      // Compute totals across all machines
       let totalBars = 0;
       let totalCuts = 0;
-      for (const k of ['lmt65', 'dt', 'renfort'] as CoupeMachineKey[]) {
-        const m = machines[k];
-        if (m) {
-          totalBars += m.totalBars;
-          totalCuts += m.totalCuts;
-        }
+      for (const m of Object.values(machines)) {
+        if (m) { totalBars += m.totalBars; totalCuts += m.totalCuts; }
       }
       return {
         ...prev,
@@ -1098,29 +1153,8 @@ function DetailView({ cmd, onClose, onRefresh }: { cmd: CommandeGlobale; onClose
             onImported={handleVitrageImported}
           />
 
-          {/* Coupe LMT 65 */}
-          <ImportSlotCoupe
-            label="COUPE LMT 65"
-            machineKey="lmt65"
-            coupeData={localCoupe}
-            onImported={handleCoupeImported}
-          />
-
-          {/* Coupe Double Tete */}
-          <ImportSlotCoupe
-            label="COUPE DOUBLE TETE"
-            machineKey="dt"
-            coupeData={localCoupe}
-            onImported={handleCoupeImported}
-          />
-
-          {/* Coupe Renfort Acier */}
-          <ImportSlotCoupe
-            label="COUPE RENFORT ACIER"
-            machineKey="renfort"
-            coupeData={localCoupe}
-            onImported={handleCoupeImported}
-          />
+          {/* Coupe programmes — dynamiques */}
+          <CoupeSlots localCoupe={localCoupe} onImported={handleCoupeImported} />
         </div>
 
         {/* Save imports + Envoyer aux postes */}

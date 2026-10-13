@@ -10,21 +10,13 @@ interface Props { onBack: () => void; startAtelier?: boolean; }
 
 /** Shape of the coupe_profiles JSONB column when populated with import data */
 interface CoupeModuleData extends ModuleStatus {
-  machines?: {
-    lmt65?: FstJob;
-    dt?: FstJob;
-    renfort?: FstJob;
-  };
-  fileNames?: {
-    lmt65?: string;
-    dt?: string;
-    renfort?: string;
-  };
+  machines?: Record<string, FstJob>;
+  fileNames?: Record<string, string>;
 }
 
 // ── Types ────────────────────────────────────────────────────────────
 
-type MachineName = 'lmt65' | 'dt' | 'renfort';
+type MachineName = string;
 
 interface MachineData {
   fstlineJob?: FstJob;
@@ -42,26 +34,22 @@ interface Commande {
   ref: string;
   chantier: string;
   date: string;
-  machines: {
-    lmt65?: MachineData;
-    dt?: MachineData;
-    renfort?: MachineData;
-  };
+  machines: Record<string, MachineData | undefined>;
   statut: 'en_attente' | 'envoyee' | 'en_cours' | 'terminee';
   notes: string;
 }
 
-const MACHINE_LABELS: Record<MachineName, string> = {
-  lmt65: 'LMT 65',
-  dt: 'DT',
-  renfort: 'RENFORT ACIER',
-};
-
-const MACHINE_COLORS: Record<MachineName, string> = {
-  lmt65: 'bg-blue-700 hover:bg-blue-600',
-  dt: 'bg-green-700 hover:bg-green-600',
-  renfort: 'bg-amber-700 hover:bg-amber-600',
-};
+const BASE_MACHINE_LABELS: Record<string, string> = { lmt65: 'LMT 65', dt: 'DT', renfort: 'RENFORT ACIER' };
+const BASE_MACHINE_COLORS: Record<string, string> = { lmt65: 'bg-blue-700 hover:bg-blue-600', dt: 'bg-green-700 hover:bg-green-600', renfort: 'bg-amber-700 hover:bg-amber-600' };
+function getBaseKey(key: string): string { return key.replace(/_\d+$/, ''); }
+function getMachineLabel(key: string): string {
+  const base = getBaseKey(key);
+  const suffix = key.match(/_(\d+)$/);
+  return (BASE_MACHINE_LABELS[base] || base.toUpperCase()) + (suffix ? ` #${suffix[1]}` : '');
+}
+function getMachineColor(key: string): string { return BASE_MACHINE_COLORS[getBaseKey(key)] || 'bg-gray-700 hover:bg-gray-600'; }
+const MACHINE_LABELS = new Proxy({} as Record<string, string>, { get: (_, k: string) => getMachineLabel(k) });
+const MACHINE_COLORS = new Proxy({} as Record<string, string>, { get: (_, k: string) => getMachineColor(k) });
 
 const STATUT_LABELS: Record<Commande['statut'], string> = {
   en_attente: 'En attente',
@@ -103,13 +91,12 @@ function getProfileBars(job: FstJob): Map<string, FstBar[]> {
 
 /** Fire-and-forget: sync coupe_profiles module status to the global dashboard */
 function syncCoupeToGlobal(commande: Commande) {
-  const machines: MachineName[] = ['lmt65', 'dt', 'renfort'];
   let totalCuts = 0;
   let doneCuts = 0;
   let ncCount = 0;
   const machineNames: string[] = [];
 
-  for (const m of machines) {
+  for (const m of Object.keys(commande.machines)) {
     const md = commande.machines[m];
     if (!md?.fstlineJob) continue;
     machineNames.push(MACHINE_LABELS[m]);
@@ -143,17 +130,18 @@ function convertGlobalToLocal(g: CommandeGlobale): Commande {
   const cp = g.coupe_profiles as CoupeModuleData | undefined;
   const machines: Commande['machines'] = {};
   const fileNames = cp?.fileNames;
-  for (const m of ['lmt65', 'dt', 'renfort'] as MachineName[]) {
-    const job = cp?.machines?.[m];
-    if (!job) continue;
-    machines[m] = {
-      fstlineJob: job,
-      fileName: fileNames?.[m] ?? '',
-      importDate: g.updated_at || new Date().toISOString(),
-      statut: 'imported',
-      barresTotal: job.totalBars ?? 0,
-      barresFaites: 0,
-    };
+  if (cp?.machines) {
+    for (const [m, job] of Object.entries(cp.machines)) {
+      if (!job) continue;
+      machines[m] = {
+        fstlineJob: job,
+        fileName: fileNames?.[m] ?? '',
+        importDate: g.updated_at || new Date().toISOString(),
+        statut: 'imported',
+        barresTotal: job.totalBars ?? 0,
+        barresFaites: 0,
+      };
+    }
   }
   return {
     id: `global_${g.ref}`,
@@ -338,8 +326,8 @@ export function PosteCoupe({ onBack, startAtelier }: Props) {
         </header>
 
         <main className="flex-1 overflow-y-auto px-4 py-6 max-w-5xl mx-auto w-full space-y-6">
-          {/* 3 Machine Slots */}
-          {(['lmt65', 'dt', 'renfort'] as MachineName[]).map(machine => {
+          {/* Machine Slots */}
+          {Object.keys(selected.machines).map(machine => {
             const md = selected.machines[machine];
             const stats = machineStats(md);
             return (
@@ -471,15 +459,10 @@ export function PosteCoupe({ onBack, startAtelier }: Props) {
         )}
 
         {filtered.map(c => {
-          const machineCount = (['lmt65', 'dt', 'renfort'] as MachineName[]).filter(m => c.machines[m]).length;
-          const totalBars = (['lmt65', 'dt', 'renfort'] as MachineName[]).reduce((s, m) => {
-            const md = c.machines[m];
-            return s + (md?.fstlineJob?.totalBars ?? 0);
-          }, 0);
-          const totalCuts = (['lmt65', 'dt', 'renfort'] as MachineName[]).reduce((s, m) => {
-            const md = c.machines[m];
-            return s + (md?.fstlineJob?.totalCuts ?? 0);
-          }, 0);
+          const machineKeys = Object.keys(c.machines);
+          const machineCount = machineKeys.length;
+          const totalBars = machineKeys.reduce((s, m) => s + (c.machines[m]?.fstlineJob?.totalBars ?? 0), 0);
+          const totalCuts = machineKeys.reduce((s, m) => s + (c.machines[m]?.fstlineJob?.totalCuts ?? 0), 0);
 
           return (
             <div key={c.id} className="w-full bg-[#181a20] border border-[#2a2d35] rounded-xl p-4 hover:border-[#404550] transition-colors">
@@ -494,7 +477,7 @@ export function PosteCoupe({ onBack, startAtelier }: Props) {
                   <div className="flex items-center gap-3 text-xs text-gray-500 mt-1">
                     <span>{c.date}</span>
                     {c.chantier && <span>{c.chantier}</span>}
-                    <span>{machineCount}/3 machines</span>
+                    <span>{machineCount} programme{machineCount > 1 ? 's' : ''}</span>
                     {totalBars > 0 && <span>{totalBars} barres — {totalCuts} pieces</span>}
                   </div>
                 </button>
@@ -600,7 +583,7 @@ function AtelierView({
     const activeCmds = commandes.filter(c => c.statut === 'envoyee' || c.statut === 'en_cours');
     const allBars: { commande: Commande; machine: MachineName; bar: FstBar }[] = [];
     for (const c of activeCmds) {
-      for (const m of ['lmt65', 'dt', 'renfort'] as MachineName[]) {
+      for (const m of Object.keys(c.machines)) {
         const j = c.machines[m]?.fstlineJob;
         if (j) for (const bar of j.bars) allBars.push({ commande: c, machine: m, bar });
       }
@@ -734,21 +717,26 @@ function AtelierView({
             PREPARATION BARRES
             <span className="block text-base opacity-80 mt-1">Preparer les profiles pour toutes les machines</span>
           </button>
-          {(['lmt65', 'dt', 'renfort'] as MachineName[]).map(m => {
-            const count = commandes.filter(c =>
-              (c.statut === 'envoyee' || c.statut === 'en_cours') && c.machines[m]?.fstlineJob
-            ).length;
-            return (
-              <button key={m} onClick={() => { setMachine(m); setStep('commande'); }}
-                className={`${MACHINE_COLORS[m]} text-white text-2xl font-bold py-8 rounded-2xl transition-colors shadow-lg active:scale-95`}
-                style={{ minHeight: 80 }}>
-                {MACHINE_LABELS[m]}
-                {count > 0 && (
-                  <span className="ml-3 text-base opacity-80">({count} commande{count > 1 ? 's' : ''})</span>
-                )}
-              </button>
-            );
-          })}
+          {(() => {
+            const allMachineKeys = new Set<string>();
+            commandes.forEach(c => Object.keys(c.machines).forEach(k => allMachineKeys.add(k)));
+            if (allMachineKeys.size === 0) ['lmt65', 'dt', 'renfort'].forEach(k => allMachineKeys.add(k));
+            return [...allMachineKeys].sort().map(m => {
+              const count = commandes.filter(c =>
+                (c.statut === 'envoyee' || c.statut === 'en_cours') && c.machines[m]?.fstlineJob
+              ).length;
+              return (
+                <button key={m} onClick={() => { setMachine(m); setStep('commande'); }}
+                  className={`${MACHINE_COLORS[m]} text-white text-2xl font-bold py-8 rounded-2xl transition-colors shadow-lg active:scale-95`}
+                  style={{ minHeight: 80 }}>
+                  {MACHINE_LABELS[m]}
+                  {count > 0 && (
+                    <span className="ml-3 text-base opacity-80">({count} commande{count > 1 ? 's' : ''})</span>
+                  )}
+                </button>
+              );
+            });
+          })()}
         </div>
       </div>
     );
