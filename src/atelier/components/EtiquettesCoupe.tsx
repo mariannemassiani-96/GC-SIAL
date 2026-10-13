@@ -59,12 +59,20 @@ function getRepNumber(cut: FstCut): string {
   return cut.labels[0] || '';
 }
 
+// ── Extract position lines (P:x, O:x, Q:x, TRANCHE:x) from LBL ───
+function getPosLines(cut: FstCut): string[] {
+  return cut.labels
+    .slice(1)
+    .filter(l => l && /^[POQT]/i.test(l.trim()))
+    .map(l => l.trim());
+}
+
 // ── Print labels HTML ───────────────────────────────────────────────
 function generatePrintHTML(cuts: { cut: FstCut; bar: FstBar }[], jobName: string): string {
   const labels = cuts.map(({ cut, bar }) => {
     const bcSrc = barcodeDataUrl(cut.bcod, 1.0, 16);
     const rep = getRepNumber(cut);
-    const pos = cut.labels[5] || '';
+    const posLines = getPosLines(cut);
 
     return `
       <div class="label">
@@ -78,7 +86,7 @@ function generatePrintHTML(cuts: { cut: FstCut; bar: FstBar }[], jobName: string
           <div class="col-right">
             <div class="rep-label">REP</div>
             <div class="rep-box">${rep}</div>
-            <div class="pos">${pos}</div>
+            ${posLines.map(l => `<div class="pos">${l}</div>`).join('')}
           </div>
         </div>
         ${bcSrc ? `<div class="row-barcode"><img src="${bcSrc}" /><span class="bc-text">${cut.bcod}</span></div>` : ''}
@@ -459,7 +467,7 @@ export function EtiquettesCoupe({ onBack }: Props) {
 function LabelPreview({ cut, bar, jobName }: { cut: FstCut; bar: FstBar; jobName: string }) {
   const bcSrc = barcodeDataUrl(cut.bcod, 0.6, 12);
   const rep = getRepNumber(cut);
-  const pos = cut.labels[5] || '';
+  const posLines = getPosLines(cut);
 
   return (
     <div className="bg-white text-black rounded-lg border border-gray-300 shadow-sm flex flex-col overflow-hidden" style={{ aspectRatio: `${LABEL_W_MM}/${LABEL_H_MM}` }}>
@@ -475,7 +483,7 @@ function LabelPreview({ cut, bar, jobName }: { cut: FstCut; bar: FstBar; jobName
         <div className="flex flex-col items-center justify-center border-l border-gray-200 pl-2" style={{ width: '30%' }}>
           <span className="text-[6px] font-bold text-gray-500 tracking-wide">REP</span>
           <span className="text-xl font-black leading-none border-2 border-black px-1.5 py-0.5 min-w-[24px] text-center">{rep}</span>
-          <span className="text-[7px] font-bold text-gray-500 mt-0.5">{pos}</span>
+          {posLines.map((l, i) => <span key={i} className="text-[7px] font-bold text-gray-500 mt-0.5">{l}</span>)}
         </div>
       </div>
       {bcSrc && (
