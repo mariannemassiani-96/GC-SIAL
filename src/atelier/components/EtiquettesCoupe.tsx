@@ -54,32 +54,34 @@ function barcodeDataUrl(text: string, w = 1.2, h = 30): string {
   }
 }
 
+// ── Extract REP number from LBL[0] ─────────────────────────────────
+function getRepNumber(cut: FstCut): string {
+  return cut.labels[0] || '';
+}
+
 // ── Print labels HTML ───────────────────────────────────────────────
 function generatePrintHTML(cuts: { cut: FstCut; bar: FstBar }[], jobName: string): string {
   const labels = cuts.map(({ cut, bar }) => {
-    const bcSrc = barcodeDataUrl(cut.bcod, 1.0, 18);
-    const angleTxt = cut.angleLeft === 90 && cut.angleRight === 90 ? '90/90'
-      : cut.angleLeft === 135 && cut.angleRight === 135 ? '45/45'
-      : `${180 - cut.angleLeft}/${180 - cut.angleRight}`;
+    const bcSrc = barcodeDataUrl(cut.bcod, 1.0, 16);
+    const rep = getRepNumber(cut);
+    const pos = cut.labels[5] || '';
 
     return `
       <div class="label">
-        <div class="row-top">
-          <div class="cid">${cut.cid || cut.ref || '—'}</div>
-          <div class="right-col">
-            <div class="dim-main">${cut.il}</div>
-            <div class="pos">${cut.labels[5] || ''}</div>
+        <div class="body">
+          <div class="col-left">
+            <div class="cid">${cut.cid || cut.ref || '—'}</div>
+            <div class="chantier">${cut.chantier || jobName}</div>
+            <div class="dims">${cut.il}mm · ${cut.angleLeft}/${cut.angleRight}°</div>
+            <div class="order">${cut.orderCode} · ${bar.code} · ${bar.brand}</div>
+          </div>
+          <div class="col-right">
+            <div class="rep-label">REP</div>
+            <div class="rep-box">${rep}</div>
+            <div class="pos">${pos}</div>
           </div>
         </div>
-        <div class="row-mid">
-          <span class="chantier">${cut.chantier || jobName}</span>
-          <span class="sep">·</span>
-          <span class="angles">${angleTxt}</span>
-          <span class="sep">·</span>
-          <span class="profile">${bar.code}</span>
-        </div>
-        <div class="row-order">${cut.orderCode} — ${bar.brand} ${bar.system}</div>
-        ${bcSrc ? `<div class="row-barcode"><img src="${bcSrc}" /><div class="bc-text">${cut.bcod}</div></div>` : ''}
+        ${bcSrc ? `<div class="row-barcode"><img src="${bcSrc}" /><span class="bc-text">${cut.bcod}</span></div>` : ''}
       </div>
     `;
   }).join('');
@@ -104,20 +106,19 @@ body { font-family: Arial, Helvetica, sans-serif; }
   flex-direction: column;
   overflow: hidden;
 }
-.row-top { display: flex; justify-content: space-between; align-items: flex-start; }
-.cid { font-size: 12pt; font-weight: 900; letter-spacing: -0.3px; line-height: 1.1; }
-.right-col { text-align: right; }
-.dim-main { font-size: 11pt; font-weight: 900; line-height: 1.1; }
-.pos { font-size: 7pt; font-weight: 700; color: #444; }
-.row-mid { font-size: 7.5pt; color: #222; margin-top: 0.3mm; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.row-mid .chantier { font-weight: 700; }
-.row-mid .angles { font-weight: 600; }
-.row-mid .profile { color: #555; }
-.row-mid .sep { color: #bbb; margin: 0 0.5mm; }
-.row-order { font-size: 6pt; color: #777; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.row-barcode { margin-top: auto; text-align: center; }
-.row-barcode img { width: 100%; height: 7mm; object-fit: contain; }
-.bc-text { font-size: 5pt; color: #555; letter-spacing: 0.4px; font-family: monospace; line-height: 1; }
+.body { display: flex; flex: 1; min-height: 0; }
+.col-left { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 0.3mm; }
+.cid { font-size: 9pt; font-weight: 900; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chantier { font-size: 7pt; font-weight: 700; color: #222; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dims { font-size: 7.5pt; font-weight: 600; color: #333; }
+.order { font-size: 5.5pt; color: #666; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.col-right { width: 18mm; display: flex; flex-direction: column; align-items: center; justify-content: center; border-left: 0.5pt solid #ccc; padding-left: 1.5mm; margin-left: 1mm; }
+.rep-label { font-size: 5.5pt; font-weight: 700; color: #666; letter-spacing: 0.5px; }
+.rep-box { font-size: 22pt; font-weight: 900; line-height: 1; border: 1.5pt solid #000; padding: 0.5mm 2mm; text-align: center; min-width: 12mm; }
+.pos { font-size: 6pt; font-weight: 700; color: #444; margin-top: 0.5mm; }
+.row-barcode { display: flex; align-items: center; gap: 1mm; margin-top: auto; }
+.row-barcode img { flex: 1; height: 6mm; object-fit: contain; }
+.bc-text { font-size: 4.5pt; color: #555; font-family: monospace; white-space: nowrap; }
 @media print {
   .label:last-child { page-break-after: avoid; }
 }
@@ -433,9 +434,9 @@ export function EtiquettesCoupe({ onBack }: Props) {
                                 <span className="text-sm font-bold text-white">{cut.il} mm</span>
                                 <span className="text-xs text-gray-500 ml-2">{cut.angleLeft === 90 ? '90' : 180 - cut.angleLeft}/{cut.angleRight === 90 ? '90' : 180 - cut.angleRight}°</span>
                               </div>
-                              <div className="text-[10px] text-gray-600 font-mono w-28 text-right truncate">{cut.bcod}</div>
-                              {cut.labels[5] && (
-                                <span className="text-[10px] text-amber-400 font-semibold">{cut.labels[5]}</span>
+                              <div className="text-[10px] text-gray-600 font-mono w-24 text-right truncate">{cut.bcod}</div>
+                              {cut.labels[0] && (
+                                <span className="text-base font-black text-pink-400 border border-pink-500/40 px-1.5 py-0.5 rounded min-w-[28px] text-center leading-none">{cut.labels[0]}</span>
                               )}
                             </div>
                           );
@@ -456,29 +457,31 @@ export function EtiquettesCoupe({ onBack }: Props) {
 // ── Label preview card ──────────────────────────────────────────────
 
 function LabelPreview({ cut, bar, jobName }: { cut: FstCut; bar: FstBar; jobName: string }) {
-  const bcSrc = barcodeDataUrl(cut.bcod, 0.8, 18);
-  const angleTxt = cut.angleLeft === 90 && cut.angleRight === 90 ? '90/90'
-    : `${180 - cut.angleLeft}/${180 - cut.angleRight}`;
+  const bcSrc = barcodeDataUrl(cut.bcod, 0.6, 12);
+  const rep = getRepNumber(cut);
+  const pos = cut.labels[5] || '';
 
   return (
-    <div className="bg-white text-black rounded-lg p-3 border border-gray-300 shadow-sm" style={{ aspectRatio: `${LABEL_W_MM}/${LABEL_H_MM}` }}>
-      <div className="flex justify-between items-baseline">
-        <span className="text-sm font-black">{cut.cid || cut.ref || '—'}</span>
-        <span className="text-[9px] font-bold text-gray-600">{cut.labels[5] || ''}</span>
+    <div className="bg-white text-black rounded-lg border border-gray-300 shadow-sm flex flex-col overflow-hidden" style={{ aspectRatio: `${LABEL_W_MM}/${LABEL_H_MM}` }}>
+      <div className="flex flex-1 min-h-0 p-2 gap-2">
+        {/* Left column: info */}
+        <div className="flex-1 min-w-0 flex flex-col justify-center gap-0.5">
+          <div className="text-[10px] font-black leading-tight truncate">{cut.cid || cut.ref || '—'}</div>
+          <div className="text-[8px] font-bold text-gray-700 truncate">{cut.chantier || jobName}</div>
+          <div className="text-[8px] font-semibold text-gray-600">{cut.il}mm · {cut.angleLeft}/{cut.angleRight}°</div>
+          <div className="text-[6px] text-gray-500 truncate">{cut.orderCode} · {bar.code} · {bar.brand}</div>
+        </div>
+        {/* Right column: REP box */}
+        <div className="flex flex-col items-center justify-center border-l border-gray-200 pl-2" style={{ width: '30%' }}>
+          <span className="text-[6px] font-bold text-gray-500 tracking-wide">REP</span>
+          <span className="text-xl font-black leading-none border-2 border-black px-1.5 py-0.5 min-w-[24px] text-center">{rep}</span>
+          <span className="text-[7px] font-bold text-gray-500 mt-0.5">{pos}</span>
+        </div>
       </div>
-      <div className="text-[9px] font-semibold text-gray-700 truncate">{cut.chantier || jobName}</div>
-      <div className="flex items-baseline gap-1 mt-0.5">
-        <span className="text-xs font-black">{cut.il} mm</span>
-        <span className="text-[8px] text-gray-400">|</span>
-        <span className="text-[9px] font-semibold">{angleTxt}</span>
-        <span className="text-[8px] text-gray-400">|</span>
-        <span className="text-[8px] text-gray-500">{bar.code}</span>
-      </div>
-      <div className="text-[7px] text-gray-500 truncate">{cut.orderCode} — {bar.brand} {bar.system}</div>
       {bcSrc && (
-        <div className="mt-auto text-center pt-1">
-          <img src={bcSrc} alt="" className="w-full h-4 object-contain" />
-          <div className="text-[6px] text-gray-500 font-mono tracking-wider">{cut.bcod}</div>
+        <div className="flex items-center gap-1 px-2 pb-1.5">
+          <img src={bcSrc} alt="" className="flex-1 h-3 object-contain" />
+          <span className="text-[5px] text-gray-500 font-mono whitespace-nowrap">{cut.bcod}</span>
         </div>
       )}
     </div>
