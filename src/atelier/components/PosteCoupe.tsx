@@ -1,8 +1,9 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { ArrowLeft, Search, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Search, ChevronRight, Printer } from 'lucide-react';
 import { useApiCollection } from '../../useApiCollection';
 import { useAuth } from '../../AuthContext';
 import type { FstJob, FstBar, FstCut } from '../fstlineParser';
+import { printLabels } from '../labelPrinter';
 import { patchCommandeModule, listCommandesGlobales, getProfileImages, logProductionEvent, type CommandeGlobale, type ModuleStatus } from '../../api';
 
 interface Props { onBack: () => void; startAtelier?: boolean; }
@@ -878,6 +879,17 @@ function AtelierView({
                   {barDoneCuts}/{barTotalCuts} coupees
                 </span>
               </div>
+              <button
+                onClick={() => {
+                  const cuts = currentBar.cuts.map(cut => ({ cut, bar: currentBar }));
+                  const name = commande?.chantier || commande?.ref || '';
+                  printLabels(cuts, name, '62x29', true);
+                }}
+                className="mt-2 px-4 py-2 bg-pink-600 hover:bg-pink-500 text-white text-base font-bold rounded-xl active:scale-95 transition-all flex items-center gap-2"
+              >
+                <Printer size={20} />
+                IMPRIMER ETIQUETTES ({currentBar.cuts.length + (currentBar.waste > 0 ? 1 : 0)})
+              </button>
             </div>
 
             {/* SVG Bar Visualization */}

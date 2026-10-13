@@ -1,18 +1,11 @@
 import { useState, useCallback, useRef } from 'react';
 import { ArrowLeft, Upload, Printer, Eye, FileText, ChevronDown, ChevronRight } from 'lucide-react';
 import { parseFstlineFile, type FstJob, type FstBar, type FstCut } from '../fstlineParser';
-import JsBarcode from 'jsbarcode';
+import { LABEL_FORMATS, type LabelFormat, barcodeDataUrl, getRepNumber, getPosLines, printLabels } from '../labelPrinter';
 
 interface Props {
   onBack: () => void;
 }
-
-// ── Label formats Brother QL-1050 ────────────────────────────────────
-type LabelFormat = '62x29' | '62x100';
-const LABEL_FORMATS: Record<LabelFormat, { w: number; h: number; name: string }> = {
-  '62x29':  { w: 62, h: 29,  name: '62 x 29 mm (adresse)' },
-  '62x100': { w: 62, h: 100, name: '62 x 100 mm (expedition)' },
-};
 
 // ── Angle SVG helper ────────────────────────────────────────────────
 function AngleSvg({ left, right, size = 28 }: { left: number; right: number; size?: number }) {
@@ -37,201 +30,6 @@ function AngleSvg({ left, right, size = 28 }: { left: number; right: number; siz
       {right === 135 && <line x1={size - margin} y1={yBot} x2={size - margin - rOff} y2={yTop} stroke="currentColor" strokeWidth="0.7" strokeDasharray="2,1" />}
     </svg>
   );
-}
-
-// ── Generate barcode as data URL ────────────────────────────────────
-function barcodeDataUrl(text: string, w = 1.2, h = 30): string {
-  if (!text) return '';
-  try {
-    const canvas = document.createElement('canvas');
-    JsBarcode(canvas, text, {
-      format: 'CODE128',
-      width: w,
-      height: h,
-      displayValue: false,
-      margin: 0,
-    });
-    return canvas.toDataURL('image/png');
-  } catch {
-    return '';
-  }
-}
-
-// ── Extract REP number from LBL[0] ─────────────────────────────────
-function getRepNumber(cut: FstCut): string {
-  return cut.labels[0] || '';
-}
-
-// ── Extract position lines (P:x, O:x, Q:x, TRANCHE:x) from LBL ───
-function getPosLines(cut: FstCut): string[] {
-  return cut.labels
-    .slice(1)
-    .filter(l => l && /^[POQT]/i.test(l.trim()))
-    .map(l => l.trim());
-}
-
-// ── Chute label HTML ────────────────────────────────────────────────
-function chuteLabel(bar: FstBar, isLarge: boolean): string {
-  if (bar.waste <= 0) return '';
-  if (isLarge) {
-    return `
-      <div class="label chute">
-        <div class="chute-tag">CHUTE</div>
-        <div class="chute-len">${Math.round(bar.waste)} mm</div>
-        <div class="divider"></div>
-        <div class="profile">${bar.code}</div>
-        <div class="chantier">${bar.brand} ${bar.system}</div>
-        <div class="color">Couleur : ${bar.innerColor}/${bar.outerColor}</div>
-        <div class="dims">Barre ${bar.length}mm — pos ${bar.position}</div>
-      </div>
-    `;
-  }
-  return `
-    <div class="label chute">
-      <div class="body">
-        <div class="col-left">
-          <div class="chute-tag-sm">CHUTE</div>
-          <div class="dims">${Math.round(bar.waste)} mm</div>
-          <div class="order">${bar.code} · ${bar.brand} · ${bar.innerColor}/${bar.outerColor}</div>
-        </div>
-        <div class="col-right">
-          <div class="chute-len-sm">${Math.round(bar.waste)}</div>
-        </div>
-      </div>
-    </div>
-  `;
-}
-
-// ── Print labels HTML ───────────────────────────────────────────────
-function generatePrintHTML(
-  cuts: { cut: FstCut; bar: FstBar }[],
-  jobName: string,
-  fmt: LabelFormat,
-  includeChutes: boolean,
-): string {
-  const { w, h } = LABEL_FORMATS[fmt];
-  const isLarge = fmt === '62x100';
-
-  const htmlParts: string[] = [];
-  let lastBarId = '';
-
-  for (const { cut, bar } of cuts) {
-    if (includeChutes && lastBarId && lastBarId !== bar.id) {
-      const prevBar = cuts.find(c => c.bar.id === lastBarId)?.bar;
-      if (prevBar) htmlParts.push(chuteLabel(prevBar, isLarge));
-    }
-    lastBarId = bar.id;
-
-    const bcSrc = barcodeDataUrl(cut.bcod, isLarge ? 1.2 : 1.0, isLarge ? 28 : 16);
-    const rep = getRepNumber(cut);
-    const posLines = getPosLines(cut);
-
-    if (isLarge) {
-      htmlParts.push(`
-        <div class="label">
-          <div class="row-top">
-            <div class="rep-label">REP</div>
-            <div class="rep-box">${rep}</div>
-            <div class="pos-col">${posLines.map(l => `<span class="pos">${l}</span>`).join('')}</div>
-          </div>
-          <div class="divider"></div>
-          <div class="cid">${cut.cid || cut.ref || '—'}</div>
-          <div class="chantier">${cut.chantier || jobName}</div>
-          <div class="dims">${cut.il} mm</div>
-          <div class="angles">${cut.angleLeft}° / ${cut.angleRight}°</div>
-          <div class="profile">${bar.code} · ${bar.brand} ${bar.system}</div>
-          <div class="color">Couleur : ${bar.innerColor}/${bar.outerColor}</div>
-          <div class="order">${cut.orderCode}</div>
-          ${bcSrc ? `<div class="row-barcode"><img src="${bcSrc}" /><div class="bc-text">${cut.bcod}</div></div>` : ''}
-        </div>
-      `);
-    } else {
-      htmlParts.push(`
-        <div class="label">
-          <div class="body">
-            <div class="col-left">
-              <div class="cid">${cut.cid || cut.ref || '—'}</div>
-              <div class="chantier">${cut.chantier || jobName}</div>
-              <div class="dims">${cut.il}mm · ${cut.angleLeft}/${cut.angleRight}°</div>
-              <div class="order">${cut.orderCode} · ${bar.code} · ${bar.brand}</div>
-            </div>
-            <div class="col-right">
-              <div class="rep-label">REP</div>
-              <div class="rep-box">${rep}</div>
-              ${posLines.map(l => `<div class="pos">${l}</div>`).join('')}
-            </div>
-          </div>
-          ${bcSrc ? `<div class="row-barcode"><img src="${bcSrc}" /><span class="bc-text">${cut.bcod}</span></div>` : ''}
-        </div>
-      `);
-    }
-  }
-
-  if (includeChutes && lastBarId) {
-    const lastBar = cuts.find(c => c.bar.id === lastBarId)?.bar;
-    if (lastBar) htmlParts.push(chuteLabel(lastBar, isLarge));
-  }
-
-  const labels = htmlParts.join('');
-
-  const smallCSS = `
-.label { width: ${w - 3}mm; height: ${h - 2}mm; page-break-after: always; display: flex; flex-direction: column; overflow: hidden; }
-.body { display: flex; flex: 1; min-height: 0; }
-.col-left { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 0.2mm; }
-.cid { font-size: 8pt; font-weight: 900; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.chantier { font-size: 7pt; font-weight: 900; color: #000; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.dims { font-size: 7pt; font-weight: 900; color: #000; }
-.order { font-size: 5pt; color: #666; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.col-right { width: 16mm; display: flex; flex-direction: column; align-items: center; justify-content: center; border-left: 0.5pt solid #ccc; padding-left: 1mm; margin-left: 1mm; }
-.rep-label { font-size: 5pt; font-weight: 700; color: #666; letter-spacing: 0.5px; }
-.rep-box { font-size: 18pt; font-weight: 900; line-height: 1; border: 1.5pt solid #000; padding: 0.3mm 1.5mm; text-align: center; min-width: 10mm; }
-.pos { font-size: 5.5pt; font-weight: 700; color: #444; margin-top: 0.3mm; }
-.row-barcode { display: flex; align-items: center; gap: 1mm; margin-top: auto; }
-.row-barcode img { flex: 1; height: 5mm; object-fit: contain; }
-.bc-text { font-size: 4pt; color: #555; font-family: monospace; white-space: nowrap; }
-.chute { border: 1.5pt dashed #000; }
-.chute-tag-sm { font-size: 8pt; font-weight: 900; letter-spacing: 1px; }
-.chute-len-sm { font-size: 16pt; font-weight: 900; line-height: 1; }
-`;
-
-  const largeCSS = `
-.label { width: ${w - 3}mm; height: ${h - 2}mm; page-break-after: always; display: flex; flex-direction: column; overflow: hidden; padding: 1mm; }
-.row-top { display: flex; align-items: center; gap: 3mm; }
-.rep-label { font-size: 8pt; font-weight: 700; color: #666; }
-.rep-box { font-size: 36pt; font-weight: 900; line-height: 1; border: 2pt solid #000; padding: 1mm 4mm; text-align: center; min-width: 18mm; }
-.pos-col { display: flex; flex-direction: column; margin-left: auto; }
-.pos { font-size: 9pt; font-weight: 700; color: #333; }
-.divider { border-top: 0.5pt solid #ccc; margin: 1.5mm 0; }
-.cid { font-size: 12pt; font-weight: 900; line-height: 1.2; }
-.chantier { font-size: 11pt; font-weight: 900; color: #000; margin-top: 0.5mm; }
-.dims { font-size: 14pt; font-weight: 900; color: #000; margin-top: 1mm; }
-.angles { font-size: 10pt; font-weight: 700; color: #333; }
-.profile { font-size: 8pt; font-weight: 600; color: #444; margin-top: 1mm; }
-.color { font-size: 7pt; color: #555; }
-.order { font-size: 8pt; color: #555; margin-top: 0.5mm; }
-.row-barcode { margin-top: auto; text-align: center; }
-.row-barcode img { width: 100%; height: 12mm; object-fit: contain; }
-.bc-text { font-size: 7pt; color: #444; letter-spacing: 0.5px; font-family: monospace; }
-.chute { border: 2pt dashed #000; }
-.chute-tag { font-size: 18pt; font-weight: 900; letter-spacing: 2px; margin-top: 2mm; }
-.chute-len { font-size: 28pt; font-weight: 900; line-height: 1.1; margin-top: 1mm; }
-`;
-
-  return `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<title>Etiquettes Coupe — ${jobName}</title>
-<style>
-@page { size: ${w}mm ${h}mm; margin: 1mm; }
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: Arial, Helvetica, sans-serif; }
-${isLarge ? largeCSS : smallCSS}
-@media print { .label:last-child { page-break-after: avoid; } }
-</style>
-</head>
-<body>${labels}</body>
-</html>`;
 }
 
 // ── Component ───────────────────────────────────────────────────────
@@ -263,8 +61,7 @@ export function EtiquettesCoupe({ onBack }: Props) {
       const allCutIds = new Set<string>();
       parsed.bars.forEach(bar => bar.cuts.forEach(cut => allCutIds.add(cut.bcod)));
       setSelectedCuts(allCutIds);
-      const allBarIds = new Set(parsed.bars.map(b => b.id));
-      setExpandedBars(allBarIds);
+      setExpandedBars(new Set(parsed.bars.map(b => b.id)));
     } catch (e) {
       setError(`Erreur de lecture : ${e instanceof Error ? e.message : 'fichier invalide'}`);
     }
@@ -285,8 +82,7 @@ export function EtiquettesCoupe({ onBack }: Props) {
   const toggleBar = (barId: string) => {
     setExpandedBars(prev => {
       const next = new Set(prev);
-      if (next.has(barId)) next.delete(barId);
-      else next.add(barId);
+      if (next.has(barId)) next.delete(barId); else next.add(barId);
       return next;
     });
   };
@@ -294,8 +90,7 @@ export function EtiquettesCoupe({ onBack }: Props) {
   const toggleCut = (bcod: string) => {
     setSelectedCuts(prev => {
       const next = new Set(prev);
-      if (next.has(bcod)) next.delete(bcod);
-      else next.add(bcod);
+      if (next.has(bcod)) next.delete(bcod); else next.add(bcod);
       return next;
     });
   };
@@ -304,19 +99,16 @@ export function EtiquettesCoupe({ onBack }: Props) {
     const allSelected = bar.cuts.every(c => selectedCuts.has(c.bcod));
     setSelectedCuts(prev => {
       const next = new Set(prev);
-      bar.cuts.forEach(c => {
-        if (allSelected) next.delete(c.bcod);
-        else next.add(c.bcod);
-      });
+      bar.cuts.forEach(c => { if (allSelected) next.delete(c.bcod); else next.add(c.bcod); });
       return next;
     });
   };
 
   const selectAll = () => {
     if (!job) return;
-    const allCutIds = new Set<string>();
-    job.bars.forEach(bar => bar.cuts.forEach(cut => allCutIds.add(cut.bcod)));
-    setSelectedCuts(allCutIds);
+    const all = new Set<string>();
+    job.bars.forEach(bar => bar.cuts.forEach(cut => all.add(cut.bcod)));
+    setSelectedCuts(all);
   };
 
   const selectNone = () => setSelectedCuts(new Set());
@@ -326,34 +118,14 @@ export function EtiquettesCoupe({ onBack }: Props) {
     const result: { cut: FstCut; bar: FstBar }[] = [];
     job.bars.forEach(bar => {
       bar.cuts.forEach(cut => {
-        if (selectedCuts.has(cut.bcod)) {
-          result.push({ cut, bar });
-        }
+        if (selectedCuts.has(cut.bcod)) result.push({ cut, bar });
       });
     });
     return result;
   };
 
   const handlePrint = () => {
-    const cutsWithBars = getSelectedCutsWithBars();
-    if (cutsWithBars.length === 0) return;
-    const html = generatePrintHTML(cutsWithBars, job?.chantier || fileName, labelFormat, includeChutes);
-    const fmt = LABEL_FORMATS[labelFormat];
-    const instructions = `
-      <div id="print-help" style="background:#fffbe6;border:2px solid #d97706;padding:12px 16px;margin:8px;border-radius:8px;font-family:Arial;font-size:13px;color:#92400e">
-        <b>AVANT D'IMPRIMER :</b><br>
-        1. Imprimante = <b>Brother QL-1050</b><br>
-        2. Format papier = <b>${fmt.w} x ${fmt.h} mm</b><br>
-        3. Decocher "Adapter a la page" / "Fit to page"<br>
-        4. Marges = Aucune<br>
-        <button onclick="this.parentElement.remove()" style="margin-top:8px;padding:4px 12px;background:#d97706;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:bold">OK, compris</button>
-      </div>
-      <style>#print-help{display:block}@media print{#print-help{display:none!important}}</style>
-    `;
-    const win = window.open('', '_blank');
-    if (!win) return;
-    win.document.write(instructions + html);
-    win.document.close();
+    printLabels(getSelectedCutsWithBars(), job?.chantier || fileName, labelFormat, includeChutes);
   };
 
   const totalSelected = selectedCuts.size;
@@ -387,28 +159,16 @@ export function EtiquettesCoupe({ onBack }: Props) {
               ))}
             </select>
             <label className="flex items-center gap-1.5 text-xs text-gray-400 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={includeChutes}
-                onChange={e => setIncludeChutes(e.target.checked)}
-                className="accent-pink-500"
-              />
+              <input type="checkbox" checked={includeChutes} onChange={e => setIncludeChutes(e.target.checked)} className="accent-pink-500" />
               Chutes
             </label>
-            <button
-              onClick={() => setPreviewMode(!previewMode)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${previewMode ? 'bg-pink-600/20 text-pink-400 border-pink-500/30' : 'bg-white/5 text-gray-400 border-[#2a2d35] hover:border-gray-500'}`}
-            >
-              <Eye size={14} className="inline mr-1" />
-              Apercu
+            <button onClick={() => setPreviewMode(!previewMode)}
+              className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${previewMode ? 'bg-pink-600/20 text-pink-400 border-pink-500/30' : 'bg-white/5 text-gray-400 border-[#2a2d35] hover:border-gray-500'}`}>
+              <Eye size={14} className="inline mr-1" />Apercu
             </button>
-            <button
-              onClick={handlePrint}
-              disabled={totalSelected === 0}
-              className="px-4 py-1.5 text-sm font-bold rounded-lg bg-pink-600 hover:bg-pink-500 text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
-            >
-              <Printer size={16} />
-              Imprimer ({totalSelected})
+            <button onClick={handlePrint} disabled={totalSelected === 0}
+              className="px-4 py-1.5 text-sm font-bold rounded-lg bg-pink-600 hover:bg-pink-500 text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors flex items-center gap-2">
+              <Printer size={16} />Imprimer ({totalSelected})
             </button>
           </div>
         )}
@@ -417,14 +177,9 @@ export function EtiquettesCoupe({ onBack }: Props) {
       {/* Content */}
       <div className="flex-1 overflow-auto p-6">
         {!job ? (
-          /* Drop zone */
           <div className="max-w-2xl mx-auto mt-16">
-            <div
-              onDragOver={e => e.preventDefault()}
-              onDrop={handleDrop}
-              onClick={() => fileRef.current?.click()}
-              className="border-2 border-dashed border-[#2a2d35] hover:border-pink-500/50 rounded-2xl p-16 text-center cursor-pointer transition-colors group"
-            >
+            <div onDragOver={e => e.preventDefault()} onDrop={handleDrop} onClick={() => fileRef.current?.click()}
+              className="border-2 border-dashed border-[#2a2d35] hover:border-pink-500/50 rounded-2xl p-16 text-center cursor-pointer transition-colors group">
               <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-pink-600/10 border border-pink-500/20 flex items-center justify-center group-hover:bg-pink-600/20 transition-colors">
                 <Upload size={36} className="text-pink-400" />
               </div>
@@ -437,34 +192,8 @@ export function EtiquettesCoupe({ onBack }: Props) {
               {error && <p className="text-sm text-red-400 mt-4">{error}</p>}
             </div>
             <input ref={fileRef} type="file" accept=".xml,.xmlt" className="hidden" onChange={handleInputChange} />
-
-            <div className="mt-10 bg-[#181a20] rounded-xl border border-[#2a2d35] p-6">
-              <h3 className="text-sm font-bold text-white mb-3 flex items-center gap-2">
-                <Printer size={16} className="text-pink-400" />
-                Configuration imprimante Brother QL-1050
-              </h3>
-              <div className="grid grid-cols-2 gap-4 text-xs text-gray-400">
-                <div className="bg-[#0f1117] rounded-lg p-3 border border-[#2a2d35]">
-                  <span className="text-gray-500 block mb-1">Rouleau</span>
-                  <span className="text-white font-semibold">DK-22205 — 62mm continu</span>
-                </div>
-                <div className="bg-[#0f1117] rounded-lg p-3 border border-[#2a2d35]">
-                  <span className="text-gray-500 block mb-1">Formats disponibles</span>
-                  <span className="text-white font-semibold">62 x 29 mm — 62 x 100 mm</span>
-                </div>
-                <div className="bg-[#0f1117] rounded-lg p-3 border border-[#2a2d35]">
-                  <span className="text-gray-500 block mb-1">Connexion</span>
-                  <span className="text-white font-semibold">USB — selectionner "Brother QL-1050" dans le dialogue d'impression</span>
-                </div>
-                <div className="bg-[#0f1117] rounded-lg p-3 border border-[#2a2d35]">
-                  <span className="text-gray-500 block mb-1">Code-barres</span>
-                  <span className="text-white font-semibold">Code 128 — scannable</span>
-                </div>
-              </div>
-            </div>
           </div>
         ) : previewMode ? (
-          /* Label preview */
           <div className="max-w-3xl mx-auto">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-sm font-bold text-white">Apercu des etiquettes ({totalSelected})</h2>
@@ -477,9 +206,7 @@ export function EtiquettesCoupe({ onBack }: Props) {
             </div>
           </div>
         ) : (
-          /* Cut list */
           <div className="max-w-5xl mx-auto">
-            {/* Job summary */}
             <div className="bg-[#181a20] rounded-xl border border-[#2a2d35] p-5 mb-6">
               <div className="flex items-start justify-between">
                 <div>
@@ -496,31 +223,20 @@ export function EtiquettesCoupe({ onBack }: Props) {
                 <div className="flex items-center gap-2">
                   <button onClick={selectAll} className="text-xs text-gray-500 hover:text-white px-2 py-1 rounded border border-[#2a2d35] hover:border-gray-500 transition-colors">Tout</button>
                   <button onClick={selectNone} className="text-xs text-gray-500 hover:text-white px-2 py-1 rounded border border-[#2a2d35] hover:border-gray-500 transition-colors">Aucun</button>
-                  <button
-                    onClick={() => fileRef.current?.click()}
-                    className="text-xs text-gray-500 hover:text-pink-400 px-2 py-1 rounded border border-[#2a2d35] hover:border-pink-500/30 transition-colors"
-                  >
-                    Autre fichier
-                  </button>
+                  <button onClick={() => fileRef.current?.click()} className="text-xs text-gray-500 hover:text-pink-400 px-2 py-1 rounded border border-[#2a2d35] hover:border-pink-500/30 transition-colors">Autre fichier</button>
                 </div>
               </div>
             </div>
             <input ref={fileRef} type="file" accept=".xml,.xmlt" className="hidden" onChange={handleInputChange} />
 
-            {/* Bar list */}
             <div className="space-y-3">
               {job.bars.map((bar) => {
                 const expanded = expandedBars.has(bar.id);
                 const selectedCount = bar.cuts.filter(c => selectedCuts.has(c.bcod)).length;
                 const allSelected = selectedCount === bar.cuts.length;
-
                 return (
                   <div key={bar.id} className="bg-[#181a20] rounded-xl border border-[#2a2d35] overflow-hidden">
-                    {/* Bar header */}
-                    <div
-                      className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-white/[0.02] transition-colors"
-                      onClick={() => toggleBar(bar.id)}
-                    >
+                    <div className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-white/[0.02] transition-colors" onClick={() => toggleBar(bar.id)}>
                       {expanded ? <ChevronDown size={16} className="text-gray-500" /> : <ChevronRight size={16} className="text-gray-500" />}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
@@ -528,39 +244,25 @@ export function EtiquettesCoupe({ onBack }: Props) {
                           <span className="text-xs text-gray-500">{bar.description}</span>
                           <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-600/20 text-blue-400 border border-blue-500/30">{bar.brand}</span>
                         </div>
-                        <div className="text-[11px] text-gray-500 mt-0.5">
-                          Barre {bar.length}mm — {bar.cuts.length} pieces — couleur {bar.innerColor}/{bar.outerColor}
-                        </div>
+                        <div className="text-[11px] text-gray-500 mt-0.5">Barre {bar.length}mm — {bar.cuts.length} pieces — chute {Math.round(bar.waste)}mm</div>
                       </div>
-                      <button
-                        onClick={e => { e.stopPropagation(); toggleAllBar(bar); }}
-                        className={`text-[10px] font-semibold px-2 py-1 rounded border transition-colors ${allSelected ? 'bg-pink-600/20 text-pink-400 border-pink-500/30' : 'bg-white/5 text-gray-500 border-[#2a2d35] hover:border-gray-500'}`}
-                      >
+                      <button onClick={e => { e.stopPropagation(); toggleAllBar(bar); }}
+                        className={`text-[10px] font-semibold px-2 py-1 rounded border transition-colors ${allSelected ? 'bg-pink-600/20 text-pink-400 border-pink-500/30' : 'bg-white/5 text-gray-500 border-[#2a2d35] hover:border-gray-500'}`}>
                         {selectedCount}/{bar.cuts.length}
                       </button>
                     </div>
-
-                    {/* Cuts */}
                     {expanded && (
                       <div className="border-t border-[#2a2d35]">
                         {bar.cuts.map((cut, ci) => {
                           const selected = selectedCuts.has(cut.bcod);
                           return (
-                            <div
-                              key={`${cut.bcod}_${ci}`}
+                            <div key={`${cut.bcod}_${ci}`}
                               className={`flex items-center gap-3 px-5 py-2.5 border-b border-[#1a1d24] last:border-b-0 cursor-pointer transition-colors ${selected ? 'bg-pink-600/5' : 'hover:bg-white/[0.02]'}`}
-                              onClick={() => toggleCut(cut.bcod)}
-                            >
+                              onClick={() => toggleCut(cut.bcod)}>
                               <div className={`w-5 h-5 rounded border-2 flex-none flex items-center justify-center transition-colors ${selected ? 'bg-pink-600 border-pink-500' : 'border-[#3a3d45]'}`}>
-                                {selected && (
-                                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                                    <path d="M2.5 6L5 8.5L9.5 4" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                                  </svg>
-                                )}
+                                {selected && <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2.5 6L5 8.5L9.5 4" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>}
                               </div>
-                              <div className="w-6 text-center">
-                                <AngleSvg left={cut.angleLeft} right={cut.angleRight} size={22} />
-                              </div>
+                              <div className="w-6 text-center"><AngleSvg left={cut.angleLeft} right={cut.angleRight} size={22} /></div>
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2">
                                   <span className="text-sm font-bold text-white">{cut.cid || cut.ref || '—'}</span>
@@ -601,14 +303,12 @@ function LabelPreview({ cut, bar, jobName }: { cut: FstCut; bar: FstBar; jobName
   return (
     <div className="bg-white text-black rounded-lg border border-gray-300 shadow-sm flex flex-col overflow-hidden" style={{ aspectRatio: '62/29' }}>
       <div className="flex flex-1 min-h-0 p-2 gap-2">
-        {/* Left column: info */}
         <div className="flex-1 min-w-0 flex flex-col justify-center gap-0.5">
           <div className="text-[10px] font-black leading-tight truncate">{cut.cid || cut.ref || '—'}</div>
           <div className="text-[9px] font-black text-black truncate">{cut.chantier || jobName}</div>
           <div className="text-[9px] font-black text-black">{cut.il}mm · {cut.angleLeft}/{cut.angleRight}°</div>
           <div className="text-[6px] text-gray-500 truncate">{cut.orderCode} · {bar.code} · {bar.brand}</div>
         </div>
-        {/* Right column: REP box */}
         <div className="flex flex-col items-center justify-center border-l border-gray-200 pl-2" style={{ width: '30%' }}>
           <span className="text-[6px] font-bold text-gray-500 tracking-wide">REP</span>
           <span className="text-xl font-black leading-none border-2 border-black px-1.5 py-0.5 min-w-[24px] text-center">{rep}</span>
