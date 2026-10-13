@@ -117,8 +117,8 @@ body { font-family: Arial, Helvetica, sans-serif; }
 .body { display: flex; flex: 1; min-height: 0; }
 .col-left { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 0.3mm; }
 .cid { font-size: 9pt; font-weight: 900; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.chantier { font-size: 7pt; font-weight: 700; color: #222; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.dims { font-size: 7.5pt; font-weight: 600; color: #333; }
+.chantier { font-size: 8pt; font-weight: 900; color: #000; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dims { font-size: 8pt; font-weight: 900; color: #000; }
 .order { font-size: 5.5pt; color: #666; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .col-right { width: 18mm; display: flex; flex-direction: column; align-items: center; justify-content: center; border-left: 0.5pt solid #ccc; padding-left: 1.5mm; margin-left: 1mm; }
 .rep-label { font-size: 5.5pt; font-weight: 700; color: #666; letter-spacing: 0.5px; }
@@ -475,8 +475,8 @@ function LabelPreview({ cut, bar, jobName }: { cut: FstCut; bar: FstBar; jobName
         {/* Left column: info */}
         <div className="flex-1 min-w-0 flex flex-col justify-center gap-0.5">
           <div className="text-[10px] font-black leading-tight truncate">{cut.cid || cut.ref || '—'}</div>
-          <div className="text-[8px] font-bold text-gray-700 truncate">{cut.chantier || jobName}</div>
-          <div className="text-[8px] font-semibold text-gray-600">{cut.il}mm · {cut.angleLeft}/{cut.angleRight}°</div>
+          <div className="text-[9px] font-black text-black truncate">{cut.chantier || jobName}</div>
+          <div className="text-[9px] font-black text-black">{cut.il}mm · {cut.angleLeft}/{cut.angleRight}°</div>
           <div className="text-[6px] text-gray-500 truncate">{cut.orderCode} · {bar.code} · {bar.brand}</div>
         </div>
         {/* Right column: REP box */}
