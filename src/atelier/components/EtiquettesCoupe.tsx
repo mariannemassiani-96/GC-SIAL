@@ -42,7 +42,7 @@ export function EtiquettesCoupe({ onBack }: Props) {
   const [expandedBars, setExpandedBars] = useState<Set<string>>(new Set());
   const [selectedCuts, setSelectedCuts] = useState<Set<string>>(new Set());
   const [previewMode, setPreviewMode] = useState(false);
-  const [labelFormat, setLabelFormat] = useState<LabelFormat>('62x29');
+  const [labelFormat, setLabelFormat] = useState<LabelFormat>('62x100');
   const [includeChutes, setIncludeChutes] = useState(true);
   const fileRef = useRef<HTMLInputElement>(null);
 
