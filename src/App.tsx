@@ -7,6 +7,7 @@ import { StageInventaire } from './atelier/components/StageInventaire';
 import { PreparationLivraison } from './atelier/components/PreparationLivraison';
 import { ReceptionMatiere } from './atelier/components/ReceptionMatiere';
 import { PosteCoupe } from './atelier/components/PosteCoupe';
+import { EtiquettesCoupe } from './atelier/components/EtiquettesCoupe';
 import { MaintenanceQualite } from './atelier/components/MaintenanceQualite';
 import { WorkshopApp } from './workshop/WorkshopApp';
 import { VitrageApp } from './pages/VitrageApp';
@@ -36,7 +37,8 @@ type AppMode =
   | 'odoo'
   | 'qualite'
   | 'bi_dashboard'
-  | 'formation_odoo';
+  | 'formation_odoo'
+  | 'etiquettes_coupe';
 
 // ── Hub Fabrication (page d'accueil) ─────────────────────────────────
 
@@ -66,6 +68,19 @@ function HubFabrication({ onSelect }: { onSelect: (mode: AppMode) => void }) {
         </svg>
       ),
       color: 'red',
+    },
+    {
+      id: 'etiquettes_coupe' as AppMode,
+      label: 'Etiquettes Coupe',
+      description: 'Import fichier machine LMT65 (.xmlt), impression etiquettes de coupe sur Brother QL-1050 (DK-22205).',
+      icon: (
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-pink-400">
+          <rect x="6" y="2" width="12" height="6" rx="1" /><path d="M6 12H4a2 2 0 00-2 2v6a2 2 0 002 2h16a2 2 0 002-2v-6a2 2 0 00-2-2h-2" />
+          <rect x="6" y="14" width="12" height="8" rx="1" /><line x1="6" y1="8" x2="6" y2="12" /><line x1="18" y1="8" x2="18" y2="12" />
+          <circle cx="18" cy="15" r="1" fill="currentColor" />
+        </svg>
+      ),
+      color: 'pink',
     },
     {
       id: 'gc' as AppMode,
@@ -207,7 +222,7 @@ function HubFabrication({ onSelect }: { onSelect: (mode: AppMode) => void }) {
   ];
 
   const atelierApps = apps.filter(a =>
-    ['reception_matiere', 'poste_coupe', 'smart_assembly', 'stock_accessoires', 'preparation_livraison', 'maintenance_qualite', 'vitrage'].includes(a.id),
+    ['reception_matiere', 'poste_coupe', 'etiquettes_coupe', 'smart_assembly', 'stock_accessoires', 'preparation_livraison', 'maintenance_qualite', 'vitrage'].includes(a.id),
   );
   const beApps = apps.filter(a => ['gc', 'workshop_layout', 'formation_odoo'].includes(a.id));
   const supervisionApps = apps.filter(a => ['dashboard_global', 'odoo', 'qualite', 'bi_dashboard'].includes(a.id));
@@ -403,6 +418,7 @@ function AppContent() {
   }
 
   if (mode === 'poste_coupe') return <PosteCoupe onBack={goHome} />;
+  if (mode === 'etiquettes_coupe') return <EtiquettesCoupe onBack={goHome} />;
   if (mode === 'maintenance_qualite') return <MaintenanceQualite onBack={goHome} />;
   if (mode === 'reception_matiere') return <ReceptionMatiere onBack={goHome} />;
   if (mode === 'smart_assembly') return <SmartAssembly onBack={goHome} />;
