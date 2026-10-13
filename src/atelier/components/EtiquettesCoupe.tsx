@@ -70,18 +70,64 @@ function getPosLines(cut: FstCut): string[] {
     .map(l => l.trim());
 }
 
+// ── Chute label HTML ────────────────────────────────────────────────
+function chuteLabel(bar: FstBar, isLarge: boolean): string {
+  if (bar.waste <= 0) return '';
+  if (isLarge) {
+    return `
+      <div class="label chute">
+        <div class="chute-tag">CHUTE</div>
+        <div class="chute-len">${Math.round(bar.waste)} mm</div>
+        <div class="divider"></div>
+        <div class="profile">${bar.code}</div>
+        <div class="chantier">${bar.brand} ${bar.system}</div>
+        <div class="color">Couleur : ${bar.innerColor}/${bar.outerColor}</div>
+        <div class="dims">Barre ${bar.length}mm — pos ${bar.position}</div>
+      </div>
+    `;
+  }
+  return `
+    <div class="label chute">
+      <div class="body">
+        <div class="col-left">
+          <div class="chute-tag-sm">CHUTE</div>
+          <div class="dims">${Math.round(bar.waste)} mm</div>
+          <div class="order">${bar.code} · ${bar.brand} · ${bar.innerColor}/${bar.outerColor}</div>
+        </div>
+        <div class="col-right">
+          <div class="chute-len-sm">${Math.round(bar.waste)}</div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 // ── Print labels HTML ───────────────────────────────────────────────
-function generatePrintHTML(cuts: { cut: FstCut; bar: FstBar }[], jobName: string, fmt: LabelFormat): string {
+function generatePrintHTML(
+  cuts: { cut: FstCut; bar: FstBar }[],
+  jobName: string,
+  fmt: LabelFormat,
+  includeChutes: boolean,
+): string {
   const { w, h } = LABEL_FORMATS[fmt];
   const isLarge = fmt === '62x100';
 
-  const labels = cuts.map(({ cut, bar }) => {
+  const htmlParts: string[] = [];
+  let lastBarId = '';
+
+  for (const { cut, bar } of cuts) {
+    if (includeChutes && lastBarId && lastBarId !== bar.id) {
+      const prevBar = cuts.find(c => c.bar.id === lastBarId)?.bar;
+      if (prevBar) htmlParts.push(chuteLabel(prevBar, isLarge));
+    }
+    lastBarId = bar.id;
+
     const bcSrc = barcodeDataUrl(cut.bcod, isLarge ? 1.2 : 1.0, isLarge ? 28 : 16);
     const rep = getRepNumber(cut);
     const posLines = getPosLines(cut);
 
     if (isLarge) {
-      return `
+      htmlParts.push(`
         <div class="label">
           <div class="row-top">
             <div class="rep-label">REP</div>
@@ -98,28 +144,35 @@ function generatePrintHTML(cuts: { cut: FstCut; bar: FstBar }[], jobName: string
           <div class="order">${cut.orderCode}</div>
           ${bcSrc ? `<div class="row-barcode"><img src="${bcSrc}" /><div class="bc-text">${cut.bcod}</div></div>` : ''}
         </div>
-      `;
-    }
-
-    return `
-      <div class="label">
-        <div class="body">
-          <div class="col-left">
-            <div class="cid">${cut.cid || cut.ref || '—'}</div>
-            <div class="chantier">${cut.chantier || jobName}</div>
-            <div class="dims">${cut.il}mm · ${cut.angleLeft}/${cut.angleRight}°</div>
-            <div class="order">${cut.orderCode} · ${bar.code} · ${bar.brand}</div>
+      `);
+    } else {
+      htmlParts.push(`
+        <div class="label">
+          <div class="body">
+            <div class="col-left">
+              <div class="cid">${cut.cid || cut.ref || '—'}</div>
+              <div class="chantier">${cut.chantier || jobName}</div>
+              <div class="dims">${cut.il}mm · ${cut.angleLeft}/${cut.angleRight}°</div>
+              <div class="order">${cut.orderCode} · ${bar.code} · ${bar.brand}</div>
+            </div>
+            <div class="col-right">
+              <div class="rep-label">REP</div>
+              <div class="rep-box">${rep}</div>
+              ${posLines.map(l => `<div class="pos">${l}</div>`).join('')}
+            </div>
           </div>
-          <div class="col-right">
-            <div class="rep-label">REP</div>
-            <div class="rep-box">${rep}</div>
-            ${posLines.map(l => `<div class="pos">${l}</div>`).join('')}
-          </div>
+          ${bcSrc ? `<div class="row-barcode"><img src="${bcSrc}" /><span class="bc-text">${cut.bcod}</span></div>` : ''}
         </div>
-        ${bcSrc ? `<div class="row-barcode"><img src="${bcSrc}" /><span class="bc-text">${cut.bcod}</span></div>` : ''}
-      </div>
-    `;
-  }).join('');
+      `);
+    }
+  }
+
+  if (includeChutes && lastBarId) {
+    const lastBar = cuts.find(c => c.bar.id === lastBarId)?.bar;
+    if (lastBar) htmlParts.push(chuteLabel(lastBar, isLarge));
+  }
+
+  const labels = htmlParts.join('');
 
   const smallCSS = `
 .label { width: ${w - 3}mm; height: ${h - 2}mm; page-break-after: always; display: flex; flex-direction: column; overflow: hidden; }
@@ -136,6 +189,9 @@ function generatePrintHTML(cuts: { cut: FstCut; bar: FstBar }[], jobName: string
 .row-barcode { display: flex; align-items: center; gap: 1mm; margin-top: auto; }
 .row-barcode img { flex: 1; height: 5mm; object-fit: contain; }
 .bc-text { font-size: 4pt; color: #555; font-family: monospace; white-space: nowrap; }
+.chute { border: 1.5pt dashed #000; }
+.chute-tag-sm { font-size: 8pt; font-weight: 900; letter-spacing: 1px; }
+.chute-len-sm { font-size: 16pt; font-weight: 900; line-height: 1; }
 `;
 
   const largeCSS = `
@@ -156,6 +212,9 @@ function generatePrintHTML(cuts: { cut: FstCut; bar: FstBar }[], jobName: string
 .row-barcode { margin-top: auto; text-align: center; }
 .row-barcode img { width: 100%; height: 12mm; object-fit: contain; }
 .bc-text { font-size: 7pt; color: #444; letter-spacing: 0.5px; font-family: monospace; }
+.chute { border: 2pt dashed #000; }
+.chute-tag { font-size: 18pt; font-weight: 900; letter-spacing: 2px; margin-top: 2mm; }
+.chute-len { font-size: 28pt; font-weight: 900; line-height: 1.1; margin-top: 1mm; }
 `;
 
   return `<!DOCTYPE html>
@@ -186,6 +245,7 @@ export function EtiquettesCoupe({ onBack }: Props) {
   const [selectedCuts, setSelectedCuts] = useState<Set<string>>(new Set());
   const [previewMode, setPreviewMode] = useState(false);
   const [labelFormat, setLabelFormat] = useState<LabelFormat>('62x29');
+  const [includeChutes, setIncludeChutes] = useState(true);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const handleFile = useCallback(async (file: File) => {
@@ -277,7 +337,7 @@ export function EtiquettesCoupe({ onBack }: Props) {
   const handlePrint = () => {
     const cutsWithBars = getSelectedCutsWithBars();
     if (cutsWithBars.length === 0) return;
-    const html = generatePrintHTML(cutsWithBars, job?.chantier || fileName, labelFormat);
+    const html = generatePrintHTML(cutsWithBars, job?.chantier || fileName, labelFormat, includeChutes);
     const fmt = LABEL_FORMATS[labelFormat];
     const instructions = `
       <div id="print-help" style="background:#fffbe6;border:2px solid #d97706;padding:12px 16px;margin:8px;border-radius:8px;font-family:Arial;font-size:13px;color:#92400e">
@@ -326,6 +386,15 @@ export function EtiquettesCoupe({ onBack }: Props) {
                 <option key={k} value={k}>{LABEL_FORMATS[k].name}</option>
               ))}
             </select>
+            <label className="flex items-center gap-1.5 text-xs text-gray-400 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={includeChutes}
+                onChange={e => setIncludeChutes(e.target.checked)}
+                className="accent-pink-500"
+              />
+              Chutes
+            </label>
             <button
               onClick={() => setPreviewMode(!previewMode)}
               className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${previewMode ? 'bg-pink-600/20 text-pink-400 border-pink-500/30' : 'bg-white/5 text-gray-400 border-[#2a2d35] hover:border-gray-500'}`}
