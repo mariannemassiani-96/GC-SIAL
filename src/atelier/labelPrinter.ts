@@ -146,25 +146,25 @@ export function generatePrintHTML(
   const labels = htmlParts.join('');
 
   const smallCSS = `
-.label { width: ${w - 2}mm; height: ${h - 2}mm; page-break-after: always; display: flex; flex-direction: column; overflow: hidden; padding: 0.5mm; }
-.row1 { display: flex; gap: 1.5mm; flex: 1; min-height: 0; align-items: center; }
-.rep-box { font-size: 16pt; font-weight: 900; line-height: 1; border: 1.5pt solid #000; padding: 1mm 1.5mm; text-align: center; min-width: 10mm; flex-shrink: 0; }
-.info-col { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 0.3mm; }
+.label { width: ${w - 2}mm; height: ${h - 2}mm; page-break-after: always; display: flex; flex-direction: column; overflow: hidden; padding: 0.5mm 0.5mm 0.5mm 3mm; }
+.row1 { display: flex; gap: 2mm; flex: 1; min-height: 0; align-items: center; }
+.rep-box { font-size: 20pt; font-weight: 900; line-height: 1; text-align: center; min-width: 10mm; flex-shrink: 0; }
+.info-col { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 0.2mm; }
 .line-top { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cid { font-size: 8pt; font-weight: 900; }
-.chantier { font-size: 7.5pt; font-weight: 900; margin-left: 1mm; }
+.chantier { font-size: 9pt; font-weight: 900; margin-left: 1mm; }
 .line-mid { white-space: nowrap; overflow: hidden; }
-.dims { font-size: 8pt; font-weight: 900; }
+.dims { font-size: 9pt; font-weight: 900; }
 .angles { font-size: 7pt; font-weight: 600; color: #333; margin-left: 0.5mm; }
-.pos-inline { font-size: 6.5pt; font-weight: 700; color: #444; margin-left: 1mm; }
+.pos-inline { font-size: 7pt; font-weight: 700; color: #333; margin-left: 1mm; }
 .line-bot { font-size: 5.5pt; color: #555; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .row-barcode { display: flex; align-items: center; gap: 1mm; margin-top: auto; }
 .row-barcode img { flex: 1; height: 5mm; object-fit: contain; }
 .bc-text { font-size: 4pt; color: #555; font-family: monospace; white-space: nowrap; }
-.chute { border: 1.5pt dashed #000; }
+.chute { border: 1.5pt dashed #000; padding-left: 3mm; }
 .chute .row1 { justify-content: center; }
-.chute-tag-sm { font-size: 7pt; font-weight: 900; letter-spacing: 1px; }
-.chute-len-sm { font-size: 14pt; font-weight: 900; line-height: 1; }
+.chute-tag-sm { font-size: 8pt; font-weight: 900; letter-spacing: 1px; }
+.chute-len-sm { font-size: 16pt; font-weight: 900; line-height: 1; }
 `;
 
   const largeCSS = `
@@ -173,7 +173,7 @@ export function generatePrintHTML(
 .col-left { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 0.5mm; }
 .col-right { width: 28mm; display: flex; flex-direction: column; align-items: center; justify-content: center; border-left: 1pt solid #ccc; padding-left: 2mm; }
 .rep-label { font-size: 7pt; font-weight: 700; color: #666; letter-spacing: 1px; }
-.rep-box { font-size: 36pt; font-weight: 900; line-height: 1; border: 2pt solid #000; padding: 1mm 3mm; text-align: center; min-width: 20mm; margin-top: 1mm; }
+.rep-box { font-size: 36pt; font-weight: 900; line-height: 1; text-align: center; min-width: 20mm; margin-top: 1mm; }
 .pos { font-size: 8pt; font-weight: 700; color: #333; margin-top: 1mm; }
 .cid { font-size: 11pt; font-weight: 900; line-height: 1.2; }
 .chantier { font-size: 10pt; font-weight: 900; color: #000; }
