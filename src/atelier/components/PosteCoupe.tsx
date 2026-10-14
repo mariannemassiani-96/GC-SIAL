@@ -772,10 +772,6 @@ function AtelierView({
       if (quickFileRef.current) quickFileRef.current.value = '';
     };
 
-    const allQuickCuts = quickJobs.flatMap(({ job }) =>
-      job.bars.flatMap(bar => bar.cuts.map(cut => ({ cut, bar })))
-    );
-
     return (
       <div className="fixed inset-0 bg-[#0a0c10] flex flex-col z-50">
         <div className="flex items-center gap-4 p-4 bg-[#14161d] border-b border-[#2a2d35]">
@@ -798,43 +794,57 @@ function AtelierView({
           </button>
           <input ref={quickFileRef} type="file" accept=".xml,.xmlt" multiple onChange={handleQuickFile} className="hidden" />
 
-          {/* Imported files list */}
+          {/* Imported files — barre par barre */}
           {quickJobs.length > 0 && (
-            <div className="w-full max-w-lg space-y-3">
-              {quickJobs.map((qj, i) => (
-                <div key={i} className="bg-[#181a20] border border-[#2a2d35] rounded-xl p-4 flex items-center justify-between">
-                  <div>
-                    <div className="text-sm font-bold text-white">{qj.fileName}</div>
-                    <div className="text-xs text-gray-500">{qj.job.chantier || qj.job.orderCode || '—'} — {qj.job.totalBars} barres, {qj.job.totalCuts} pieces</div>
+            <div className="w-full max-w-2xl space-y-4">
+              {quickJobs.map((qj, qi) => (
+                <div key={qi} className="bg-[#181a20] border border-[#2a2d35] rounded-xl overflow-hidden">
+                  {/* File header */}
+                  <div className="flex items-center justify-between px-4 py-3 border-b border-[#2a2d35]">
+                    <div>
+                      <span className="text-sm font-bold text-white">{qj.fileName}</span>
+                      <span className="text-xs text-gray-500 ml-3">{qj.job.chantier || qj.job.orderCode || '—'} — {qj.job.totalBars} barres</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => {
+                          const cuts = qj.job.bars.flatMap(bar => bar.cuts.map(cut => ({ cut, bar })));
+                          printLabels(cuts, qj.job.chantier || qj.fileName, '62x29', true);
+                        }}
+                        className="px-3 py-1.5 bg-pink-600 hover:bg-pink-500 text-white text-xs font-bold rounded-lg active:scale-95 flex items-center gap-1.5"
+                      >
+                        <Printer size={14} />TOUT ({qj.job.totalCuts})
+                      </button>
+                      <button onClick={() => setQuickJobs(prev => prev.filter((_, j) => j !== qi))}
+                        className="px-2 py-1.5 text-gray-600 hover:text-red-400 transition-colors">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => {
-                        const cuts = qj.job.bars.flatMap(bar => bar.cuts.map(cut => ({ cut, bar })));
-                        printLabels(cuts, qj.job.chantier || qj.fileName, '62x29', true);
-                      }}
-                      className="px-4 py-2 bg-pink-600 hover:bg-pink-500 text-white text-sm font-bold rounded-xl active:scale-95 flex items-center gap-2"
-                    >
-                      <Printer size={16} />
-                      IMPRIMER ({qj.job.totalCuts})
-                    </button>
-                    <button onClick={() => setQuickJobs(prev => prev.filter((_, j) => j !== i))}
-                      className="px-2 py-2 text-gray-600 hover:text-red-400 transition-colors">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-                    </button>
-                  </div>
+                  {/* Bars list */}
+                  {qj.job.bars.map((bar, bi) => (
+                    <div key={bar.id} className="flex items-center px-4 py-2.5 border-b border-[#1a1d24] last:border-b-0 hover:bg-white/[0.02]">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-gray-600 font-mono w-6">B{bi + 1}</span>
+                          <span className="text-sm font-bold text-white">{bar.code}</span>
+                          <span className="text-xs text-gray-500">{bar.length}mm — {bar.cuts.length} pcs</span>
+                          {bar.waste > 0 && <span className="text-[10px] text-amber-400">chute {Math.round(bar.waste)}mm</span>}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => {
+                          const cuts = bar.cuts.map(cut => ({ cut, bar }));
+                          printLabels(cuts, qj.job.chantier || qj.fileName, '62x29', true);
+                        }}
+                        className="px-3 py-1.5 bg-pink-600/80 hover:bg-pink-500 text-white text-xs font-bold rounded-lg active:scale-95 flex items-center gap-1.5"
+                      >
+                        <Printer size={12} />{bar.cuts.length + (bar.waste > 0 ? 1 : 0)}
+                      </button>
+                    </div>
+                  ))}
                 </div>
               ))}
-
-              {quickJobs.length > 1 && (
-                <button
-                  onClick={() => printLabels(allQuickCuts, 'Etiquettes', '62x29', true)}
-                  className="w-full py-4 bg-pink-600 hover:bg-pink-500 text-white text-xl font-bold rounded-2xl active:scale-95 flex items-center justify-center gap-3"
-                >
-                  <Printer size={24} />
-                  TOUT IMPRIMER ({allQuickCuts.length} etiquettes)
-                </button>
-              )}
             </div>
           )}
         </div>
