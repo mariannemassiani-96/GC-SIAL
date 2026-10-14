@@ -1,8 +1,9 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { ArrowLeft, Search, ChevronRight, Printer } from 'lucide-react';
+import { ArrowLeft, Search, ChevronRight, Printer, Upload } from 'lucide-react';
 import { useApiCollection } from '../../useApiCollection';
 import { useAuth } from '../../AuthContext';
 import type { FstJob, FstBar, FstCut } from '../fstlineParser';
+import { parseFstlineFile } from '../fstlineParser';
 import { printLabels } from '../labelPrinter';
 import { patchCommandeModule, listCommandesGlobales, deleteCommandeGlobale, getProfileImages, logProductionEvent, logout as apiLogout, type CommandeGlobale, type ModuleStatus } from '../../api';
 
@@ -526,13 +527,15 @@ function AtelierView({
   markBarAllCut: (commandeId: string, machine: MachineName, barId: string) => void;
   updateBarPreparation: (commandeId: string, machine: MachineName, barId: string, status: 'ok' | 'nc' | 'manquant' | null) => void;
 }) {
-  const [step, setStep] = useState<AtelierStep | 'preparation'>('machine');
+  const [step, setStep] = useState<AtelierStep | 'preparation' | 'quick_labels'>('machine');
   const [machine, setMachine] = useState<MachineName | null>(null);
   const [commandeId, setCommandeId] = useState<string | null>(null);
   const [profileCode, setProfileCode] = useState<string | null>(null);
   const [barIdx, setBarIdx] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const quickFileRef = useRef<HTMLInputElement>(null);
   const [profileImgs, setProfileImgs] = useState<Record<string, string>>({});
+  const [quickJobs, setQuickJobs] = useState<{ job: FstJob; fileName: string }[]>([]);
 
   const commande = commandes.find(c => c.id === commandeId) ?? null;
   const md = commande && machine ? commande.machines[machine] : undefined;
@@ -737,6 +740,103 @@ function AtelierView({
               );
             });
           })()}
+          <button onClick={() => setStep('quick_labels')}
+            className="bg-pink-700 hover:bg-pink-600 text-white text-2xl font-bold py-8 rounded-2xl transition-colors shadow-lg active:scale-95"
+            style={{ minHeight: 80 }}>
+            <Printer size={28} className="inline mr-3" />
+            ETIQUETTES RAPIDES
+            <span className="block text-base opacity-80 mt-1">Importer un fichier machine et imprimer les etiquettes</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Quick Labels: import XML + print ──
+  if (step === 'quick_labels') {
+    const handleQuickFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const files = e.target.files;
+      if (!files) return;
+      for (let i = 0; i < files.length; i++) {
+        const f = files[i];
+        const name = f.name.toLowerCase();
+        if (name.endsWith('.xml') || name.endsWith('.xmlt')) {
+          try {
+            const parsed = await parseFstlineFile(f);
+            if (parsed.totalBars > 0) {
+              setQuickJobs(prev => [...prev, { job: parsed, fileName: f.name }]);
+            }
+          } catch { /* silent */ }
+        }
+      }
+      if (quickFileRef.current) quickFileRef.current.value = '';
+    };
+
+    const allQuickCuts = quickJobs.flatMap(({ job }) =>
+      job.bars.flatMap(bar => bar.cuts.map(cut => ({ cut, bar })))
+    );
+
+    return (
+      <div className="fixed inset-0 bg-[#0a0c10] flex flex-col z-50">
+        <div className="flex items-center gap-4 p-4 bg-[#14161d] border-b border-[#2a2d35]">
+          <button onClick={() => { setStep('machine'); setQuickJobs([]); }} className="text-gray-400 hover:text-white text-lg px-3 py-2">
+            <ArrowLeft size={24} className="inline mr-2" />Retour
+          </button>
+          <h1 className="text-2xl font-black text-white flex-1">
+            <Printer size={24} className="inline mr-2 text-pink-400" />ETIQUETTES RAPIDES
+          </h1>
+          <button onClick={onBack} className="text-xs text-gray-600 hover:text-red-400 px-3 py-2 border border-[#2a2d35] hover:border-red-500/30 rounded-lg transition-colors">QUITTER ATELIER</button>
+        </div>
+
+        <div className="flex-1 overflow-auto p-6 flex flex-col items-center gap-6">
+          {/* Import zone */}
+          <button onClick={() => quickFileRef.current?.click()}
+            className="w-full max-w-lg p-6 border-2 border-dashed border-pink-500/30 hover:border-pink-500 rounded-2xl text-center transition-colors active:scale-[0.98]">
+            <Upload size={32} className="mx-auto text-pink-400 mb-2" />
+            <span className="text-xl font-bold text-white block">Importer fichier machine</span>
+            <span className="text-sm text-gray-500">.xml ou .xmlt — plusieurs fichiers possibles</span>
+          </button>
+          <input ref={quickFileRef} type="file" accept=".xml,.xmlt" multiple onChange={handleQuickFile} className="hidden" />
+
+          {/* Imported files list */}
+          {quickJobs.length > 0 && (
+            <div className="w-full max-w-lg space-y-3">
+              {quickJobs.map((qj, i) => (
+                <div key={i} className="bg-[#181a20] border border-[#2a2d35] rounded-xl p-4 flex items-center justify-between">
+                  <div>
+                    <div className="text-sm font-bold text-white">{qj.fileName}</div>
+                    <div className="text-xs text-gray-500">{qj.job.chantier || qj.job.orderCode || '—'} — {qj.job.totalBars} barres, {qj.job.totalCuts} pieces</div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        const cuts = qj.job.bars.flatMap(bar => bar.cuts.map(cut => ({ cut, bar })));
+                        printLabels(cuts, qj.job.chantier || qj.fileName, '62x29', true);
+                      }}
+                      className="px-4 py-2 bg-pink-600 hover:bg-pink-500 text-white text-sm font-bold rounded-xl active:scale-95 flex items-center gap-2"
+                    >
+                      <Printer size={16} />
+                      IMPRIMER ({qj.job.totalCuts})
+                    </button>
+                    <button onClick={() => setQuickJobs(prev => prev.filter((_, j) => j !== i))}
+                      className="px-2 py-2 text-gray-600 hover:text-red-400 transition-colors">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              {quickJobs.length > 1 && (
+                <button
+                  onClick={() => printLabels(allQuickCuts, 'Etiquettes', '62x29', true)}
+                  className="w-full py-4 bg-pink-600 hover:bg-pink-500 text-white text-xl font-bold rounded-2xl active:scale-95 flex items-center justify-center gap-3"
+                >
+                  <Printer size={24} />
+                  TOUT IMPRIMER ({allQuickCuts.length} etiquettes)
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
     );
