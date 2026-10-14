@@ -121,14 +121,17 @@ export function generatePrintHTML(
         </div>
       `);
     } else {
-      const posStr = posLines.length ? posLines.join(' ') : '';
+      const posStr = posLines.length ? posLines.join('  ') : '';
       htmlParts.push(`
         <div class="label">
           <div class="row1">
-            <div class="rep-box">${rep}</div>
+            <div class="left-col">
+              <div class="rep-box">${rep}</div>
+              ${posStr ? `<div class="pos-block">${posStr}</div>` : ''}
+            </div>
             <div class="info-col">
               <div class="line-chantier">${cut.chantier || jobName}</div>
-              <div class="line-mid"><span class="dims">${cut.il} mm</span> <span class="angles">${cut.angleLeft}/${cut.angleRight}°</span> <span class="cid">${cut.cid || cut.ref || '—'}</span>${posStr ? ` <span class="pos-inline">${posStr}</span>` : ''}</div>
+              <div class="line-mid"><span class="dims">${cut.il} mm</span> <span class="angles">${cut.angleLeft}/${cut.angleRight}°</span> <span class="cid-sm">${cut.cid || cut.ref || '—'}</span></div>
               <div class="line-bot">${bar.code} · ${bar.brand} · ${cut.orderCode}</div>
             </div>
           </div>
@@ -147,15 +150,16 @@ export function generatePrintHTML(
 
   const smallCSS = `
 .label { width: ${w - 2}mm; height: ${h - 2}mm; page-break-after: always; display: flex; flex-direction: column; overflow: hidden; padding: 0.5mm 0.5mm 0.5mm 3mm; }
-.row1 { display: flex; gap: 2mm; flex: 1; min-height: 0; align-items: center; }
-.rep-box { font-size: 20pt; font-weight: 900; line-height: 1; text-align: center; min-width: 10mm; flex-shrink: 0; }
+.row1 { display: flex; gap: 1.5mm; flex: 1; min-height: 0; align-items: center; }
+.left-col { display: flex; flex-direction: column; align-items: center; flex-shrink: 0; min-width: 12mm; }
+.rep-box { font-size: 20pt; font-weight: 900; line-height: 1; text-align: center; }
+.pos-block { font-size: 7pt; font-weight: 900; color: #000; text-align: center; margin-top: 0.3mm; white-space: nowrap; }
 .info-col { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 0.2mm; }
 .line-chantier { font-size: 9pt; font-weight: 900; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .line-mid { white-space: nowrap; overflow: hidden; }
 .dims { font-size: 9pt; font-weight: 900; }
-.cid { font-size: 7pt; font-weight: 700; color: #333; margin-left: 1mm; }
+.cid-sm { font-size: 7pt; font-weight: 700; color: #333; margin-left: 1mm; }
 .angles { font-size: 7pt; font-weight: 600; color: #333; margin-left: 0.5mm; }
-.pos-inline { font-size: 7pt; font-weight: 900; color: #000; margin-left: 1mm; }
 .line-bot { font-size: 5.5pt; color: #555; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .row-barcode { display: flex; align-items: center; gap: 1mm; margin-top: auto; }
 .row-barcode img { flex: 1; height: 5mm; object-fit: contain; }
