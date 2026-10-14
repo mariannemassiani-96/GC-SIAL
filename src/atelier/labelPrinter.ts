@@ -31,11 +31,11 @@ export function getRepNumber(cut: FstCut): string {
   return cut.labels[0] || '';
 }
 
-// ── Extract position lines (P:x, O:x, Q:x, TRANCHE:x) from LBL ───
+// ── Extract position lines (P :x, O :x, Q :x, TRANCHE:x) from LBL ─
 export function getPosLines(cut: FstCut): string[] {
   return cut.labels
     .slice(1)
-    .filter(l => l && /^[POQT]/i.test(l.trim()))
+    .filter(l => l && /^[POQ]\s*:|\bTRANCHE\b/i.test(l.trim()))
     .map(l => l.trim());
 }
 
@@ -121,14 +121,14 @@ export function generatePrintHTML(
         </div>
       `);
     } else {
-      const posStr = posLines.length ? `<span class="pos-inline">${posLines.join('  ')}</span>` : '';
+      const posStr = posLines.length ? posLines.join(' ') : '';
       htmlParts.push(`
         <div class="label">
           <div class="row1">
             <div class="rep-box">${rep}</div>
             <div class="info-col">
-              <div class="line-top"><span class="cid">${cut.cid || cut.ref || '—'}</span> <span class="chantier">${cut.chantier || jobName}</span></div>
-              <div class="line-mid"><span class="dims">${cut.il} mm</span> <span class="angles">${cut.angleLeft}/${cut.angleRight}°</span> ${posStr}</div>
+              <div class="line-chantier">${cut.chantier || jobName}</div>
+              <div class="line-mid"><span class="dims">${cut.il} mm</span> <span class="angles">${cut.angleLeft}/${cut.angleRight}°</span> <span class="cid">${cut.cid || cut.ref || '—'}</span>${posStr ? ` <span class="pos-inline">${posStr}</span>` : ''}</div>
               <div class="line-bot">${bar.code} · ${bar.brand} · ${cut.orderCode}</div>
             </div>
           </div>
@@ -150,13 +150,12 @@ export function generatePrintHTML(
 .row1 { display: flex; gap: 2mm; flex: 1; min-height: 0; align-items: center; }
 .rep-box { font-size: 20pt; font-weight: 900; line-height: 1; text-align: center; min-width: 10mm; flex-shrink: 0; }
 .info-col { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 0.2mm; }
-.line-top { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.cid { font-size: 8pt; font-weight: 900; }
-.chantier { font-size: 9pt; font-weight: 900; margin-left: 1mm; }
+.line-chantier { font-size: 9pt; font-weight: 900; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .line-mid { white-space: nowrap; overflow: hidden; }
 .dims { font-size: 9pt; font-weight: 900; }
+.cid { font-size: 7pt; font-weight: 700; color: #333; margin-left: 1mm; }
 .angles { font-size: 7pt; font-weight: 600; color: #333; margin-left: 0.5mm; }
-.pos-inline { font-size: 7pt; font-weight: 700; color: #333; margin-left: 1mm; }
+.pos-inline { font-size: 7pt; font-weight: 900; color: #000; margin-left: 1mm; }
 .line-bot { font-size: 5.5pt; color: #555; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .row-barcode { display: flex; align-items: center; gap: 1mm; margin-top: auto; }
 .row-barcode img { flex: 1; height: 5mm; object-fit: contain; }
